@@ -1,0 +1,41 @@
+{
+  "name": "@dynamic-demos/moneygram-ramp",
+  "version": "0.1.0",
+  "description": "MoneyGram Ramps off-ramp demo with Dynamic embedded wallets across Base, Ethereum, and Solana",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dynamic-labs-sdk/client": "0.12.1",
+    "@dynamic-labs-sdk/evm": "0.12.1",
+    "@dynamic-labs-sdk/solana": "0.12.1",
+    "@solana/spl-token": "0.4.13",
+    "@solana/web3.js": "1.98.4",
+    "@t3-oss/env-nextjs": "0.13.8",
+    "clsx": "2.1.1",
+    "lucide-react": "0.542.0",
+    "next": "15.5.9",
+    "react": "19.1.4",
+    "react-dom": "19.1.4",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "3.4.0",
+    "viem": "2.42.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "3.3.1",
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/node": "20.19.25",
+    "@types/react": "19.2.5",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.1",
+    "eslint-config-next": "15.5.4",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3"
+  }
+}
