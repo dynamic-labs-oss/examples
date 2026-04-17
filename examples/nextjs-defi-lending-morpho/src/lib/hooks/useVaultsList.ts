@@ -8,6 +8,8 @@ export interface Vault {
   name: string;
   symbol: string;
   asset: string;
+  assetAddress: string;
+  assetDecimals: number;
   apy: string;
   netApy: string;
   tvl: string;
@@ -31,6 +33,10 @@ export type SortOption =
   | "whitelisted-desc"
   | "totalSupply-desc"
   | "name-asc";
+
+// Vaults pinned to the top regardless of sort order.
+// The Sentora PYUSD vault is Dynamic's featured Morpho integration.
+const FEATURED_VAULT_NAMES = ["Sentora PYUSD Main"];
 
 interface VaultApiResponse {
   id: string;
@@ -91,9 +97,16 @@ export function useVaultsList(sortBy: SortOption = "netApy-desc") {
   };
 
   useEffect(() => {
-    // Sorting function
+    // Sorting function — featured vaults are always pinned to the top.
     const sortVaults = (vaultsToSort: Vault[]): Vault[] => {
-      return [...vaultsToSort].sort((a, b) => {
+      const featured = vaultsToSort.filter((v) =>
+        FEATURED_VAULT_NAMES.includes(v.name)
+      );
+      const rest = vaultsToSort.filter(
+        (v) => !FEATURED_VAULT_NAMES.includes(v.name)
+      );
+
+      const sortedRest = [...rest].sort((a, b) => {
         switch (sortBy) {
           case "netApy-desc":
             return parseNumericValue(b.netApy) - parseNumericValue(a.netApy);
@@ -124,6 +137,8 @@ export function useVaultsList(sortBy: SortOption = "netApy-desc") {
             return parseNumericValue(b.netApy) - parseNumericValue(a.netApy);
         }
       });
+
+      return [...featured, ...sortedRest];
     };
 
     async function fetchVaults() {
@@ -238,6 +253,8 @@ export function useVaultsList(sortBy: SortOption = "netApy-desc") {
               name: vault.name || `${vault.asset?.symbol || "Unknown"} Vault`,
               symbol: vault.symbol,
               asset: vault.asset?.symbol || "Unknown",
+              assetAddress: vault.asset?.address || "",
+              assetDecimals: vault.asset?.decimals || 18,
               apy,
               netApy,
               tvl,

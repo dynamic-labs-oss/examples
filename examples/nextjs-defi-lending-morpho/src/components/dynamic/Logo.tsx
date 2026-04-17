@@ -7,7 +7,7 @@ interface DynamicLogoProps {
 export default function DynamicLogo({
   width = 150,
   height = 30,
-  className = "text-[#141839] dark:text-white",
+  className = "text-[#141839]",
 }: DynamicLogoProps) {
   return (
     <svg

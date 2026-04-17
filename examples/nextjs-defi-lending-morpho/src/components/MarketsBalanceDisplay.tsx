@@ -32,7 +32,6 @@ export function MarketsBalanceDisplay({
   loanTokenDecimals = 18,
   collateralDecimals = 6,
 }: MarketsBalanceDisplayProps) {
-  // Format balance values
   const formattedLoanTokenBalance = loanTokenBalance
     ? formatUnits(loanTokenBalance as bigint, loanTokenDecimals)
     : "-";
@@ -48,71 +47,43 @@ export function MarketsBalanceDisplay({
   };
 
   return (
-    <div className="mt-6 mb-2 text-base">
-      <div>
-        <span className="text-gray-400">Your {loanTokenSymbol} balance:</span>{" "}
-        <span className="font-bold text-white">
-          {formattedLoanTokenBalance}
-        </span>
+    <div className="mt-4 mb-2 text-sm space-y-1 border-t border-earn-border pt-4">
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Your {loanTokenSymbol} balance:</span>
+        <span className="font-medium text-earn-text-primary">{formattedLoanTokenBalance}</span>
       </div>
-
-      <div>
-        <span className="text-gray-400">Your {collateralSymbol} balance:</span>{" "}
-        <span className="font-bold text-white">
-          {formattedCollateralBalance}
-        </span>
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Your {collateralSymbol} balance:</span>
+        <span className="font-medium text-earn-text-primary">{formattedCollateralBalance}</span>
       </div>
-
-      <div>
-        <span className="text-gray-400">
-          Supplied assets ({collateralSymbol}):
-        </span>{" "}
-        <span className="font-bold text-white">
-          {supplied === null ? "-" : supplied}
-        </span>
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Supplied ({collateralSymbol}):</span>
+        <span className="font-medium text-earn-text-primary">{supplied ?? "-"}</span>
       </div>
-
-      <div>
-        <span className="text-gray-400">Supplied assets (USD):</span>{" "}
-        <span className="font-bold text-white">
-          {suppliedUsd === null ? "-" : suppliedUsd}
-        </span>
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Supplied (USD):</span>
+        <span className="font-medium text-earn-text-primary">{suppliedUsd ?? "-"}</span>
       </div>
-
-      <div>
-        <span className="text-gray-400">Collateral ({collateralSymbol}):</span>{" "}
-        <span className="font-bold text-white">
-          {collateral === null ? "-" : collateral}
-        </span>
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Collateral ({collateralSymbol}):</span>
+        <span className="font-medium text-earn-text-primary">{collateral ?? "-"}</span>
       </div>
-
-      <div>
-        <span className="text-gray-400">Collateral (USD):</span>{" "}
-        <span className="font-bold text-white">
-          {collateralUsd === null ? "-" : collateralUsd}
-        </span>
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Collateral (USD):</span>
+        <span className="font-medium text-earn-text-primary">{collateralUsd ?? "-"}</span>
       </div>
-
-      <div>
-        <span className="text-gray-400">Borrowed ({loanTokenSymbol}):</span>{" "}
-        <span className="font-bold text-white">
-          {borrowed === null ? "-" : borrowed}
-        </span>
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Borrowed ({loanTokenSymbol}):</span>
+        <span className="font-medium text-earn-text-primary">{borrowed ?? "-"}</span>
       </div>
-
-      <div>
-        <span className="text-gray-400">Borrowed (USD):</span>{" "}
-        <span className="font-bold text-white">
-          {borrowedUsd === null ? "-" : borrowedUsd}
-        </span>
+      <div className="flex justify-between">
+        <span className="text-earn-text-secondary">Borrowed (USD):</span>
+        <span className="font-medium text-earn-text-primary">{borrowedUsd ?? "-"}</span>
       </div>
-
       {healthFactor && (
-        <div>
-          <span className="text-gray-400">Health Factor:</span>{" "}
-          <span className={`font-bold ${getHealthFactorClass(healthFactor)}`}>
-            {healthFactor}
-          </span>
+        <div className="flex justify-between">
+          <span className="text-earn-text-secondary">Health Factor:</span>
+          <span className={`font-medium ${getHealthFactorClass(healthFactor)}`}>{healthFactor}</span>
         </div>
       )}
     </div>

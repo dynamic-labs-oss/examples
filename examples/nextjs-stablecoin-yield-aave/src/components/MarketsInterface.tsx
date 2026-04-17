@@ -13,7 +13,6 @@ import { useEffect, useState } from "react";
 import { WalletClient } from "viem";
 import { useChainId } from "wagmi";
 import { mainnet, base, polygon } from "viem/chains";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,30 +22,45 @@ import { BorrowCard } from "./BorrowCard";
 import { MarketCard } from "./MarketCard";
 import { SupplyCard } from "./SupplyCard";
 
+// urql (used inside @aave/react hooks) triggers a synchronous setState on its
+// first render, which React 19 rejects in concurrent mode.  We work around this
+// by deferring the mount of the inner component by one commit so its hooks
+// always execute in their own render cycle.
 export function MarketsInterface() {
+  const chainId = useChainId();
+  const { primaryWallet } = useDynamicContext();
+  const address = primaryWallet?.address ?? "disconnected";
+  const mountKey = `${chainId}-${address}`;
+
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  useEffect(() => {
+    setActiveKey(mountKey);
+  }, [mountKey]);
+
+  if (activeKey !== mountKey) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <p className="text-earn-text-secondary text-sm">Loading markets...</p>
+      </div>
+    );
+  }
+
+  return <MarketsInterfaceInner key={mountKey} />;
+}
+
+function MarketsInterfaceInner() {
   const { primaryWallet } = useDynamicContext();
   const chainId = useChainId();
-  const queryClient = useQueryClient();
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
   const [chainError, setChainError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [lastTransaction, setLastTransaction] = useState<{
-    type: string;
-    hash: string;
-    timestamp: number;
-  } | null>(null);
+  const [txError, setTxError] = useState<string | null>(null);
 
   useEffect(() => {
     if (primaryWallet && isEthereumWallet(primaryWallet)) {
       primaryWallet.getWalletClient().then(setWalletClient);
     }
   }, [primaryWallet]);
-
-  // Force refresh when chain changes
-  useEffect(() => {
-    setRefreshKey((prev) => prev + 1);
-  }, [chainId]);
 
   const handleSwitchChain = async (targetChainId: number) => {
     if (!primaryWallet || !isEthereumWallet(primaryWallet)) {
@@ -63,21 +77,12 @@ export function MarketsInterface() {
       } else {
         setChainError("Your wallet doesn't support network switching");
       }
-    } catch (err: unknown) {
+    } catch {
       setChainError("Failed to switch chain. Please try again.");
     } finally {
       setIsSwitching(false);
     }
   };
-
-  useEffect(() => {
-    if (lastTransaction) {
-      const timer = setTimeout(() => {
-        setLastTransaction(null);
-      }, 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [lastTransaction]);
 
   const {
     isOperating,
@@ -86,6 +91,8 @@ export function MarketsInterface() {
     executeRepay,
     executeWithdraw,
   } = useTransactionOperations(walletClient, chainId);
+
+  const FEATURED_SYMBOLS = ["PYUSD"];
 
   const {
     data: markets,
@@ -98,29 +105,28 @@ export function MarketsInterface() {
       : undefined,
   });
 
-  // Force refetch markets when chain changes
-  useEffect(() => {
-    if (chainId) {
-      // Add a small delay to ensure chain switch is complete
-      const timeoutId = setTimeout(() => {
-        // Invalidate all queries to force fresh data
-        queryClient.invalidateQueries();
-      }, 100);
+  const hasFeaturedReserve = (m: NonNullable<typeof markets>[number]) =>
+    m.supplyReserves.some((r) => FEATURED_SYMBOLS.includes(r.underlyingToken.symbol));
 
-      return () => clearTimeout(timeoutId);
-    }
-  }, [chainId, queryClient]);
+  const sortedMarkets = (markets ?? []).slice().sort((a, b) => {
+    const aFeatured = hasFeaturedReserve(a);
+    const bFeatured = hasFeaturedReserve(b);
+    if (aFeatured !== bFeatured) return aFeatured ? -1 : 1;
+    return 0;
+  });
+
+  const marketRefs =
+    markets?.map((market) => ({
+      chainId: market.chain.chainId,
+      address: market.address,
+    })) ?? [];
 
   const {
     data: userSupplies,
     loading: userSuppliesLoading,
     error: userSuppliesError,
   } = useUserSupplies({
-    markets:
-      markets?.map((market) => ({
-        chainId: market.chain.chainId,
-        address: market.address,
-      })) || [],
+    markets: marketRefs,
     user: primaryWallet?.address
       ? evmAddress(primaryWallet.address)
       : undefined,
@@ -131,47 +137,37 @@ export function MarketsInterface() {
     loading: userBorrowsLoading,
     error: userBorrowsError,
   } = useUserBorrows({
-    markets:
-      markets?.map((market) => ({
-        chainId: market.chain.chainId,
-        address: market.address,
-      })) || [],
+    markets: marketRefs,
     user: primaryWallet?.address
       ? evmAddress(primaryWallet.address)
       : undefined,
   });
+
+  const friendlyError = (action: string, error: unknown): string => {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("execution reverted")) {
+      if (action === "Borrow") {
+        return "Borrow reverted — you may not have enough collateral. Supply assets first, then try again.";
+      }
+      return `${action} reverted — check your balance and collateral, then try again.`;
+    }
+    if (msg.includes("User rejected") || msg.includes("user rejected")) {
+      return `${action} was cancelled.`;
+    }
+    return `${action} failed: ${msg}`;
+  };
 
   const handleSupply = async (
     marketAddress: string,
     currencyAddress: string,
     amount: string
   ) => {
-    // Log market details when supply button is clicked
-    const market = markets?.find((m) => m.address === marketAddress);
-    if (market && primaryWallet?.address) {
-      const marketDetails = {
-        market: market.address,
-        amount: {
-          erc20: {
-            currency: evmAddress(currencyAddress),
-            value: amount,
-          },
-        },
-        supplier: evmAddress(primaryWallet.address),
-        chainId: market.chain.chainId,
-      };
-    }
-
+    setTxError(null);
     try {
-      const hash = await executeSupply(marketAddress, currencyAddress, amount);
-      if (hash) {
-        setLastTransaction({
-          type: "Supply",
-          hash,
-          timestamp: Date.now(),
-        });
-      }
-    } catch (error) {}
+      await executeSupply(marketAddress, currencyAddress, amount);
+    } catch (error) {
+      setTxError(friendlyError("Supply", error));
+    }
   };
 
   const handleBorrow = async (
@@ -179,16 +175,12 @@ export function MarketsInterface() {
     currencyAddress: string,
     amount: string
   ) => {
+    setTxError(null);
     try {
-      const hash = await executeBorrow(marketAddress, currencyAddress, amount);
-      if (hash) {
-        setLastTransaction({
-          type: "Borrow",
-          hash,
-          timestamp: Date.now(),
-        });
-      }
-    } catch (error) {}
+      await executeBorrow(marketAddress, currencyAddress, amount);
+    } catch (error) {
+      setTxError(friendlyError("Borrow", error));
+    }
   };
 
   const handleRepay = async (
@@ -196,16 +188,12 @@ export function MarketsInterface() {
     currencyAddress: string,
     amount: string | "max"
   ) => {
+    setTxError(null);
     try {
-      const hash = await executeRepay(marketAddress, currencyAddress, amount);
-      if (hash) {
-        setLastTransaction({
-          type: "Repay",
-          hash,
-          timestamp: Date.now(),
-        });
-      }
-    } catch (error) {}
+      await executeRepay(marketAddress, currencyAddress, amount);
+    } catch (error) {
+      setTxError(friendlyError("Repay", error));
+    }
   };
 
   const handleWithdraw = async (
@@ -213,35 +201,29 @@ export function MarketsInterface() {
     currencyAddress: string,
     amount: string
   ) => {
+    setTxError(null);
     try {
-      const hash = await executeWithdraw(
-        marketAddress,
-        currencyAddress,
-        amount
-      );
-      if (hash) {
-        setLastTransaction({
-          type: "Withdraw",
-          hash,
-          timestamp: Date.now(),
-        });
-      }
-    } catch (error) {}
+      await executeWithdraw(marketAddress, currencyAddress, amount);
+    } catch (error) {
+      setTxError(friendlyError("Withdraw", error));
+    }
   };
 
-  // Show error state if there's a chain error
   if (chainError) {
     return (
-      <div className="min-h-screen flex items-center justify-center mt-24">
-        <Card className="max-w-md mx-auto">
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <Card className="max-w-md w-full bg-white border border-earn-border rounded-xl shadow-sm">
           <CardHeader>
-            <CardTitle className="text-center text-destructive">
+            <CardTitle className="text-center text-destructive text-base">
               Connection Error
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-center text-muted-foreground">{chainError}</p>
-            <Button onClick={() => window.location.reload()} className="w-full">
+            <p className="text-center text-earn-text-secondary text-sm">{chainError}</p>
+            <Button
+              onClick={() => window.location.reload()}
+              className="w-full bg-earn-primary hover:bg-earn-primary/90 text-white"
+            >
               Retry
             </Button>
           </CardContent>
@@ -250,13 +232,12 @@ export function MarketsInterface() {
     );
   }
 
-  // Show loading state when chain is changing
   if (isSwitching) {
     return (
-      <div className="min-h-screen flex items-center justify-center mt-24">
-        <Card className="max-w-md mx-auto">
-          <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <Card className="max-w-md w-full bg-white border border-earn-border rounded-xl shadow-sm">
+          <CardContent className="pt-6 pb-6">
+            <p className="text-center text-earn-text-secondary text-sm">
               Switching to {getChainName(chainId)}...
             </p>
           </CardContent>
@@ -266,144 +247,167 @@ export function MarketsInterface() {
   }
 
   return (
-    <div key={`markets-${chainId}-${refreshKey}`} className="space-y-6 mt-6">
-      <h1 className="text-3xl font-bold text-center">
-        Dynamic Yield Integration
-      </h1>
-      <Card className="max-w-5xl mx-auto">
-        <CardHeader>
-          <CardTitle>Available Markets</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {marketsLoading ? (
-            <p className="text-muted-foreground">Loading markets...</p>
-          ) : marketsError ? (
-            <p className="text-destructive">
+    <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-earn-text-primary">
+          Aave Markets
+        </h1>
+        <p className="text-sm text-earn-text-secondary mt-1">
+          Supply assets and borrow against your collateral on {getChainName(chainId)}
+        </p>
+      </div>
+
+      {txError && (
+        <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+          <p className="text-sm text-destructive flex-1">{txError}</p>
+          <button
+            onClick={() => setTxError(null)}
+            className="text-destructive/60 hover:text-destructive text-lg leading-none"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
+      <section>
+        <h2 className="text-sm font-semibold text-earn-text-secondary uppercase tracking-wide mb-3">
+          Available Markets
+        </h2>
+        {marketsLoading ? (
+          <div className="bg-white border border-earn-border rounded-xl p-6">
+            <p className="text-earn-text-secondary text-sm">Loading markets...</p>
+          </div>
+        ) : marketsError ? (
+          <div className="bg-white border border-earn-border rounded-xl p-6">
+            <p className="text-destructive text-sm">
               Error loading markets: {String(marketsError)}
             </p>
-          ) : markets && markets.length > 0 ? (
-            <div className={`grid grid-cols-1 md:grid-cols-2 gap-4`}>
-              {markets.map((market) => (
-                <MarketCard
-                  key={market.address}
-                  market={market}
-                  isOperating={isOperating}
-                  primaryWallet={primaryWallet}
-                  onSupply={handleSupply}
-                  onBorrow={handleBorrow}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center space-y-4">
-              <p className="text-muted-foreground">
-                No markets found for {getChainName(chainId)}.
+          </div>
+        ) : sortedMarkets.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {sortedMarkets.map((market) => (
+              <MarketCard
+                key={market.address}
+                market={market}
+                isOperating={isOperating}
+                primaryWallet={primaryWallet}
+                onSupply={handleSupply}
+                onBorrow={handleBorrow}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white border border-earn-border rounded-xl p-6 space-y-4">
+            <p className="text-earn-text-secondary text-sm">
+              No markets found for {getChainName(chainId)}.
+            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-earn-text-secondary">
+                Try switching to a supported network:
               </p>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Try switching to a supported network:
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(mainnet.id)}
-                    disabled={isSwitching || Number(chainId) === mainnet.id}
-                  >
-                    {mainnet.name}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(base.id)}
-                    disabled={isSwitching || Number(chainId) === base.id}
-                  >
-                    {base.name}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(polygon.id)}
-                    disabled={isSwitching || Number(chainId) === polygon.id}
-                  >
-                    {polygon.name}
-                  </Button>
-                </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSwitchChain(mainnet.id)}
+                  disabled={isSwitching || Number(chainId) === mainnet.id}
+                  className="border-earn-border text-earn-text-primary hover:bg-earn-light"
+                >
+                  {mainnet.name}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSwitchChain(base.id)}
+                  disabled={isSwitching || Number(chainId) === base.id}
+                  className="border-earn-border text-earn-text-primary hover:bg-earn-light"
+                >
+                  {base.name}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSwitchChain(polygon.id)}
+                  disabled={isSwitching || Number(chainId) === polygon.id}
+                  className="border-earn-border text-earn-text-primary hover:bg-earn-light"
+                >
+                  {polygon.name}
+                </Button>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </section>
 
       {primaryWallet && (
         <>
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle>Your Supplies</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {userSuppliesLoading ? (
-                <p className="text-muted-foreground">Loading supplies...</p>
-              ) : userSuppliesError ? (
-                <p className="text-destructive">
+          <section>
+            <h2 className="text-sm font-semibold text-earn-text-secondary uppercase tracking-wide mb-3">
+              Your Supplies
+            </h2>
+            {userSuppliesLoading ? (
+              <div className="bg-white border border-earn-border rounded-xl p-6">
+                <p className="text-earn-text-secondary text-sm">Loading supplies...</p>
+              </div>
+            ) : userSuppliesError ? (
+              <div className="bg-white border border-earn-border rounded-xl p-6">
+                <p className="text-destructive text-sm">
                   Error loading supplies: {String(userSuppliesError)}
                 </p>
-              ) : userSupplies && userSupplies.length > 0 ? (
-                <div
-                  className={`grid grid-cols-1 gap-4 ${
-                    userSupplies.length === 1
-                      ? ""
-                      : userSupplies.length === 2
-                      ? "md:grid-cols-2 max-w-2xl mx-auto"
-                      : "md:grid-cols-2 lg:grid-cols-3"
-                  }`}
-                >
-                  {userSupplies.map((supply) => (
-                    <SupplyCard
-                      key={`${supply.market.address}-${supply.currency.address}`}
-                      supply={supply}
-                      isOperating={isOperating}
-                      primaryWallet={primaryWallet}
-                      onSupply={handleSupply}
-                      onBorrow={handleBorrow}
-                      onWithdraw={handleWithdraw}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No supplies found.</p>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            ) : userSupplies && userSupplies.length > 0 ? (
+              <div className={`grid grid-cols-1 gap-4 ${userSupplies.length >= 2 ? "md:grid-cols-2 lg:grid-cols-3" : ""}`}>
+                {userSupplies.map((supply) => (
+                  <SupplyCard
+                    key={`${supply.market.address}-${supply.currency.address}`}
+                    supply={supply}
+                    isOperating={isOperating}
+                    primaryWallet={primaryWallet}
+                    onSupply={handleSupply}
+                    onBorrow={handleBorrow}
+                    onWithdraw={handleWithdraw}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white border border-earn-border rounded-xl p-6">
+                <p className="text-earn-text-secondary text-sm">No active supplies.</p>
+              </div>
+            )}
+          </section>
 
-          <Card className="max-w-2xl mx-auto mb-6">
-            <CardHeader>
-              <CardTitle>Your Borrows</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {userBorrowsLoading ? (
-                <p className="text-muted-foreground">Loading borrows...</p>
-              ) : userBorrowsError ? (
-                <p className="text-destructive">
+          <section className="pb-8">
+            <h2 className="text-sm font-semibold text-earn-text-secondary uppercase tracking-wide mb-3">
+              Your Borrows
+            </h2>
+            {userBorrowsLoading ? (
+              <div className="bg-white border border-earn-border rounded-xl p-6">
+                <p className="text-earn-text-secondary text-sm">Loading borrows...</p>
+              </div>
+            ) : userBorrowsError ? (
+              <div className="bg-white border border-earn-border rounded-xl p-6">
+                <p className="text-destructive text-sm">
                   Error loading borrows: {String(userBorrowsError)}
                 </p>
-              ) : userBorrows && userBorrows.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {userBorrows.map((borrow) => (
-                    <BorrowCard
-                      key={`${borrow.market.address}-${borrow.currency.address}`}
-                      borrow={borrow}
-                      isOperating={isOperating}
-                      primaryWallet={primaryWallet}
-                      onRepay={handleRepay}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No borrows found.</p>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            ) : userBorrows && userBorrows.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {userBorrows.map((borrow) => (
+                  <BorrowCard
+                    key={`${borrow.market.address}-${borrow.currency.address}`}
+                    borrow={borrow}
+                    isOperating={isOperating}
+                    primaryWallet={primaryWallet}
+                    onRepay={handleRepay}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white border border-earn-border rounded-xl p-6">
+                <p className="text-earn-text-secondary text-sm">No active borrows.</p>
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>

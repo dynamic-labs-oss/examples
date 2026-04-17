@@ -33,7 +33,7 @@ export function HamburgerMenu({ children, className }: HamburgerMenuProps) {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="bg-white dark:bg-gray-900 absolute top-full right-0 mt-2 w-48 bg-background border rounded-md shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-200">
+        <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-earn-border rounded-md shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-200">
           <div className="flex flex-col p-2 space-y-1 ">
             {/* Navigation Items */}
             <div className="flex flex-col space-y-1">{children}</div>

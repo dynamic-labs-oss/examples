@@ -1,128 +1,147 @@
 "use client";
 
-import Link from "next/link";
-import { useVaultsList } from "../../lib/hooks";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useAccount } from "wagmi";
+import { useVaultsList, useVaultPositions } from "../../lib/hooks";
+import { VaultCard } from "@/components/VaultCard";
+import { PositionCard } from "@/components/PositionCard";
+
+const VAULTS_PER_PAGE = 6;
 
 export default function EarnPage() {
-  const { vaults, loading, error } = useVaultsList("whitelisted-desc");
+  const [page, setPage] = useState(0);
+  const { address, isConnected } = useAccount();
+  const { vaults, loading, error } = useVaultsList("tvl-desc");
+  const { positions, loading: positionsLoading } = useVaultPositions(address, vaults);
+
+  const totalPages = Math.ceil(vaults.length / VAULTS_PER_PAGE);
+  const pagedVaults = vaults.slice(page * VAULTS_PER_PAGE, (page + 1) * VAULTS_PER_PAGE);
+
+  const totalBalanceUsd = positions.reduce((sum, p) => {
+    const assets = parseFloat(p.assetsFormatted);
+    const price = parseFloat(p.vault.sharePrice.replace("$", "")) || 0;
+    return sum + assets * price;
+  }, 0);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
-      <h1 className="text-5xl font-extrabold text-center mb-6 bg-gradient-to-br from-white to-blue-400 bg-clip-text text-transparent">
-        Earn
-      </h1>
-
-      <div className="mb-12">
-        <p className="text-xl text-center text-gray-400 leading-relaxed">
-          Choose a vault to start earning yield on your assets
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-earn-text-primary">Earn</h1>
+        <p className="text-sm text-earn-text-secondary mt-1">
+          Deposit into Morpho vaults and earn yield on your assets
         </p>
       </div>
 
-      {loading && (
-        <div className="mt-8 p-8 bg-gray-700 rounded-xl text-center text-gray-400 text-base">
-          Loading vaults...
+      {/* Portfolio summary */}
+      {isConnected && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl p-5" style={{ border: "1px solid #DADADA" }}>
+            <p className="text-sm text-earn-text-secondary font-medium">Total balance</p>
+            <p className="text-2xl font-semibold text-earn-text-primary mt-2">
+              {positionsLoading ? "—" : `$${totalBalanceUsd.toFixed(2)}`}
+            </p>
+            <p className="text-xs text-earn-text-secondary mt-1">
+              Across {positions.length} active vault{positions.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-5" style={{ border: "1px solid #DADADA" }}>
+            <p className="text-sm text-earn-text-secondary font-medium">Wallet</p>
+            <p className="text-sm font-mono text-earn-text-primary mt-2 truncate">{address}</p>
+            <p className="text-xs text-earn-text-secondary mt-1">
+              {vaults.length} vaults available on this network
+            </p>
+          </div>
         </div>
       )}
 
-      {error && (
-        <div className="mt-8 p-4 bg-red-500/10 rounded-lg text-center text-red-500 border border-red-500">
-          Error loading vaults: {error}
-        </div>
-      )}
+      {/* Vaults grid */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-medium text-earn-text-primary">Vaults</h2>
+            {vaults.length > 0 && (
+              <p className="text-xs text-earn-text-secondary mt-0.5">
+                {vaults.length} vaults · sorted by TVL
+              </p>
+            )}
+          </div>
 
-      {!loading && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {vaults.length > 0 ? (
-            vaults.map((vault) => (
-              <Link
-                key={vault.id}
-                href={`/earn/${vault.id}`}
-                className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl p-6 border border-gray-600 cursor-pointer transition-all duration-300 no-underline block hover:border-blue-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/20"
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="p-1.5 rounded-lg bg-white hover:bg-earn-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                style={{ border: "1px solid #DADADA" }}
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex flex-col gap-2">
-                      <h3 className="text-white font-bold text-lg m-0">
-                        {vault.name}
-                      </h3>
-                      {vault.whitelisted && (
-                        <span className="bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded self-start">
-                          Whitelisted
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-400 text-xs m-0 line-clamp-2">
-                      {vault.description}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-green-500 font-bold text-base">
-                      {vault.netApy} Net APY
-                    </span>
-                    {vault.apy !== vault.netApy && (
-                      <span className="text-gray-400 font-medium text-xs">
-                        {vault.apy} Base
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">
-                      TVL
-                    </span>
-                    <span className="text-white text-base font-semibold truncate">
-                      {vault.tvl}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">
-                      Share Price
-                    </span>
-                    <span className="text-white text-base font-semibold truncate">
-                      {vault.sharePrice}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">
-                      Total Supply
-                    </span>
-                    <span className="text-white text-base font-semibold truncate">
-                      {vault.totalSupply}
-                    </span>
-                  </div>
-                </div>
-
-                {vault.rewards.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-4 p-3 bg-white/5 rounded-lg overflow-hidden">
-                    <span className="text-gray-400 text-xs font-semibold mr-1 flex-shrink-0">
-                      Rewards:
-                    </span>
-                    {vault.rewards.map((reward, index) => (
-                      <span
-                        key={index}
-                        className="text-blue-600 text-xs font-medium bg-blue-600/10 px-2 py-1 rounded flex-shrink-0"
-                      >
-                        {reward.asset} {reward.supplyApr}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex justify-end items-center">
-                  <span className="text-blue-600 text-sm font-semibold">
-                    View Details →
-                  </span>
-                </div>
-              </Link>
-            ))
-          ) : (
-            <div className="mt-8 p-8 bg-gray-700 rounded-xl text-center text-gray-400 text-base">
-              No vaults available at the moment.
+                <ChevronLeft className="h-4 w-4 text-earn-text-secondary" />
+              </button>
+              <span className="text-xs text-earn-text-secondary">
+                {page + 1} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page === totalPages - 1}
+                className="p-1.5 rounded-lg bg-white hover:bg-earn-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                style={{ border: "1px solid #DADADA" }}
+              >
+                <ChevronRight className="h-4 w-4 text-earn-text-secondary" />
+              </button>
             </div>
           )}
         </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: VAULTS_PER_PAGE }).map((_, i) => (
+              <div key={i} className="h-64 rounded-xl bg-white border border-earn-border animate-pulse" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="p-4 bg-red-50 rounded-xl border border-red-200 text-sm text-red-600">
+            Error loading vaults: {error}
+          </div>
+        ) : pagedVaults.length === 0 ? (
+          <div className="p-6 bg-earn-light rounded-xl border border-earn-border text-sm text-earn-text-secondary text-center">
+            No vaults available on this network.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pagedVaults.map((vault) => (
+              <VaultCard key={vault.id} vault={vault} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Your positions */}
+      {isConnected && (
+        <section>
+          <h2 className="text-sm font-medium text-earn-text-primary mb-4">Your Positions</h2>
+          {positionsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-36 rounded-xl bg-white border border-earn-border animate-pulse" />
+              ))}
+            </div>
+          ) : positions.length === 0 ? (
+            <div
+              className="rounded-xl p-6 text-center"
+              style={{ background: "#F9F9F9", border: "1px solid #DADADA" }}
+            >
+              <p className="text-sm text-earn-text-secondary">
+                No active positions. Deposit into a vault above to get started.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {positions.map((position) => (
+                <PositionCard key={position.vault.id} position={position} />
+              ))}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

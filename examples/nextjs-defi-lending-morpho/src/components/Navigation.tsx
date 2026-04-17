@@ -1,72 +1,53 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
-import { ModeToggle } from "@/components/mode-toggle";
-import { HamburgerMenu } from "./HamburgerMenu";
-import DynamicButton from "./dynamic/DynamicButton";
 import DynamicLogo from "./dynamic/Logo";
-import { Button } from "./ui/button";
 
 export default function Navigation() {
   const currentPath = usePathname();
 
-  const isActiveOrChild = (path: string) =>
+  const isActive = (path: string) =>
     currentPath === path || currentPath.startsWith(`${path}/`);
 
-  const navItems = (
-    <>
-      <Button variant="link" asChild>
-        <Link
-          href="/borrow"
-          className={
-            isActiveOrChild("/borrow")
-              ? "text-primary underline"
-              : "text-muted-foreground hover:text-primary hover:bg-accent"
-          }
-        >
-          Borrow
-        </Link>
-      </Button>
-      <Button variant="link" asChild>
+  return (
+    <header
+      className="fixed top-0 left-0 right-0 h-16 bg-white z-40 flex items-center px-6 gap-4"
+      style={{ borderBottom: "1px solid #DADADA", boxShadow: "0 1px 2px 0 rgba(0,0,0,0.08)" }}
+    >
+      <Link href="/" className="flex items-center">
+        <DynamicLogo width={120} height={24} className="text-[#030303]" />
+      </Link>
+
+      <nav className="flex items-center gap-1 ml-2">
         <Link
           href="/earn"
-          className={
-            isActiveOrChild("/earn")
-              ? "text-primary underline"
-              : "text-muted-foreground hover:text-primary hover:bg-accent"
+          className="px-3 py-1.5 rounded-md text-sm transition-colors"
+          style={
+            isActive("/earn")
+              ? { background: "#E8F0FE", color: "#1967D2", fontWeight: 500 }
+              : { color: "#606060" }
           }
         >
           Earn
         </Link>
-      </Button>
-    </>
-  );
-
-  return (
-    <div
-      className={
-        "absolute top-0 flex items-center justify-between w-full py-2 sticky bg-background/80 backdrop-blur-md border-b border-border z-50"
-      }
-    >
-      <div className="pl-4 h-[40px] flex items-center">
-        <Link href="/">
-          <DynamicLogo />
+        <Link
+          href="/borrow"
+          className="px-3 py-1.5 rounded-md text-sm transition-colors"
+          style={
+            isActive("/borrow")
+              ? { background: "#E8F0FE", color: "#1967D2", fontWeight: 500 }
+              : { color: "#606060" }
+          }
+        >
+          Borrow
         </Link>
-      </div>
-      <div className="hidden md:flex gap-2 pr-4 items-center">
-        {navItems}
+      </nav>
+
+      <div className="ml-auto">
         <DynamicWidget />
-        <ModeToggle />
       </div>
-      <div className="md:hidden pr-4">
-        <HamburgerMenu>
-          {navItems}
-          <DynamicButton />
-        </HamburgerMenu>
-      </div>
-    </div>
+    </header>
   );
 }

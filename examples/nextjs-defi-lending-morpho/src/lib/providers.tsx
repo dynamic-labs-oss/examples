@@ -23,12 +23,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
+      defaultTheme="light"
       disableTransitionOnChange
     >
       <DynamicContextProvider
-        theme="auto"
+        theme="light"
         settings={{
           environmentId:
             // replace with your own environment ID

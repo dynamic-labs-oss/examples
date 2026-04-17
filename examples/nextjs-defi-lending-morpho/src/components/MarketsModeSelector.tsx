@@ -17,15 +17,15 @@ export function MarketsModeSelector({
   ];
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-2 w-full">
+    <div className="mb-4 grid grid-cols-2 gap-2 w-full">
       {modes.map(({ key, label }) => (
         <button
           key={key}
           onClick={() => onModeChange(key)}
-          className={`font-normal bg-gray-700 text-gray-400 border-none rounded-lg py-3 cursor-pointer transition-all duration-200 text-sm hover:bg-gray-600 ${
+          className={`rounded-lg py-2 cursor-pointer transition-colors duration-200 text-sm border ${
             mode === key
-              ? "font-bold bg-blue-600 text-white outline-2 outline-blue-400"
-              : ""
+              ? "bg-earn-active-bg text-earn-active-text font-medium border-earn-primary/30"
+              : "bg-earn-light text-earn-text-secondary border-earn-border hover:bg-gray-100"
           }`}
         >
           {label}

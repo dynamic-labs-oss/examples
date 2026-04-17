@@ -7,3 +7,4 @@ export { useMarketsList } from "./useMarketsList";
 export { useNetwork, useNetworkConfig } from "./useNetwork";
 export { useVaultsList } from "./useVaultsList";
 export { useVaultDetail } from "./useVaultDetail";
+export { useVaultPositions } from "./useVaultPositions";

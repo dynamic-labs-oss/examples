@@ -39,25 +39,38 @@ export function SupplyCard({
   onWithdraw,
 }: SupplyCardProps) {
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="text-lg">{supply.currency.symbol}</CardTitle>
-        <div className="text-sm text-muted-foreground space-y-1">
-          <p>Market: {supply.market.name}</p>
-          <p>
-            Balance: {safeParseFloat(supply.balance.amount, 6)}{" "}
+    <Card className="w-full bg-white border border-earn-border rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold text-earn-text-primary">
             {supply.currency.symbol}
-          </p>
-          <p>USD Value: {safeParseUSD(supply.balance.usd)}</p>
+          </CardTitle>
+          <span className="text-xs text-earn-active-text bg-earn-active-bg px-2 py-0.5 rounded-full font-medium">
+            Supplied
+          </span>
+        </div>
+        <p className="text-xs text-earn-text-secondary mt-1">{supply.market.name}</p>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className="bg-earn-light rounded-lg px-3 py-2">
+            <p className="text-xs text-earn-text-secondary">Balance</p>
+            <p className="text-sm font-semibold text-earn-text-primary">
+              {safeParseFloat(supply.balance.amount, 6)} {supply.currency.symbol}
+            </p>
+          </div>
+          <div className="bg-earn-light rounded-lg px-3 py-2">
+            <p className="text-xs text-earn-text-secondary">USD Value</p>
+            <p className="text-sm font-semibold text-earn-text-primary">
+              {safeParseUSD(supply.balance.usd)}
+            </p>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Supply more */}
+      <CardContent className="space-y-2 pt-0">
         <div className="flex gap-2">
           <input
             type="number"
             placeholder="Amount"
-            className="flex-1 text-xs px-3 py-2 border border-input rounded-md text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1 text-xs px-3 py-2 border border-earn-border rounded-lg text-earn-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-earn-primary/30 focus:border-earn-primary"
             defaultValue="1.0"
             step="0.1"
             min="0"
@@ -68,23 +81,21 @@ export function SupplyCard({
               const input = document.getElementById(
                 `supply-more-amount-${supply.market.address}-${supply.currency.address}`
               ) as HTMLInputElement;
-              const amount = input?.value || "1.0";
-              onSupply(supply.market.address, supply.currency.address, amount);
+              onSupply(supply.market.address, supply.currency.address, input?.value || "1.0");
             }}
             disabled={isOperating || !primaryWallet}
             size="sm"
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="bg-earn-primary hover:bg-earn-primary/90 text-white"
           >
             Supply More
           </Button>
         </div>
 
-        {/* Borrow */}
         <div className="flex gap-2">
           <input
             type="number"
             placeholder="Amount"
-            className="flex-1 text-xs px-3 py-2 border border-input rounded-md text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1 text-xs px-3 py-2 border border-earn-border rounded-lg text-earn-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-earn-primary/30 focus:border-earn-primary"
             defaultValue="1.0"
             step="0.1"
             min="0"
@@ -95,23 +106,21 @@ export function SupplyCard({
               const input = document.getElementById(
                 `borrow-amount-${supply.market.address}-${supply.currency.address}`
               ) as HTMLInputElement;
-              const amount = input?.value || "1.0";
-              onBorrow(supply.market.address, supply.currency.address, amount);
+              onBorrow(supply.market.address, supply.currency.address, input?.value || "1.0");
             }}
             disabled={isOperating || !primaryWallet}
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="bg-earn-dark hover:bg-earn-dark/90 text-white"
           >
             Borrow
           </Button>
         </div>
 
-        {/* Withdraw */}
         <div className="flex gap-2">
           <input
             type="number"
             placeholder="Amount"
-            className="flex-1 text-xs px-3 py-2 border border-input rounded-md text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1 text-xs px-3 py-2 border border-earn-border rounded-lg text-earn-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-earn-primary/30 focus:border-earn-primary"
             defaultValue="1.0"
             step="0.1"
             min="0"
@@ -122,16 +131,12 @@ export function SupplyCard({
               const input = document.getElementById(
                 `withdraw-amount-${supply.market.address}-${supply.currency.address}`
               ) as HTMLInputElement;
-              const amount = input?.value || "1.0";
-              onWithdraw(
-                supply.market.address,
-                supply.currency.address,
-                amount
-              );
+              onWithdraw(supply.market.address, supply.currency.address, input?.value || "1.0");
             }}
             disabled={isOperating || !primaryWallet}
             size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white"
+            variant="outline"
+            className="border-earn-border text-earn-text-primary hover:bg-earn-light"
           >
             Withdraw
           </Button>

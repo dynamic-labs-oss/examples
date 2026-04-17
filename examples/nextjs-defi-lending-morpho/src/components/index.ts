@@ -16,3 +16,5 @@ export { MarketsModeSelector } from "./MarketsModeSelector";
 
 // Card Components
 export { MarketCard } from "./MarketCard";
+export { VaultCard } from "./VaultCard";
+export { PositionCard } from "./PositionCard";

@@ -3,7 +3,6 @@ import { Button } from "./Button";
 import { Input } from "./Input";
 import { DynamicConnectButton } from "@dynamic-labs/sdk-react-core";
 
-// Market mode configuration
 const MARKET_MODE_CONFIG = {
   supply: {
     placeholder: "Amount in Collateral",
@@ -69,12 +68,6 @@ export function MarketsForm({
   const config = MARKET_MODE_CONFIG[mode];
   const isPending = isSupplying || isWithdrawing || isBorrowing || isRepaying;
 
-  const getButtonText = () => {
-    if (isPending) {
-      return config.loadingText;
-    }
-    return config.buttonText;
-  };
   const needsApproval =
     mode === "borrow" || mode === "repay"
       ? needsLoanTokenApproval
@@ -88,8 +81,11 @@ export function MarketsForm({
       ? onApproveLoanToken
       : onApproveCollateral;
 
+  const approveSymbol =
+    mode === "borrow" || mode === "repay" ? loanTokenSymbol : collateralSymbol;
+
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <Input
         type="number"
         min={0}
@@ -102,16 +98,12 @@ export function MarketsForm({
 
       {needsApproval && onApprove && (
         <Button variant="approve" loading={isApproving} onClick={onApprove}>
-          {`Approve ${
-            mode === "borrow" || mode === "repay"
-              ? loanTokenSymbol
-              : collateralSymbol
-          }`}
+          {`Approve ${approveSymbol}`}
         </Button>
       )}
 
       {!isConnected ? (
-        <DynamicConnectButton buttonClassName="border-none rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 text-white outline-2 outline-blue-400 hover:not-disabled:bg-gradient-to-br hover:not-disabled:from-blue-500 hover:not-disabled:to-blue-600 hover:not-disabled:-translate-y-1 hover:not-disabled:shadow-xl hover:not-disabled:shadow-blue-600/502xl py-4.5 font-bold text-lg cursor-pointer mb-1 shadow-lg transition-all duration-300 ease-in-out w-full relative overflow-hidden disabled:cursor-not-allowed disabled:outline-none disabled:opacity-60 disabled:transform-none w-full bg-gradient-to-br from-blue-600 to-blue-500 text-white outline-2 outline-blue-400 hover:not-disabled:bg-gradient-to-br hover:not-disabled:from-blue-500 hover:not-disabled:to-blue-600 hover:not-disabled:-translate-y-1 hover:not-disabled:shadow-xl hover:not-disabled:shadow-blue-600/50">
+        <DynamicConnectButton buttonClassName="bg-earn-primary text-white rounded-xl py-3 font-medium text-sm w-full cursor-pointer hover:bg-earn-primary/90 transition-colors">
           Connect Wallet
         </DynamicConnectButton>
       ) : (
@@ -121,7 +113,7 @@ export function MarketsForm({
           disabled={!isConnected || isPending || needsApproval}
           loading={isPending}
         >
-          {getButtonText()}
+          {isPending ? config.loadingText : config.buttonText}
         </Button>
       )}
     </form>
