@@ -50,13 +50,11 @@ function shortenAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-const primaryBtn =
-  "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-[#4779FF] text-white hover:bg-[#3366ee] disabled:opacity-50 disabled:cursor-not-allowed";
-const outlineBtn =
-  "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-[#DADADA] text-[#030303] hover:bg-[#F9F9F9] disabled:opacity-50 disabled:cursor-not-allowed";
+const primaryBtn = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-[#4779FF] text-white hover:bg-[#3366ee] disabled:opacity-50 disabled:cursor-not-allowed";
+const outlineBtn = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-[#DADADA] text-[#030303] hover:bg-[#F9F9F9] disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function DynamicButton() {
-  const { evmAccount, loggedIn, disconnect, ensureEvmWallet } = useWallet();
+  const { evmAccount, loggedIn, disconnect, ensureWallets } = useWallet();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "email" | "otp" | "wallet" | "export">("menu");
   const [email, setEmail] = useState("");
@@ -72,57 +70,30 @@ export default function DynamicButton() {
   useEffect(() => {
     if (!open) return;
     function handler(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setView("menu");
-        setError(null);
-      }
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) { setOpen(false); setView("menu"); setError(null); }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const reset = () => {
-    setView("menu");
-    setEmail("");
-    setOtp("");
-    setOtpVerification(null);
-    setError(null);
-    setLoading(false);
-    setExportPassword("");
-    setExportRevealed(false);
-  };
+  const reset = () => { setView("menu"); setEmail(""); setOtp(""); setOtpVerification(null); setError(null); setLoading(false); setExportPassword(""); setExportRevealed(false); };
 
   const handleExportKey = useCallback(async () => {
     if (!exportContainerRef.current || !evmAccount) return;
     setLoading(true);
     setError(null);
     try {
-      await exportWaasPrivateKey(
-        { displayContainer: exportContainerRef.current, password: exportPassword, walletAccount: evmAccount },
-        dynamicClient
-      );
+      await exportWaasPrivateKey({ displayContainer: exportContainerRef.current, password: exportPassword, walletAccount: evmAccount }, dynamicClient);
       setExportRevealed(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Export failed");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Export failed"); } finally { setLoading(false); }
   }, [exportPassword, evmAccount]);
 
   const handleSendOTP = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    try {
-      const verification = await sendEmailOTP({ email }, dynamicClient);
-      setOtpVerification(verification);
-      setView("otp");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send OTP");
-    } finally {
-      setLoading(false);
-    }
+    try { const verification = await sendEmailOTP({ email }, dynamicClient); setOtpVerification(verification); setView("otp"); }
+    catch (err) { setError(err instanceof Error ? err.message : "Failed to send OTP"); } finally { setLoading(false); }
   }, [email]);
 
   const handleVerifyOTP = useCallback(async (e: React.FormEvent) => {
@@ -132,106 +103,61 @@ export default function DynamicButton() {
     setError(null);
     try {
       await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
-      await ensureEvmWallet();
+      await ensureWallets();
       setOpen(false);
       reset();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Invalid code";
-      if (msg.toLowerCase().includes("unauthorized")) {
-        setError("Verification failed. Please request a new code and try again.");
-      } else {
-        setError(msg);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [otpVerification, otp, ensureEvmWallet]);
+      setError(msg.toLowerCase().includes("unauthorized") ? "Verification failed. Please request a new code and try again." : msg);
+    } finally { setLoading(false); }
+  }, [otpVerification, otp, ensureWallets]);
 
   const handleGoogle = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      await authenticateWithSocial(
-        { provider: "google", redirectUrl: typeof window !== "undefined" ? window.location.href : "" },
-        dynamicClient
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed");
-      setLoading(false);
-    }
+    try { await authenticateWithSocial({ provider: "google", redirectUrl: typeof window !== "undefined" ? window.location.href : "" }, dynamicClient); }
+    catch (err) { setError(err instanceof Error ? err.message : "Google sign-in failed"); setLoading(false); }
   }, []);
 
-  const getEvmProviders = (): WalletProviderData[] =>
-    getAvailableWalletProvidersData(dynamicClient).filter((p) => p.chain === "EVM");
+  const getAllProviders = (): WalletProviderData[] => getAvailableWalletProvidersData(dynamicClient);
 
   const handleConnectWallet = useCallback(async (providerKey: string) => {
     setLoading(true);
     setError(null);
-    try {
-      await connectAndVerifyWithWalletProvider({ walletProviderKey: providerKey }, dynamicClient);
-      await ensureEvmWallet();
-      setOpen(false);
-      reset();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Connection failed");
-    } finally {
-      setLoading(false);
-    }
-  }, [ensureEvmWallet]);
+    try { await connectAndVerifyWithWalletProvider({ walletProviderKey: providerKey }, dynamicClient); await ensureWallets(); setOpen(false); reset(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Connection failed"); } finally { setLoading(false); }
+  }, [ensureWallets]);
 
-  if (loggedIn && evmAccount) {
+  const displayAddress = evmAccount?.address ?? "";
+
+  if (loggedIn && displayAddress) {
     return (
       <div className="relative" ref={panelRef}>
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#DADADA] bg-white hover:bg-[#F9F9F9] transition-colors text-sm font-medium text-[#030303]"
-        >
-          <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white" style={{ background: "#4779FF" }}>
-            {evmAccount.address[0].toUpperCase()}
-          </span>
-          <span className="hidden sm:block font-mono text-xs text-[#606060]">{shortenAddress(evmAccount.address)}</span>
+        <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#DADADA] bg-white hover:bg-[#F9F9F9] transition-colors text-sm font-medium text-[#030303]">
+          <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white" style={{ background: "#4779FF" }}>{displayAddress[0].toUpperCase()}</span>
+          <span className="hidden sm:block font-mono text-xs text-[#606060]">{shortenAddress(displayAddress)}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#606060" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
         </button>
-
         {open && (
           <div className={`absolute right-0 top-full mt-2 bg-white rounded-xl border border-[#DADADA] shadow-lg p-2 z-50 ${view === "export" ? "w-72" : "w-52"}`}>
             {view !== "export" && (
               <>
-                <div className="px-3 py-2 mb-1">
-                  <p className="text-xs text-[#606060] font-medium">Connected</p>
-                  <p className="text-xs font-mono text-[#030303] truncate mt-0.5">{evmAccount.address}</p>
-                </div>
+                <div className="px-3 py-2 mb-1"><p className="text-xs text-[#606060] font-medium">Connected</p><p className="text-xs font-mono text-[#030303] truncate mt-0.5">{displayAddress}</p></div>
                 <div className="border-t border-[#DADADA] my-1" />
-                <button
-                  onClick={() => { setView("export"); setError(null); }}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#030303] hover:bg-[#F9F9F9] rounded-lg transition-colors"
-                >
-                  <KeyRound className="h-3.5 w-3.5 text-[#606060]" />
-                  Export Private Key
-                </button>
+                {evmAccount && <button onClick={() => { setView("export"); setError(null); }} className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#030303] hover:bg-[#F9F9F9] rounded-lg transition-colors"><KeyRound className="h-3.5 w-3.5 text-[#606060]" />Export Private Key</button>}
                 <div className="border-t border-[#DADADA] my-1" />
-                <button onClick={() => { disconnect(); setOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                  Disconnect
-                </button>
+                <button onClick={() => { disconnect(); setOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">Disconnect</button>
               </>
             )}
-            {view === "export" && (
+            {view === "export" && evmAccount && (
               <div className="p-2 space-y-3">
-                <button type="button" onClick={() => { setView("menu"); setError(null); setExportPassword(""); setExportRevealed(false); }} className="flex items-center gap-1 text-xs text-[#606060] hover:text-[#030303] mb-1">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
-                  Back
-                </button>
-                <div className="flex items-center gap-2">
-                  <KeyRound className="h-4 w-4 text-[#606060]" />
-                  <p className="text-sm font-medium text-[#030303]">Export Private Key</p>
-                </div>
+                <button type="button" onClick={() => { setView("menu"); setError(null); setExportPassword(""); setExportRevealed(false); }} className="flex items-center gap-1 text-xs text-[#606060] hover:text-[#030303] mb-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>Back</button>
+                <div className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-[#606060]" /><p className="text-sm font-medium text-[#030303]">Export Private Key</p></div>
                 {!exportRevealed && (
                   <>
                     <input type="password" value={exportPassword} onChange={(e) => setExportPassword(e.target.value)} placeholder="Enter your password" className="w-full text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#4779FF]" style={{ border: "1px solid #DADADA", background: "#F9F9F9" }} />
                     {error && <p className="text-xs text-red-600">{error}</p>}
-                    <button onClick={handleExportKey} disabled={loading} className="w-full py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: "#030303", color: "#fff" }}>
-                      {loading ? "Exporting…" : "Reveal Private Key"}
-                    </button>
+                    <button onClick={handleExportKey} disabled={loading} className="w-full py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: "#030303", color: "#fff" }}>{loading ? "Exporting…" : "Reveal Private Key"}</button>
                   </>
                 )}
                 <div ref={exportContainerRef} className={exportRevealed ? "mt-2" : "hidden"} />
@@ -245,22 +171,17 @@ export default function DynamicButton() {
 
   return (
     <div className="relative" ref={panelRef}>
-      <button onClick={() => { setOpen((o) => !o); setView("menu"); setError(null); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-[#4779FF] text-white hover:bg-[#3366ee] transition-colors">
-        Sign in
-      </button>
-
+      <button onClick={() => { setOpen((o) => !o); setView("menu"); setError(null); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-[#4779FF] text-white hover:bg-[#3366ee] transition-colors">Sign in</button>
       {open && (
         <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border border-[#DADADA] shadow-lg p-4 z-50">
           {view === "menu" && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-[#030303] mb-3">Sign in to Iron Ramp</p>
+              <p className="text-sm font-medium text-[#030303] mb-3">Sign in to Cash Pickup</p>
               <button onClick={handleGoogle} disabled={loading} className={outlineBtn}><GoogleIcon />Continue with Google</button>
               <button onClick={() => { setView("email"); setError(null); }} className={outlineBtn}><EmailIcon />Continue with Email</button>
-              {getEvmProviders().length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 my-1"><div className="flex-1 h-px bg-[#DADADA]" /><span className="text-xs text-[#606060]">or</span><div className="flex-1 h-px bg-[#DADADA]" /></div>
-                  <button onClick={() => { setView("wallet"); setError(null); }} className={outlineBtn}><WalletIcon />Connect Wallet</button>
-                </>
+              {getAllProviders().length > 0 && (
+                <><div className="flex items-center gap-2 my-1"><div className="flex-1 h-px bg-[#DADADA]" /><span className="text-xs text-[#606060]">or</span><div className="flex-1 h-px bg-[#DADADA]" /></div>
+                <button onClick={() => { setView("wallet"); setError(null); }} className={outlineBtn}><WalletIcon />Connect Wallet</button></>
               )}
               {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
             </div>
@@ -287,11 +208,11 @@ export default function DynamicButton() {
           {view === "wallet" && (
             <div className="space-y-2">
               <button type="button" onClick={() => { setView("menu"); setError(null); }} className="flex items-center gap-1 text-xs text-[#606060] hover:text-[#030303] mb-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>Back</button>
-              <p className="text-sm font-medium text-[#030303] mb-3">Choose an EVM wallet</p>
-              {getEvmProviders().length === 0 ? (
-                <p className="text-xs text-[#606060]">No EVM wallets detected. Install MetaMask or another EVM wallet.</p>
+              <p className="text-sm font-medium text-[#030303] mb-3">Choose a wallet</p>
+              {getAllProviders().length === 0 ? (
+                <p className="text-xs text-[#606060]">No wallets detected. Install MetaMask, Phantom, or another wallet.</p>
               ) : (
-                getEvmProviders().map((provider) => (
+                getAllProviders().map((provider) => (
                   <button key={provider.key} onClick={() => handleConnectWallet(provider.key)} disabled={loading} className={outlineBtn}>
                     {provider.metadata.icon && (
                       // eslint-disable-next-line @next/next/no-img-element
