@@ -10,5 +10,5 @@ export const env = {
   IRON_API_KEY: process.env.IRON_API_KEY || "",
 
   // Dynamic
-  NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID || "",
+  NEXT_PUBLIC_DYNAMIC_ENV_ID: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID || "",
 } as const;

@@ -1,10 +1,8 @@
 "use client";
 
-import {
-  useDynamicContext,
-  useUserUpdateRequest,
-} from "@dynamic-labs/sdk-react-core";
+import { onEvent, updateUser } from "@dynamic-labs-sdk/client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { dynamicClient } from "@/lib/dynamic";
 
 // =============================================================================
 // TYPES
@@ -39,7 +37,7 @@ export interface KYCState {
   walletId: string;
   walletAddress: string;
   bankAccountId: string;
-  bankIban: string; // The actual IBAN for the bank account
+  bankIban: string;
   identificationId: string;
   kycUrl: string;
   step: OnboardStep;
@@ -65,22 +63,20 @@ const DEFAULT_STATE: KYCState = {
 /**
  * useKYCMetadata - Manages KYC onboarding state in Dynamic user metadata
  *
- * Single source of truth: user.metadata.iron. All state is stored there and
- * synced via updateUser(); re-run init when user/metadata changes to stay in sync.
+ * Uses the JS SDK's `dynamicClient.user` to read current user state and
+ * `updateUser` to persist metadata. Subscribes to `userChanged` events
+ * to stay in sync across tabs and after auth.
  */
 export function useKYCMetadata() {
-  const { user } = useDynamicContext();
-  const { updateUser } = useUserUpdateRequest();
-
   const [state, setState] = useState<KYCState>(DEFAULT_STATE);
   const [isLoading, setIsLoading] = useState(true);
-
   const lastSyncedState = useRef<string>("");
 
   // ---------------------------------------------------------------------------
   // Load state from Dynamic user metadata
   // ---------------------------------------------------------------------------
-  const loadFromDynamic = useCallback((): KYCState | null => {
+  const loadFromUser = useCallback(() => {
+    const user = dynamicClient.user;
     if (!user?.metadata) return null;
 
     const metadata = user.metadata as IronKYCMetadata;
@@ -97,72 +93,85 @@ export function useKYCMetadata() {
       step: metadata.iron.onboardingStep || "customer",
       kycCompleted: metadata.iron.kycCompleted || false,
     };
-  }, [user?.metadata]);
+  }, []);
 
-  // ---------------------------------------------------------------------------
-  // Sync state to Dynamic user metadata
-  // ---------------------------------------------------------------------------
-  const syncToDynamic = useCallback(
-    async (newState: KYCState): Promise<boolean> => {
-      if (!user) {
-        console.warn("[useKYCMetadata] No user, skipping Dynamic sync");
-        return false;
-      }
-
-      // Avoid unnecessary syncs
-      const stateHash = JSON.stringify(newState);
-      if (stateHash === lastSyncedState.current) {
-        return true;
-      }
-
-      try {
-        const metadata: IronKYCMetadata = {
-          ...(user.metadata as IronKYCMetadata),
-          iron: {
-            customerId: newState.customerId,
-            walletId: newState.walletId,
-            walletAddress: newState.walletAddress,
-            bankAccountId: newState.bankAccountId,
-            bankIban: newState.bankIban,
-            identificationId: newState.identificationId,
-            kycUrl: newState.kycUrl,
-            onboardingStep: newState.step,
-            kycCompleted: newState.kycCompleted,
-            updatedAt: new Date().toISOString(),
-            createdAt:
-              (user.metadata as IronKYCMetadata)?.iron?.createdAt ||
-              new Date().toISOString(),
-          },
-        };
-
-        await updateUser({ metadata });
-        lastSyncedState.current = stateHash;
-        return true;
-      } catch (e) {
-        console.error("[useKYCMetadata] Sync failed:", e instanceof Error ? e.message : e);
-        return false;
-      }
-    },
-    [user, updateUser]
-  );
-
-  // ---------------------------------------------------------------------------
-  // Initialize state from Dynamic user metadata (re-run when user/metadata changes)
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
+  const syncFromClient = useCallback(() => {
     setIsLoading(true);
-
-    const dynamicState = loadFromDynamic();
-
+    const dynamicState = loadFromUser();
     if (dynamicState && dynamicState.customerId) {
       setState(dynamicState);
       lastSyncedState.current = JSON.stringify(dynamicState);
     } else {
       setState(DEFAULT_STATE);
     }
-
     setIsLoading(false);
-  }, [user?.userId, user?.metadata, loadFromDynamic]);
+  }, [loadFromUser]);
+
+  // ---------------------------------------------------------------------------
+  // Subscribe to userChanged events and init on mount
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    syncFromClient();
+    const unsub = onEvent(
+      { event: "userChanged", listener: () => syncFromClient() },
+      dynamicClient
+    );
+    const unsubLogout = onEvent(
+      { event: "logout", listener: () => { setState(DEFAULT_STATE); lastSyncedState.current = ""; } },
+      dynamicClient
+    );
+    return () => {
+      unsub();
+      unsubLogout();
+    };
+  }, [syncFromClient]);
+
+  // ---------------------------------------------------------------------------
+  // Sync state to Dynamic user metadata
+  // ---------------------------------------------------------------------------
+  const syncToDynamic = useCallback(async (newState: KYCState): Promise<boolean> => {
+    const user = dynamicClient.user;
+    if (!user) {
+      console.warn("[useKYCMetadata] No user, skipping Dynamic sync");
+      return false;
+    }
+
+    const stateHash = JSON.stringify(newState);
+    if (stateHash === lastSyncedState.current) return true;
+
+    try {
+      const existingMetadata = (user.metadata as IronKYCMetadata) || {};
+      await updateUser(
+        {
+          userFields: {
+            metadata: {
+              ...existingMetadata,
+              iron: {
+                customerId: newState.customerId,
+                walletId: newState.walletId,
+                walletAddress: newState.walletAddress,
+                bankAccountId: newState.bankAccountId,
+                bankIban: newState.bankIban,
+                identificationId: newState.identificationId,
+                kycUrl: newState.kycUrl,
+                onboardingStep: newState.step,
+                kycCompleted: newState.kycCompleted,
+                updatedAt: new Date().toISOString(),
+                createdAt:
+                  existingMetadata.iron?.createdAt || new Date().toISOString(),
+              },
+            },
+          },
+        },
+        dynamicClient
+      );
+      lastSyncedState.current = stateHash;
+      return true;
+    } catch (e) {
+      console.error("[useKYCMetadata] Sync failed:", e instanceof Error ? e.message : e);
+      return false;
+    }
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Update state and sync to Dynamic user metadata
@@ -171,14 +180,9 @@ export function useKYCMetadata() {
     async (updates: Partial<KYCState>): Promise<boolean> => {
       const newState = { ...state, ...updates };
       setState(newState);
-
-      if (user) {
-        return await syncToDynamic(newState);
-      }
-
-      return true;
+      return await syncToDynamic(newState);
     },
-    [state, user, syncToDynamic]
+    [state, syncToDynamic]
   );
 
   // ---------------------------------------------------------------------------
@@ -187,13 +191,8 @@ export function useKYCMetadata() {
   const reset = useCallback(async (): Promise<boolean> => {
     setState(DEFAULT_STATE);
     lastSyncedState.current = "";
-
-    if (user) {
-      return await syncToDynamic(DEFAULT_STATE);
-    }
-
-    return true;
-  }, [user, syncToDynamic]);
+    return await syncToDynamic(DEFAULT_STATE);
+  }, [syncToDynamic]);
 
   return {
     ...state,

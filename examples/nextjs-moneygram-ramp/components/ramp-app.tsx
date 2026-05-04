@@ -2,18 +2,17 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  isSignedIn,
   sendEmailOTP,
   verifyOTP,
   getWalletAccounts,
-  onEvent,
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
-import { initDynamic, dynamicClient } from "@/lib/dynamic";
+import { dynamicClient } from "@/lib/dynamic";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
 import type { WalletAccount } from "@dynamic-labs-sdk/client";
+import { useWallet } from "@/lib/providers";
 import { ArrowRight, Banknote, Check, Copy, Globe, Wallet, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { ChainSelector } from "./chain-selector";
@@ -36,7 +35,7 @@ function truncate(addr: string): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function RampApp() {
-  const [signedIn, setSignedIn] = useState(false);
+  const { loggedIn, ensureWallets } = useWallet();
   const [walletAccounts, setWalletAccounts] = useState<WalletAccount[]>([]);
   const [selectedChain, setSelectedChain] = useState<MgChain>("base");
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
@@ -48,35 +47,15 @@ export function RampApp() {
   const [otpVerification, setOtpVerification] = useState<OTPVerification | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Sync wallet accounts from the dynamic client when loggedIn changes
   useEffect(() => {
-    let unsubToken: (() => void) | undefined;
-    let unsubWallets: (() => void) | undefined;
-    initDynamic().then(async () => {
-      if (isSignedIn()) {
-        const existing = getWalletAccounts();
-        if (existing.length === 0) {
-          await createWaasWalletAccounts({ chains: ["EVM", "SOL"] }, dynamicClient);
-        }
-        setSignedIn(true);
-        setWalletAccounts(getWalletAccounts());
-      }
-      unsubToken = onEvent(
-        { event: "tokenChanged", listener: ({ token }) => {
-          setSignedIn(!!token);
-          if (!token) setWalletAccounts([]);
-        }},
-        dynamicClient,
-      );
-      unsubWallets = onEvent(
-        { event: "walletAccountsChanged", listener: ({ walletAccounts }) => setWalletAccounts(walletAccounts) },
-        dynamicClient,
-      );
-    });
-    return () => {
-      unsubToken?.();
-      unsubWallets?.();
-    };
-  }, []);
+    if (loggedIn) {
+      const accounts = getWalletAccounts(dynamicClient);
+      setWalletAccounts(accounts);
+    } else {
+      setWalletAccounts([]);
+    }
+  }, [loggedIn]);
 
   const address = getAddressForChain(selectedChain, walletAccounts);
 
@@ -90,7 +69,7 @@ export function RampApp() {
     if (!email) return;
     setLoading(true);
     try {
-      const verification = await sendEmailOTP({ email });
+      const verification = await sendEmailOTP({ email }, dynamicClient);
       setOtpVerification(verification);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send code");
@@ -103,10 +82,14 @@ export function RampApp() {
     if (!otp || !otpVerification) return;
     setLoading(true);
     try {
-      await verifyOTP({ otpVerification, verificationToken: otp });
-      if (getWalletAccounts().length === 0) {
+      await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
+      // Ensure wallets are created for both EVM and Solana
+      const accounts = getWalletAccounts(dynamicClient);
+      if (accounts.length === 0) {
         await createWaasWalletAccounts({ chains: ["EVM", "SOL"] }, dynamicClient);
       }
+      await ensureWallets();
+      setWalletAccounts(getWalletAccounts(dynamicClient));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid code");
     } finally {
@@ -121,28 +104,28 @@ export function RampApp() {
 
   // ── Landing / Auth ──────────────────────────────────────────────────────────
 
-  if (!signedIn) {
+  if (!loggedIn) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
+      <div className="min-h-screen bg-[rgb(249,249,249)] text-[#030303]">
         {/* Hero */}
         <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-linear-to-br from-teal-950/40 via-gray-950 to-gray-950 pointer-events-none" />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#4779FF]/5 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[#4779FF]/5 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative container mx-auto px-4 pt-20 pb-16 text-center">
-            <h1 className="text-5xl sm:text-6xl font-bold mb-5 tracking-tight leading-[1.1]">
+            <h1 className="text-5xl sm:text-6xl font-bold mb-5 tracking-tight leading-[1.1] text-[#030303]">
               USDC to cash,{" "}
-              <span className="bg-linear-to-r from-teal-400 to-teal-600 bg-clip-text text-transparent">
+              <span className="text-[#4779FF]">
                 anywhere
               </span>
             </h1>
-            <p className="text-lg text-gray-400 mb-10 max-w-md mx-auto leading-relaxed">
+            <p className="text-lg text-[#606060] mb-10 max-w-md mx-auto leading-relaxed">
               Off-ramp your USDC across Base, Ethereum, and Solana. Pick up
               cash at thousands of locations worldwide.
             </p>
 
             {/* Auth card */}
-            <div className="mx-auto max-w-xs bg-gray-900 border border-gray-800 rounded-2xl p-6 text-left space-y-3">
+            <div className="mx-auto max-w-xs bg-white border border-[#DADADA] rounded-2xl p-6 text-left space-y-3 shadow-sm">
               {!otpVerification ? (
                 <>
                   <input
@@ -151,13 +134,13 @@ export function RampApp() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-teal-600 transition-colors"
+                    className="w-full bg-[#F9F9F9] border border-[#DADADA] rounded-xl px-4 py-2.5 text-[#030303] placeholder-[#606060] text-sm focus:outline-none focus:border-[#4779FF] transition-colors"
                     suppressHydrationWarning
                   />
                   <button
                     onClick={handleSendOtp}
                     disabled={loading || !email}
-                    className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-teal-500/25"
+                    className="w-full flex items-center justify-center gap-2 bg-[#4779FF] hover:bg-[#3366ee] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
                   >
                     {loading ? "Sending..." : "Get started"}
                     {!loading && <ArrowRight className="w-4 h-4" />}
@@ -165,8 +148,8 @@ export function RampApp() {
                 </>
               ) : (
                 <>
-                  <p className="text-xs text-gray-500 text-center">
-                    Code sent to <span className="text-gray-300">{email}</span>
+                  <p className="text-xs text-[#606060] text-center">
+                    Code sent to <span className="text-[#030303]">{email}</span>
                   </p>
                   <input
                     type="text"
@@ -175,20 +158,20 @@ export function RampApp() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 text-sm text-center tracking-widest focus:outline-none focus:border-teal-600 transition-colors"
+                    className="w-full bg-[#F9F9F9] border border-[#DADADA] rounded-xl px-4 py-2.5 text-[#030303] placeholder-[#606060] text-sm text-center tracking-widest focus:outline-none focus:border-[#4779FF] transition-colors"
                     maxLength={6}
                   />
                   <button
                     onClick={handleVerifyOtp}
                     disabled={loading || otp.length < 6}
-                    className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
+                    className="w-full flex items-center justify-center gap-2 bg-[#4779FF] hover:bg-[#3366ee] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
                   >
                     {loading ? "Verifying..." : "Verify"}
                     {!loading && <ArrowRight className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={() => { setOtpVerification(null); setOtp(""); }}
-                    className="w-full text-gray-500 hover:text-gray-300 text-xs text-center transition-colors py-1"
+                    className="w-full text-[#606060] hover:text-[#030303] text-xs text-center transition-colors py-1"
                   >
                     ← Back
                   </button>
@@ -204,47 +187,42 @@ export function RampApp() {
             {[
               {
                 icon: Wallet,
-                color: "teal",
+                color: "#4779FF",
                 title: "Embedded wallets",
                 desc: "Non-custodial wallets created automatically — no extensions or seed phrases.",
               },
               {
                 icon: Zap,
-                color: "purple",
+                color: "#7c3aed",
                 title: "Multi-chain",
                 desc: "Send USDC on Base, Ethereum, or Solana — switch chains anytime.",
               },
               {
                 icon: Globe,
-                color: "blue",
+                color: "#0284c7",
                 title: "Global pickup",
                 desc: "Thousands of cash pickup locations across 200+ countries.",
               },
             ].map(({ icon: Icon, color, title, desc }) => (
               <div
                 key={title}
-                className="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-colors"
+                className="bg-white border border-[#DADADA] rounded-2xl p-6 hover:shadow-sm transition-shadow"
               >
                 <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${
-                    color === "teal" ? "bg-teal-500/10" : color === "purple" ? "bg-purple-500/10" : "bg-blue-500/10"
-                  }`}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                  style={{ background: `${color}15` }}
                 >
-                  <Icon
-                    className={`w-5 h-5 ${
-                      color === "teal" ? "text-teal-400" : color === "purple" ? "text-purple-400" : "text-blue-400"
-                    }`}
-                  />
+                  <Icon className="w-5 h-5" style={{ color }} />
                 </div>
-                <h3 className="font-semibold text-white mb-1.5">{title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                <h3 className="font-semibold text-[#030303] mb-1.5">{title}</h3>
+                <p className="text-sm text-[#606060] leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
 
           {/* How it works */}
           <div className="max-w-lg mx-auto mt-20">
-            <h2 className="text-2xl font-bold text-center mb-10">How it works</h2>
+            <h2 className="text-2xl font-bold text-center mb-10 text-[#030303]">How it works</h2>
             <div className="relative space-y-0">
               {[
                 {
@@ -265,14 +243,14 @@ export function RampApp() {
               ].map(({ step, title, desc }, i) => (
                 <div key={step} className="flex gap-5">
                   <div className="flex flex-col items-center">
-                    <div className="w-9 h-9 rounded-full bg-teal-600/20 border border-teal-600/40 flex items-center justify-center flex-shrink-0">
-                      <span className="text-teal-400 text-xs font-bold">{step}</span>
+                    <div className="w-9 h-9 rounded-full bg-[#4779FF]/10 border border-[#4779FF]/30 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[#4779FF] text-xs font-bold">{step}</span>
                     </div>
-                    {i < 2 && <div className="w-px h-10 bg-gray-800 mt-1" />}
+                    {i < 2 && <div className="w-px h-10 bg-[#DADADA] mt-1" />}
                   </div>
                   <div className="pb-10">
-                    <h4 className="font-semibold text-white mb-1">{title}</h4>
-                    <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                    <h4 className="font-semibold text-[#030303] mb-1">{title}</h4>
+                    <p className="text-sm text-[#606060] leading-relaxed">{desc}</p>
                   </div>
                 </div>
               ))}
@@ -286,12 +264,12 @@ export function RampApp() {
   // ── Ramp UI ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-[rgb(249,249,249)]">
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-sm mx-auto space-y-5">
           <div>
-            <h2 className="text-xl font-bold text-white mb-1">Off-ramp USDC</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-xl font-bold text-[#030303] mb-1">Off-ramp USDC</h2>
+            <p className="text-sm text-[#606060]">
               Select a network and send USDC for cash pickup.
             </p>
           </div>
@@ -299,15 +277,15 @@ export function RampApp() {
           <ChainSelector selected={selectedChain} onChange={setSelectedChain} />
 
           {/* Wallet card */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5 hover:border-gray-700 transition-colors">
+          <div className="bg-white border border-[#DADADA] rounded-2xl p-6 space-y-5 hover:shadow-sm transition-shadow">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0">
-                <Wallet className="w-5 h-5 text-teal-400" />
+              <div className="w-10 h-10 rounded-xl bg-[#4779FF]/10 flex items-center justify-center flex-shrink-0">
+                <Wallet className="w-5 h-5 text-[#4779FF]" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500">{CHAINS[selectedChain].name}</p>
-                <p className="text-sm font-mono text-white">
-                  {address ? truncate(address) : <span className="text-gray-600">No wallet</span>}
+                <p className="text-xs text-[#606060]">{CHAINS[selectedChain].name}</p>
+                <p className="text-sm font-mono text-[#030303]">
+                  {address ? truncate(address) : <span className="text-[#DADADA]">No wallet</span>}
                 </p>
               </div>
               {address && (
@@ -317,19 +295,19 @@ export function RampApp() {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                  className="p-1.5 rounded-lg text-[#606060] hover:text-[#030303] hover:bg-[#F9F9F9] transition-colors"
                   title="Copy address"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-teal-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3.5 h-3.5 text-[#4779FF]" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               )}
             </div>
 
-            <div className="border-t border-gray-800 pt-4">
-              <p className="text-xs text-gray-500 mb-1">USDC balance</p>
-              <p className="text-3xl font-bold text-white">
+            <div className="border-t border-[#DADADA] pt-4">
+              <p className="text-xs text-[#606060] mb-1">USDC balance</p>
+              <p className="text-3xl font-bold text-[#030303]">
                 {usdcBalance === null ? (
-                  <span className="text-gray-700 text-xl font-normal">Loading...</span>
+                  <span className="text-[#DADADA] text-xl font-normal">Loading...</span>
                 ) : (
                   <>${usdcBalance.toFixed(2)}</>
                 )}
@@ -339,14 +317,14 @@ export function RampApp() {
             <button
               onClick={() => setWidgetOpen(true)}
               disabled={!address || !usdcBalance}
-              className="w-full flex items-center justify-center gap-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-teal-500/25"
+              className="w-full flex items-center justify-center gap-2.5 bg-[#4779FF] hover:bg-[#3366ee] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-all duration-200"
             >
               <Banknote className="w-4 h-4" />
               Cash Pickup
             </button>
           </div>
 
-          <p className="text-center text-xs text-gray-600">
+          <p className="text-center text-xs text-[#606060]">
             USDC on {CHAINS[selectedChain].name} → cash at pickup locations worldwide
           </p>
         </div>

@@ -21,20 +21,25 @@ import {
   isEvmWalletAccount,
   type EvmWalletAccount,
 } from "@dynamic-labs-sdk/evm";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  isSolanaWalletAccount,
+  type SolanaWalletAccount,
+} from "@dynamic-labs-sdk/solana";
 import { dynamicClient } from "./dynamic";
 
 interface WalletContextValue {
   evmAccount: EvmWalletAccount | null;
+  solanaAccount: SolanaWalletAccount | null;
   loggedIn: boolean;
-  ensureEvmWallet: () => Promise<void>;
+  ensureWallets: () => Promise<void>;
   disconnect: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextValue>({
   evmAccount: null,
+  solanaAccount: null,
   loggedIn: false,
-  ensureEvmWallet: async () => {},
+  ensureWallets: async () => {},
   disconnect: async () => {},
 });
 
@@ -42,36 +47,37 @@ export function useWallet() {
   return useContext(WalletContext);
 }
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
-export default function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children }: { children: ReactNode }) {
   const [evmAccount, setEvmAccount] = useState<EvmWalletAccount | null>(null);
+  const [solanaAccount, setSolanaAccount] = useState<SolanaWalletAccount | null>(null);
   const [loggedIn, setLoggedIn] = useState(false);
 
   const refresh = useCallback(() => {
     const accounts = getWalletAccounts(dynamicClient);
     setEvmAccount(accounts.find(isEvmWalletAccount) ?? null);
+    setSolanaAccount(accounts.find(isSolanaWalletAccount) ?? null);
     setLoggedIn(isSignedIn(dynamicClient));
   }, []);
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);
     setEvmAccount(null);
+    setSolanaAccount(null);
     setLoggedIn(false);
   }, []);
 
-  const ensureEvmWallet = useCallback(async () => {
+  const ensureWallets = useCallback(async () => {
     try {
       const accounts = getWalletAccounts(dynamicClient);
-      if (!accounts.some(isEvmWalletAccount) && isSignedIn(dynamicClient)) {
-        await createWaasWalletAccounts({ chains: ["EVM"] }, dynamicClient);
+      const hasEvm = accounts.some(isEvmWalletAccount);
+      const hasSolana = accounts.some(isSolanaWalletAccount);
+      if (isSignedIn(dynamicClient)) {
+        const chainsToCreate: ("EVM" | "SOL")[] = [];
+        if (!hasEvm) chainsToCreate.push("EVM");
+        if (!hasSolana) chainsToCreate.push("SOL");
+        if (chainsToCreate.length > 0) {
+          await createWaasWalletAccounts({ chains: chainsToCreate }, dynamicClient);
+        }
       }
     } catch {}
     refresh();
@@ -84,7 +90,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         const url = new URL(window.location.href);
         if (await detectOAuthRedirect({ url }, dynamicClient)) {
           await completeSocialAuthentication({ url }, dynamicClient);
-          await ensureEvmWallet();
+          await ensureWallets();
           window.history.replaceState({}, "", window.location.pathname);
           return;
         }
@@ -93,7 +99,7 @@ export default function Providers({ children }: { children: ReactNode }) {
     };
     handleOAuthRedirect();
     const unsub1 = onEvent(
-      { event: "walletAccountsChanged", listener: () => ensureEvmWallet() },
+      { event: "walletAccountsChanged", listener: () => ensureWallets() },
       dynamicClient
     );
     const unsub2 = onEvent(
@@ -101,6 +107,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         event: "logout",
         listener: () => {
           setEvmAccount(null);
+          setSolanaAccount(null);
           setLoggedIn(false);
         },
       },
@@ -110,11 +117,11 @@ export default function Providers({ children }: { children: ReactNode }) {
       unsub1();
       unsub2();
     };
-  }, [refresh, ensureEvmWallet]);
+  }, [refresh, ensureWallets]);
 
   return (
-    <WalletContext.Provider value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <WalletContext.Provider value={{ evmAccount, solanaAccount, loggedIn, ensureWallets, disconnect }}>
+      {children}
     </WalletContext.Provider>
   );
 }
