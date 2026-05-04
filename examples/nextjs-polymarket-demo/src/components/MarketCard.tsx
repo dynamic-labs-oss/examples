@@ -210,7 +210,6 @@ export function MarketCard({
     noTokenId,
     marketId,
     placeOrder,
-    setShowAuthFlow,
     handleClose,
   ]);
 

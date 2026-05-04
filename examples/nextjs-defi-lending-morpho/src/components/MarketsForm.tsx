@@ -1,7 +1,6 @@
 import React from "react";
 import { Button } from "./Button";
 import { Input } from "./Input";
-import { DynamicConnectButton } from "@dynamic-labs/sdk-react-core";
 
 const MARKET_MODE_CONFIG = {
   supply: {
@@ -103,9 +102,13 @@ export function MarketsForm({
       )}
 
       {!isConnected ? (
-        <DynamicConnectButton buttonClassName="bg-earn-primary text-white rounded-xl py-3 font-medium text-sm w-full cursor-pointer hover:bg-earn-primary/90 transition-colors">
+        <button
+          type="button"
+          className="bg-earn-primary text-white rounded-xl py-3 font-medium text-sm w-full cursor-pointer hover:bg-earn-primary/90 transition-colors"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        >
           Connect Wallet
-        </DynamicConnectButton>
+        </button>
       ) : (
         <Button
           type="submit"
