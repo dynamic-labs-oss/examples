@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { formatUnits } from "viem";
-import { useAccount } from "wagmi";
-import { DynamicConnectButton } from "@dynamic-labs/sdk-react-core";
 import { useVaultOperations } from "@/lib/hooks/useVaultOperations";
 import { Vault } from "@/lib/hooks/useVaultsList";
+import { useWallet } from "@/lib/providers";
 
 interface VaultCardProps {
   vault: Vault;
 }
 
 export function VaultCard({ vault }: VaultCardProps) {
-  const { address, isConnected } = useAccount();
+  const { evmAccount, loggedIn } = useWallet();
+  const address = evmAccount?.address;
+  const isConnected = loggedIn && !!evmAccount;
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
 
   const vaultInfo = {
@@ -186,9 +187,9 @@ export function VaultCard({ vault }: VaultCardProps) {
               style={{ border: `1px solid ${exceedsBalance ? "#EF4444" : "#DADADA"}`, background: "#fff" }}
             />
             {!isConnected ? (
-              <DynamicConnectButton buttonClassName="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap cursor-pointer bg-earn-primary">
-                Connect
-              </DynamicConnectButton>
+              <span className="px-3 py-2 text-xs font-medium rounded-lg text-[#606060]" style={{ background: "#F9F9F9", border: "1px solid #DADADA" }}>
+                Sign in to deposit
+              </span>
             ) : needsApproval && mode === "deposit" ? (
               <button
                 onClick={handleApprove}
@@ -196,7 +197,7 @@ export function VaultCard({ vault }: VaultCardProps) {
                 className="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: "#EAB308" }}
               >
-                {isApproving ? "…" : "Approve"}
+                {isApproving ? "..." : "Approve"}
               </button>
             ) : (
               <button
@@ -205,7 +206,7 @@ export function VaultCard({ vault }: VaultCardProps) {
                 className="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: mode === "deposit" ? "#4779FF" : "#606060" }}
               >
-                {isLoading ? "…" : mode === "deposit" ? "Deposit" : "Withdraw"}
+                {isLoading ? "..." : mode === "deposit" ? "Deposit" : "Withdraw"}
               </button>
             )}
           </div>

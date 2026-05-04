@@ -6,7 +6,11 @@ import Footer from "@/components/footer";
 
 import "./globals.css";
 
-const roboto = Roboto({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-roboto" });
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "700"],
+  variable: "--font-roboto",
+});
 
 export const metadata: Metadata = {
   title: "DeFi Lending & Borrowing with Dynamic",
@@ -19,12 +23,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={roboto.variable}>
+    <html lang="en">
+      <body className={`${roboto.variable} font-sans bg-[#F9F9F9] text-[#030303]`}>
         <Providers>
-          <Navigation />
-          <div className="min-h-screen bg-background pt-16 pb-14">{children}</div>
-          <Footer />
+          <div className="min-h-screen flex flex-col">
+            <Navigation />
+            <main className="flex-1 pt-0">{children}</main>
+            <Footer />
+          </div>
         </Providers>
       </body>
     </html>

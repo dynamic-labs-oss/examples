@@ -1,9 +1,6 @@
 "use client";
 
-import { isEthereumWallet } from "@dynamic-labs/ethereum";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useEffect, useState, useCallback } from "react";
-import { useChainId, useSwitchChain } from "wagmi";
 import { mainnet, base, polygon } from "viem/chains";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useTransactionOperations } from "../lib/useTransactionOperations";
 import { getChainName } from "../lib/utils";
 import { client as podsClient } from "../lib/pods";
+import { useWallet } from "@/lib/providers";
 import type {
   Strategy,
   WalletPositions,
@@ -20,9 +18,7 @@ import type {
 } from "../lib/pods-types";
 
 export function YieldInterface() {
-  const { primaryWallet } = useDynamicContext();
-  const wagmiChainId = useChainId();
-  const { switchChain } = useSwitchChain();
+  const { evmAccount, loggedIn } = useWallet();
   const [selectedChainId, setSelectedChainId] = useState<number>(base.id);
   const [isSwitching, setIsSwitching] = useState(false);
   const [chainError, setChainError] = useState<string | null>(null);
@@ -37,14 +33,13 @@ export function YieldInterface() {
   const [error, setError] = useState<string | null>(null);
   const [positions, setPositions] = useState<WalletPositions | null>(null);
 
-  // Use selectedChainId if wallet is connected and synced, otherwise use local state
-  const chainId = primaryWallet ? wagmiChainId : selectedChainId;
+  // Use selectedChainId as the active chain
+  const chainId = selectedChainId;
 
   const fetchStrategies = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch up to 100 strategies at once
       const response = await podsClient.getStrategies(chainId, 100);
       const activeStrategies = response.data.filter(
         (s) => s.isActive !== false
@@ -65,13 +60,13 @@ export function YieldInterface() {
   // Fetch positions when wallet is connected
   useEffect(() => {
     const fetchPositions = async () => {
-      if (!primaryWallet?.address) {
+      if (!evmAccount?.address) {
         setPositions(null);
         return;
       }
 
       try {
-        const data = await podsClient.getWalletPositions(primaryWallet.address);
+        const data = await podsClient.getWalletPositions(evmAccount.address);
         setPositions(data);
       } catch (err) {
         console.error("Failed to fetch positions:", err);
@@ -80,33 +75,17 @@ export function YieldInterface() {
     };
 
     fetchPositions();
-  }, [primaryWallet?.address]);
+  }, [evmAccount?.address]);
 
   const handleSwitchChain = async (targetChainId: number) => {
-    // If wallet is connected, try to switch the actual network
-    if (primaryWallet && isEthereumWallet(primaryWallet)) {
-      setIsSwitching(true);
-      setChainError(null);
-
-      try {
-        if (primaryWallet.connector.supportsNetworkSwitching()) {
-          await primaryWallet.switchNetwork(targetChainId);
-        } else if (switchChain) {
-          // Fallback to wagmi's switchChain
-          await switchChain({ chainId: targetChainId as 1 | 8453 | 137 });
-        } else {
-          setChainError("Your wallet doesn't support network switching");
-        }
-      } catch (err) {
-        console.error("Failed to switch chain:", err);
-        setChainError("Failed to switch chain. Please try again.");
-      } finally {
-        setIsSwitching(false);
-      }
-    } else {
-      // If no wallet, just update local state to show strategies for that chain
+    setIsSwitching(true);
+    setChainError(null);
+    try {
       setSelectedChainId(targetChainId);
-      setChainError(null);
+    } catch {
+      setChainError("Failed to switch chain. Please try again.");
+    } finally {
+      setIsSwitching(false);
     }
   };
 
@@ -119,14 +98,6 @@ export function YieldInterface() {
     }
   }, [lastTransaction]);
 
-  // Sync selectedChainId with wagmi chainId only when wallet is connected
-  useEffect(() => {
-    if (primaryWallet && wagmiChainId) {
-      setSelectedChainId(wagmiChainId);
-    }
-  }, [primaryWallet, wagmiChainId]);
-
-  // Use original hook name (internals support smart wallet bundling)
   const { isOperating, executeDeposit, executeWithdraw } =
     useTransactionOperations(null, chainId);
 
@@ -139,7 +110,6 @@ export function YieldInterface() {
           hash,
           timestamp: Date.now(),
         });
-        // Refresh strategies after successful deposit
         await fetchStrategies();
       }
     } catch (error) {
@@ -157,12 +127,9 @@ export function YieldInterface() {
           hash,
           timestamp: Date.now(),
         });
-        // Refresh strategies and positions after successful withdraw
         await fetchStrategies();
-        if (primaryWallet?.address) {
-          const data = await podsClient.getWalletPositions(
-            primaryWallet.address
-          );
+        if (evmAccount?.address) {
+          const data = await podsClient.getWalletPositions(evmAccount.address);
           setPositions(data);
         }
       }
@@ -173,14 +140,12 @@ export function YieldInterface() {
   };
 
   const handlePositionWithdraw = async (position: Position, amount: string) => {
-    // Prefer using the real strategy from the API when we have the ID
     try {
       let strategy: Strategy | null = null;
       if (position.strategyId) {
         strategy = await podsClient.getStrategy(position.strategyId);
       }
 
-      // Fallback: synthesize minimal strategy if no id present
       if (!strategy) {
         strategy = {
           asset: position.asset.address,
@@ -205,15 +170,12 @@ export function YieldInterface() {
     }
   };
 
-  // Don't block the UI with chain errors - just show them as a banner
-
-  // Show loading state when chain is changing
   if (isSwitching) {
     return (
-      <div className="min-h-screen flex items-center justify-center mt-24">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <Card className="max-w-md mx-auto">
           <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">
+            <p className="text-center text-[#606060]">
               Switching to {getChainName(chainId)}...
             </p>
           </CardContent>
@@ -223,148 +185,125 @@ export function YieldInterface() {
   }
 
   return (
-    <div key={`yield-${chainId}-${refreshKey}`} className="space-y-6 mt-6">
-      <h1 className="text-3xl font-bold text-center">
-        Yield Strategies with Dynamic
-      </h1>
+    <div key={`yield-${chainId}-${refreshKey}`} className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-[#030303]">
+          Yield Strategies
+        </h1>
+        <p className="text-sm text-[#606060] mt-1">
+          Deposit stablecoins into yield strategies powered by Deframe Pods
+        </p>
+      </div>
 
       {lastTransaction && (
-        <Card className="max-w-5xl mx-auto bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-          <CardContent className="pt-6">
-            <p className="text-center text-green-600 dark:text-green-400">
-              ✅ {lastTransaction.type} transaction sent! Hash:{" "}
-              {lastTransaction.hash.slice(0, 10)}...
-            </p>
-          </CardContent>
-        </Card>
+        <div className="p-4 rounded-xl border border-green-200 bg-green-50 text-sm text-green-700">
+          {lastTransaction.type} transaction sent! Hash: {lastTransaction.hash.slice(0, 10)}...
+        </div>
       )}
 
       {chainError && (
-        <Card className="max-w-5xl mx-auto bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <p className="text-center text-yellow-600 dark:text-yellow-400">
-                ⚠️ {chainError}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setChainError(null)}
-                className="text-yellow-600 dark:text-yellow-400"
-              >
-                Dismiss
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="p-4 rounded-xl border border-yellow-200 bg-yellow-50 flex items-center justify-between">
+          <p className="text-sm text-yellow-700">{chainError}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setChainError(null)}
+            className="text-yellow-700 border-yellow-300"
+          >
+            Dismiss
+          </Button>
+        </div>
       )}
 
       {error && (
-        <Card className="max-w-5xl mx-auto bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <p className="text-center text-red-600 dark:text-red-400">
-                ❌ {error}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setError(null)}
-                className="text-red-600 dark:text-red-400"
-              >
-                Dismiss
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="p-4 rounded-xl border border-red-200 bg-red-50 flex items-center justify-between">
+          <p className="text-sm text-red-600">{error}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setError(null)}
+            className="text-red-600 border-red-300"
+          >
+            Dismiss
+          </Button>
+        </div>
       )}
 
       {/* Open Positions Section */}
       {positions && positions.positions.length > 0 && (
-        <Card className="max-w-5xl mx-auto">
-          <CardHeader>
-            <CardTitle>Your Open Positions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {positions.positions.map((position, idx) => (
-                <PositionCard
-                  key={idx}
-                  position={position}
-                  isOperating={isOperating}
-                  onWithdraw={handlePositionWithdraw}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section>
+          <h2 className="text-sm font-semibold text-[#606060] uppercase tracking-wide mb-3">
+            Your Open Positions
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {positions.positions.map((position, idx) => (
+              <PositionCard
+                key={idx}
+                position={position}
+                isOperating={isOperating}
+                onWithdraw={handlePositionWithdraw}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Available Strategies Section */}
-      <Card className="max-w-5xl mx-auto">
-        <CardHeader>
-          <CardTitle>Available Strategies</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-muted-foreground">Loading strategies...</p>
-          ) : error ? (
-            <p className="text-destructive">
-              Error loading strategies: {error}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-[#606060] uppercase tracking-wide">
+            Available Strategies
+          </h2>
+          <div className="flex gap-2">
+            {[
+              { id: mainnet.id, name: "Ethereum" },
+              { id: base.id, name: "Base" },
+              { id: polygon.id, name: "Polygon" },
+            ].map((chain) => (
+              <button
+                key={chain.id}
+                onClick={() => handleSwitchChain(chain.id)}
+                disabled={isSwitching || chainId === chain.id}
+                className="px-2 py-1 text-xs rounded-md border transition-colors disabled:opacity-50"
+                style={
+                  chainId === chain.id
+                    ? { background: "#4779FF", color: "#fff", borderColor: "#4779FF" }
+                    : { background: "#fff", color: "#606060", borderColor: "#DADADA" }
+                }
+              >
+                {chain.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-48 rounded-xl bg-white border border-[#DADADA] animate-pulse" />
+            ))}
+          </div>
+        ) : strategies && strategies.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {strategies.map((strategy) => (
+              <StrategyCard
+                key={strategy.id}
+                strategy={strategy}
+                isOperating={isOperating}
+                primaryWallet={evmAccount ? { address: evmAccount.address } : null}
+                onDeposit={handleDeposit}
+                onWithdraw={handleWithdraw}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white border border-[#DADADA] rounded-xl p-6 text-center">
+            <p className="text-sm text-[#606060]">
+              No strategies found for {getChainName(chainId)}.
             </p>
-          ) : strategies && strategies.length > 0 ? (
-            <div className={`grid grid-cols-1 md:grid-cols-2 gap-4`}>
-              {strategies.map((strategy) => (
-                <StrategyCard
-                  key={strategy.id}
-                  strategy={strategy}
-                  isOperating={isOperating}
-                  primaryWallet={primaryWallet}
-                  onDeposit={handleDeposit}
-                  onWithdraw={handleWithdraw}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center space-y-4">
-              <p className="text-muted-foreground">
-                No strategies found for {getChainName(chainId)}.
-              </p>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Try switching to a supported network:
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(mainnet.id)}
-                    disabled={isSwitching || Number(chainId) === mainnet.id}
-                  >
-                    {mainnet.name}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(base.id)}
-                    disabled={isSwitching || Number(chainId) === base.id}
-                  >
-                    {base.name}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(polygon.id)}
-                    disabled={isSwitching || Number(chainId) === polygon.id}
-                  >
-                    {polygon.name}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -386,83 +325,73 @@ function PositionCard({
   const apyPercent = (parseFloat(position.apy) * 100).toFixed(2);
 
   return (
-    <Card className="border-blue-200 dark:border-blue-800">
-      <CardHeader>
+    <div className="bg-white rounded-xl border border-[#DADADA] shadow-sm">
+      <div className="p-4 border-b border-[#DADADA]">
         <div className="flex items-center justify-between">
-          <CardTitle>{position.asset.symbol}</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {position.protocol}
-          </span>
+          <h3 className="text-base font-semibold text-[#030303]">{position.asset.symbol}</h3>
+          <span className="text-sm text-[#606060]">{position.protocol}</span>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Balance</span>
-            <span className="font-semibold">
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-[#606060]">Balance</p>
+            <p className="text-sm font-semibold text-[#030303] mt-0.5">
               {position.balance.humanized.toFixed(4)} {position.asset.symbol}
-            </span>
+            </p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">USD Value</span>
-            <span className="font-semibold">${position.balanceUSD}</span>
+          <div>
+            <p className="text-xs text-[#606060]">USD Value</p>
+            <p className="text-sm font-semibold text-[#030303] mt-0.5">${position.balanceUSD}</p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Current APY</span>
-            <span className="text-lg font-bold text-blue-600">
-              {apyPercent}%
-            </span>
+          <div>
+            <p className="text-xs text-[#606060]">Current APY</p>
+            <p className="text-lg font-bold text-[#4779FF] mt-0.5">{apyPercent}%</p>
           </div>
         </div>
 
         {position.rewards && position.rewards.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-muted-foreground">
-              Rewards:
-            </p>
+            <p className="text-xs font-medium text-[#606060]">Rewards:</p>
             {position.rewards.map((reward, idx) => (
               <div key={idx} className="flex justify-between text-sm">
-                <span>
-                  {reward.amount} {reward.token.symbol}
-                </span>
-                <span className="text-muted-foreground">
-                  ${reward.amountUSD}
-                </span>
+                <span className="text-[#030303]">{reward.amount} {reward.token.symbol}</span>
+                <span className="text-[#606060]">${reward.amountUSD}</span>
               </div>
             ))}
           </div>
         )}
 
-        <div className="space-y-2 pt-2 border-t">
+        <div className="space-y-2 pt-2 border-t border-[#DADADA]">
           <input
             type="number"
             placeholder="Amount to withdraw"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
+            className="w-full px-3 py-2 text-sm border border-[#DADADA] rounded-lg outline-none focus:ring-2 focus:ring-[#4779FF]/30"
             disabled={isOperating}
             max={position.balance.humanized}
           />
-          <Button
+          <button
             onClick={handleAction}
-            variant="outline"
             disabled={
               isOperating ||
               !amount ||
               parseFloat(amount) <= 0 ||
               parseFloat(amount) > position.balance.humanized
             }
-            className="w-full"
+            className="w-full py-2 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: "#DADADA", color: "#606060" }}
           >
             Withdraw
-          </Button>
+          </button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
-// Simple Strategy Card Component
+// Strategy Card Component
 function StrategyCard({
   strategy,
   isOperating,
@@ -475,46 +404,48 @@ function StrategyCard({
 
   const handleAction = () => {
     if (!amount || parseFloat(amount) <= 0) return;
-
     if (isDeposit) {
       onDeposit(strategy, amount);
     } else {
       onWithdraw(strategy, amount);
     }
-
     setAmount("");
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <div className="bg-white rounded-xl border border-[#DADADA] shadow-sm">
+      <div className="p-4 border-b border-[#DADADA]">
         <div className="flex items-center justify-between">
-          <CardTitle>{strategy.assetName}</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {strategy.protocol}
-          </span>
+          <h3 className="text-base font-semibold text-[#030303]">{strategy.assetName}</h3>
+          <span className="text-sm text-[#606060]">{strategy.protocol}</span>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between"></div>
-
+      </div>
+      <div className="p-4 space-y-3">
         <div className="flex gap-2">
-          <Button
-            variant={isDeposit ? "default" : "outline"}
-            size="sm"
+          <button
             onClick={() => setIsDeposit(true)}
             disabled={isOperating}
+            className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors"
+            style={
+              isDeposit
+                ? { background: "#4779FF", color: "#fff", borderColor: "#4779FF" }
+                : { background: "#fff", color: "#606060", borderColor: "#DADADA" }
+            }
           >
             Deposit
-          </Button>
-          <Button
-            variant={!isDeposit ? "default" : "outline"}
-            size="sm"
+          </button>
+          <button
             onClick={() => setIsDeposit(false)}
             disabled={isOperating}
+            className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors"
+            style={
+              !isDeposit
+                ? { background: "#606060", color: "#fff", borderColor: "#606060" }
+                : { background: "#fff", color: "#606060", borderColor: "#DADADA" }
+            }
           >
             Withdraw
-          </Button>
+          </button>
         </div>
 
         <div className="space-y-2">
@@ -523,10 +454,10 @@ function StrategyCard({
             placeholder="Amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
+            className="w-full px-3 py-2 text-sm border border-[#DADADA] rounded-lg outline-none focus:ring-2 focus:ring-[#4779FF]/30"
             disabled={isOperating || !primaryWallet}
           />
-          <Button
+          <button
             onClick={handleAction}
             disabled={
               isOperating ||
@@ -534,18 +465,19 @@ function StrategyCard({
               !amount ||
               parseFloat(amount) <= 0
             }
-            className="w-full"
+            className="w-full py-2 text-sm font-medium rounded-lg text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: isDeposit ? "#4779FF" : "#606060" }}
           >
             {isDeposit ? "Deposit" : "Withdraw"}
-          </Button>
+          </button>
         </div>
 
         {!primaryWallet && (
-          <p className="text-xs text-muted-foreground text-center">
-            Connect wallet to interact
+          <p className="text-xs text-[#606060] text-center">
+            Sign in to interact with strategies
           </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
