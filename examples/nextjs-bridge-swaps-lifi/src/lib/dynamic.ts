@@ -1,8 +1,11 @@
-export * from "@dynamic-labs/sdk-react-core";
-export * from "@dynamic-labs/ethereum";
-export * from "@dynamic-labs/solana";
-export {
-  ZeroDevSmartWalletConnectors,
-  isZeroDevConnector,
-} from "@dynamic-labs/ethereum-aa";
-export { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
+import { createDynamicClient } from "@dynamic-labs-sdk/client";
+import { addEvmExtension } from "@dynamic-labs-sdk/evm";
+import { addSolanaExtension } from "@dynamic-labs-sdk/solana";
+
+export const dynamicClient = createDynamicClient({
+  environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID!,
+  metadata: { name: "LiFi Cross-Chain Swaps" },
+});
+
+addEvmExtension();
+addSolanaExtension();

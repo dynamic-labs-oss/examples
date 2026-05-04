@@ -2,12 +2,16 @@
 
 import MultiChainSwap from "@/components/MultiChainSwap";
 import Nav from "@/components/nav";
+import Footer from "@/components/footer";
 
 export default function Main() {
   return (
-    <div className="min-h-screen flex flex-col transition-colors duration-300 bg-gray-100 text-gray-800">
+    <div className="flex flex-col min-h-screen" style={{ background: "rgb(249,249,249)" }}>
       <Nav />
-      <MultiChainSwap />
+      <main className="flex-1">
+        <MultiChainSwap />
+      </main>
+      <Footer />
     </div>
   );
 }

@@ -55,7 +55,7 @@ const outlineBtn =
   "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-[#DADADA] text-[#030303] hover:bg-[#F9F9F9] disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function DynamicButton() {
-  const { evmAccount, loggedIn, disconnect, ensureWallets } = useWallet();
+  const { evmAccount, loggedIn, disconnect, ensureEvmWallet } = useWallet();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "email" | "otp" | "wallet" | "export">("menu");
   const [email, setEmail] = useState("");
@@ -131,7 +131,7 @@ export default function DynamicButton() {
     setError(null);
     try {
       await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
-      await ensureWallets();
+      await ensureEvmWallet();
       setOpen(false);
       reset();
     } catch (err) {
@@ -144,7 +144,7 @@ export default function DynamicButton() {
     } finally {
       setLoading(false);
     }
-  }, [otpVerification, otp, ensureWallets]);
+  }, [otpVerification, otp, ensureEvmWallet]);
 
   const handleGoogle = useCallback(async () => {
     setLoading(true);
@@ -163,17 +163,15 @@ export default function DynamicButton() {
     }
   }, []);
 
-  const getAllProviders = (): WalletProviderData[] =>
-    getAvailableWalletProvidersData(dynamicClient).filter(
-      (p) => p.chain === "EVM" || p.chain === "SOL"
-    );
+  const getEvmProviders = (): WalletProviderData[] =>
+    getAvailableWalletProvidersData(dynamicClient).filter((p) => p.chain === "EVM");
 
   const handleConnectWallet = useCallback(async (providerKey: string) => {
     setLoading(true);
     setError(null);
     try {
       await connectAndVerifyWithWalletProvider({ walletProviderKey: providerKey }, dynamicClient);
-      await ensureWallets();
+      await ensureEvmWallet();
       setOpen(false);
       reset();
     } catch (err) {
@@ -181,11 +179,9 @@ export default function DynamicButton() {
     } finally {
       setLoading(false);
     }
-  }, [ensureWallets]);
+  }, [ensureEvmWallet]);
 
-  const displayAccount = evmAccount;
-
-  if (loggedIn && displayAccount) {
+  if (loggedIn && evmAccount) {
     return (
       <div className="relative" ref={panelRef}>
         <button
@@ -196,10 +192,10 @@ export default function DynamicButton() {
             className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white"
             style={{ background: "#4779FF" }}
           >
-            {displayAccount.address[0].toUpperCase()}
+            {evmAccount.address[0].toUpperCase()}
           </span>
           <span className="hidden sm:block font-mono text-xs text-[#606060]">
-            {shortenAddress(displayAccount.address)}
+            {shortenAddress(evmAccount.address)}
           </span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#606060" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
         </button>
@@ -213,7 +209,7 @@ export default function DynamicButton() {
                 <div className="px-3 py-2 mb-1">
                   <p className="text-xs text-[#606060] font-medium">Connected</p>
                   <p className="text-xs font-mono text-[#030303] truncate mt-0.5">
-                    {displayAccount.address}
+                    {evmAccount.address}
                   </p>
                 </div>
                 <div className="border-t border-[#DADADA] my-1" />
@@ -291,7 +287,7 @@ export default function DynamicButton() {
         <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border border-[#DADADA] shadow-lg p-4 z-50">
           {view === "menu" && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-[#030303] mb-3">Sign in to LiFi Swaps</p>
+              <p className="text-sm font-medium text-[#030303] mb-3">Sign in to Mayan Bridge</p>
 
               <button onClick={handleGoogle} disabled={loading} className={outlineBtn}>
                 <GoogleIcon />
@@ -303,7 +299,7 @@ export default function DynamicButton() {
                 Continue with Email
               </button>
 
-              {getAllProviders().length > 0 && (
+              {getEvmProviders().length > 0 && (
                 <>
                   <div className="flex items-center gap-2 my-1">
                     <div className="flex-1 h-px bg-[#DADADA]" />
@@ -385,11 +381,11 @@ export default function DynamicButton() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
                 Back
               </button>
-              <p className="text-sm font-medium text-[#030303] mb-3">Choose a wallet</p>
-              {getAllProviders().length === 0 ? (
-                <p className="text-xs text-[#606060]">No wallets detected. Install MetaMask, Phantom, or another wallet.</p>
+              <p className="text-sm font-medium text-[#030303] mb-3">Choose an EVM wallet</p>
+              {getEvmProviders().length === 0 ? (
+                <p className="text-xs text-[#606060]">No EVM wallets detected. Install MetaMask or another EVM wallet.</p>
               ) : (
-                getAllProviders().map((provider) => (
+                getEvmProviders().map((provider) => (
                   <button
                     key={provider.key}
                     onClick={() => handleConnectWallet(provider.key)}
@@ -406,8 +402,7 @@ export default function DynamicButton() {
                         className="rounded-sm shrink-0"
                       />
                     )}
-                    <span>{provider.metadata.displayName}</span>
-                    <span className="ml-auto text-xs text-[#606060]">{provider.chain}</span>
+                    {provider.metadata.displayName}
                   </button>
                 ))
               )}

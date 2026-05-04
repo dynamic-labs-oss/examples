@@ -1,15 +1,25 @@
 import { ChainType, EVM, createConfig, getChains } from "@lifi/sdk";
-import { getWalletClient, switchChain, type Config } from "@wagmi/core";
+import type { EvmWalletAccount } from "@dynamic-labs-sdk/evm";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 
-export const initializeLiFiConfig = (wagmiConfig: Config) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyWalletClient = any;
+
+export const initializeLiFiConfig = (getEvmAccount: () => EvmWalletAccount | null) => {
   return createConfig({
     integrator: "Dynamic",
     providers: [
       EVM({
-        getWalletClient: () => getWalletClient(wagmiConfig),
-        switchChain: async (chainId: number) => {
-          const chain = await switchChain(wagmiConfig, { chainId });
-          return getWalletClient(wagmiConfig, { chainId: chain.id });
+        getWalletClient: async (): Promise<AnyWalletClient> => {
+          const account = getEvmAccount();
+          if (!account) throw new Error("No EVM wallet connected");
+          return createWalletClientForWalletAccount({ walletAccount: account });
+        },
+        switchChain: async (_chainId: number): Promise<AnyWalletClient> => {
+          // Chain switching is handled per-transaction by the embedded wallet
+          const account = getEvmAccount();
+          if (!account) throw new Error("No EVM wallet connected");
+          return createWalletClientForWalletAccount({ walletAccount: account });
         },
       }),
     ],
