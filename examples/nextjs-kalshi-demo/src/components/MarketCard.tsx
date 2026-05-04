@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from "react";
 import ClockIcon from "./ClockIcon";
 import { ImageWithFallback } from "./ImageWithFallback";
 import { useKalshiTrading } from "@/lib/hooks/useKalshiTrading";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { useWallet } from "@/lib/providers";
 
 interface MarketCardProps {
   question: string;
@@ -63,12 +63,11 @@ export function MarketCard({
   const cardRef = useRef<HTMLDivElement>(null);
   const isSubmittingRef = useRef(false);
 
-  const { primaryWallet, setShowAuthFlow } = useDynamicContext();
+  const { solanaAccount } = useWallet();
   const { placeOrder } = useKalshiTrading();
 
   const handleOptionClick = (option: "yes" | "no") => {
-    if (!primaryWallet) {
-      setShowAuthFlow(true);
+    if (!solanaAccount) {
       return;
     }
 
@@ -131,8 +130,7 @@ export function MarketCard({
     if (isSubmittingRef.current) return;
     if (betAmount === 0 || !selectedOption) return;
 
-    if (!primaryWallet) {
-      setShowAuthFlow(true);
+    if (!solanaAccount) {
       return;
     }
 
@@ -179,13 +177,12 @@ export function MarketCard({
   }, [
     betAmount,
     selectedOption,
-    primaryWallet,
+    solanaAccount,
     ticker,
     yesTokenMint,
     noTokenMint,
     marketId,
     placeOrder,
-    setShowAuthFlow,
     handleClose,
   ]);
 
@@ -493,7 +490,7 @@ export function MarketCard({
                             <p className="font-['Clash_Display',sans-serif] relative shrink-0 text-[rgba(248,250,255,0.95)] font-bold">
                               {isProcessing
                                 ? "Processing..."
-                                : !primaryWallet
+                                : !solanaAccount
                                 ? "Connect Wallet"
                                 : `Buy ${
                                     selectedOption === "yes" ? "Yes" : "No"

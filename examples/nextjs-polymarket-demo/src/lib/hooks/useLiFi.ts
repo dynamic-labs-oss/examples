@@ -1,7 +1,5 @@
 "use client";
 
-import { isEthereumWallet } from "@dynamic-labs/ethereum";
-import { type Wallet } from "@dynamic-labs/sdk-react-core";
 import { getRoutes, executeRoute, type Route, type Token } from "@lifi/sdk";
 import { useCallback, useState } from "react";
 import { parseUnits, formatUnits } from "viem";
@@ -23,13 +21,11 @@ export interface UseLiFiReturn {
   getRoutesForSwap: (params: LiFiSwapParams) => Promise<Route[]>;
   executeSwap: (
     route: Route,
-    params: LiFiSwapParams,
-    wallet: Wallet
+    params: LiFiSwapParams
   ) => Promise<void>;
   clearError: () => void;
 }
 
-// Gas buffer: 150% extra (2.5x) to prevent reverts on complex cross-chain txs
 const GAS_MULTIPLIER = BigInt(250);
 const GAS_DIVISOR = BigInt(100);
 const DEFAULT_GAS = BigInt(800000);
@@ -81,9 +77,8 @@ export function useLiFi(): UseLiFiReturn {
             t.address.toLowerCase() === params.fromTokenAddress.toLowerCase()
         );
 
-        if (!fromToken) throw new Error("Token not found");
-
-        const amountInWei = parseUnits(params.fromAmount, fromToken.decimals);
+        const decimals = fromToken?.decimals ?? 18;
+        const amountInWei = parseUnits(params.fromAmount, decimals);
 
         const result = await getRoutes({
           fromChainId: params.fromChainId,
@@ -120,23 +115,11 @@ export function useLiFi(): UseLiFiReturn {
   );
 
   const executeSwap = useCallback(
-    async (route: Route, params: LiFiSwapParams, wallet: Wallet) => {
-      if (!wallet || !isEthereumWallet(wallet)) {
-        throw new Error("Wallet not connected or not EVM compatible");
-      }
-
+    async (route: Route, _params: LiFiSwapParams) => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const walletClient = await wallet.getWalletClient();
-        if (
-          walletClient.account?.address?.toLowerCase() !==
-          params.fromAddress.toLowerCase()
-        ) {
-          throw new Error("Wallet address mismatch");
-        }
-
         await executeRoute(route, {
           updateRouteHook: () => {},
           updateTransactionRequestHook: async (txRequest) => {
@@ -161,12 +144,6 @@ export function useLiFi(): UseLiFiReturn {
             return window.confirm(
               `Rate changed by ${change.toFixed(2)}%. Continue?`
             );
-          },
-          switchChainHook: async (chainId) => {
-            if (wallet.connector.supportsNetworkSwitching()) {
-              await wallet.switchNetwork(chainId);
-            }
-            return undefined;
           },
           infiniteApproval: true,
         });

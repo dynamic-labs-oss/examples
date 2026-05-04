@@ -4,8 +4,8 @@
 
 :root {
   --font-size: 16px;
-  --background: #0f1117;
-  --foreground: #dde2f6;
+  --background: rgb(249,249,249);
+  --foreground: #030303;
   --card: #ffffff;
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -135,7 +135,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
   #root {
@@ -355,7 +355,7 @@ html {
   --dynamic-connect-button-radius: 9.135px;
   --dynamic-connect-button-height: 41.107px;
   --dynamic-connect-button-padding: 11.419px 22.837px;
-  --dynamic-connect-button-font-family: "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --dynamic-connect-button-font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --dynamic-connect-button-font-weight: 500;
   
   /* Button text color - ensure buttons have dark text */

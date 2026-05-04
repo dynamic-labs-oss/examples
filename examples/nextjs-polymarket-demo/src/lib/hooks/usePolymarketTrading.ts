@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { isEthereumWallet } from "@dynamic-labs/ethereum";
+import { useWallet } from "@/lib/providers";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { polygon } from "viem/chains";
 import { ClobClient, Side, OrderType } from "@polymarket/clob-client";
 import type { UserOrder, UserMarketOrder } from "@polymarket/clob-client";
 import { Contract, providers, BigNumber } from "ethers";
@@ -281,7 +282,7 @@ const CTF_REDEEM_ABI = [
 ] as const;
 
 export function usePolymarketTrading(): UsePolymarketTradingReturn {
-  const { primaryWallet } = useDynamicContext();
+  const { evmAccount } = useWallet();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSelling, setIsSelling] = useState(false);
@@ -294,19 +295,19 @@ export function usePolymarketTrading(): UsePolymarketTradingReturn {
   const credentialsRef = useRef<UserApiCredentials | null>(null);
   const lastWalletAddressRef = useRef<string | null>(null);
 
-  const address = primaryWallet?.address;
+  const address = evmAccount?.address;
 
   const getEthersSigner =
     useCallback(async (): Promise<providers.JsonRpcSigner | null> => {
-      if (!primaryWallet || !isEthereumWallet(primaryWallet)) {
+      if (!evmAccount) {
         signerRef.current = null;
         return null;
       }
 
-      if (lastWalletAddressRef.current !== primaryWallet.address) {
+      if (lastWalletAddressRef.current !== evmAccount.address) {
         signerRef.current = null;
         credentialsRef.current = null;
-        lastWalletAddressRef.current = primaryWallet.address;
+        lastWalletAddressRef.current = evmAccount.address;
       }
 
       if (signerRef.current) {
@@ -314,7 +315,10 @@ export function usePolymarketTrading(): UsePolymarketTradingReturn {
       }
 
       try {
-        const walletClient = await primaryWallet.getWalletClient();
+        const walletClient = createWalletClientForWalletAccount({
+          walletAccount: evmAccount,
+          chain: polygon,
+        });
         const wrappedClient = wrapWalletClientWithChainIdFix(walletClient);
         const provider = new providers.Web3Provider(wrappedClient);
         signerRef.current = provider.getSigner();
@@ -324,7 +328,7 @@ export function usePolymarketTrading(): UsePolymarketTradingReturn {
         signerRef.current = null;
         return null;
       }
-    }, [primaryWallet]);
+    }, [evmAccount]);
 
   const initializeCredentials =
     useCallback(async (): Promise<UserApiCredentials | null> => {

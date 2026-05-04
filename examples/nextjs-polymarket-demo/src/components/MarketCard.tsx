@@ -4,8 +4,8 @@ import ClockIcon from "./ClockIcon";
 import { ImageWithFallback } from "./ImageWithFallback";
 import PriceChart from "./PriceChart";
 import { usePolymarketTrading } from "@/lib/hooks/usePolymarketTrading";
-import { polygon } from "wagmi/chains";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { polygon } from "viem/chains";
+import { useWallet } from "@/lib/providers";
 
 interface MarketCardProps {
   question: string;
@@ -65,13 +65,12 @@ export function MarketCard({
   // Ref to prevent double-submission of orders
   const isSubmittingRef = useRef(false);
 
-  const { primaryWallet, setShowAuthFlow } = useDynamicContext();
+  const { evmAccount } = useWallet();
   const { placeOrder } = usePolymarketTrading();
 
   const handleOptionClick = (option: "yes" | "no") => {
     // If wallet not connected, show connect modal
-    if (!primaryWallet) {
-      setShowAuthFlow(true);
+    if (!evmAccount) {
       return;
     }
 
@@ -145,8 +144,7 @@ export function MarketCard({
     if (betAmount === 0 || !selectedOption) return;
 
     // Check if wallet is connected first
-    if (!primaryWallet) {
-      setShowAuthFlow(true);
+    if (!evmAccount) {
       return;
     }
 
@@ -162,23 +160,7 @@ export function MarketCard({
     setTradingSuccess(false);
 
     try {
-      // Switch to Polygon if not already on it
-      const currentNetwork = await primaryWallet.getNetwork();
-      if (currentNetwork !== polygon.id) {
-        try {
-          if (primaryWallet.connector.supportsNetworkSwitching()) {
-            await primaryWallet.switchNetwork(polygon.id);
-            // Wait a bit for network switch
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-          } else {
-            setTradingError("Please switch to Polygon network to trade");
-            return;
-          }
-        } catch {
-          setTradingError("Please switch to Polygon network to trade");
-          return;
-        }
-      }
+      // Network switching is handled by the wallet client configured with polygon chain
 
       // Get the appropriate token ID
       const tokenId = selectedOption === "yes" ? yesTokenId : noTokenId;
@@ -222,7 +204,7 @@ export function MarketCard({
   }, [
     betAmount,
     selectedOption,
-    primaryWallet,
+    evmAccount,
     conditionId,
     yesTokenId,
     noTokenId,
@@ -557,7 +539,7 @@ export function MarketCard({
                             <p className="font-['SF_Pro_Rounded:Bold',sans-serif] relative shrink-0 text-[rgba(248,250,255,0.95)]">
                               {isProcessing
                                 ? "Processing..."
-                                : !primaryWallet
+                                : !evmAccount
                                 ? "Connect Wallet"
                                 : `Buy ${
                                     selectedOption === "yes" ? "Yes" : "No"

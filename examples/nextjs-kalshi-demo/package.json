@@ -9,9 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@dynamic-labs/sdk-react-core": "^4.52.2",
-    "@dynamic-labs/solana": "^4.52.2",
-    "@dynamic-labs/solana-core": "^4.52.2",
+    "@dynamic-labs-sdk/client": "^0.24.1",
+    "@dynamic-labs-sdk/solana": "^0.24.1",
     "@lifi/sdk": "^3.14.1",
     "@solana/buffer-layout-utils": "^0.3.0",
     "@solana/spl-token": "^0.4.14",

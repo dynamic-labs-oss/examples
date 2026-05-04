@@ -1,22 +1,20 @@
 "use client";
 
 import { config as lifiConfig } from "@lifi/sdk";
-import { useSyncWagmiConfig } from "@lifi/wallet-management";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, type PropsWithChildren, useEffect, useCallback, useRef } from "react";
-import type { Config, CreateConnectorFn } from "wagmi";
 import { initializeLiFiConfig, loadLiFiChains } from "./lifi";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { isEthereumWallet } from "@dynamic-labs/ethereum";
+import { useWallet } from "./providers";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { polygon } from "viem/chains";
 
-interface LiFiProviderProps extends PropsWithChildren {
-  wagmiConfig: Config;
-  connectors: CreateConnectorFn[];
-}
-
-export const LiFiProvider: FC<LiFiProviderProps> = ({ children, wagmiConfig, connectors }) => {
-  const { sdkHasLoaded, primaryWallet } = useDynamicContext();
+export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
+  const { evmAccount, loggedIn } = useWallet();
   const initRef = useRef(false);
+  const evmAccountRef = useRef(evmAccount);
+  useEffect(() => {
+    evmAccountRef.current = evmAccount;
+  }, [evmAccount]);
 
   const { data: chains } = useQuery({
     queryKey: ["lifi-chains"],
@@ -27,26 +25,25 @@ export const LiFiProvider: FC<LiFiProviderProps> = ({ children, wagmiConfig, con
     },
     staleTime: 5 * 60 * 1000,
     retry: 3,
-    enabled: sdkHasLoaded,
+    enabled: loggedIn,
   });
 
   const getDynamicWalletClient = useCallback(async () => {
-    if (!primaryWallet || !isEthereumWallet(primaryWallet)) return null;
-    return await primaryWallet.getWalletClient();
-  }, [primaryWallet]);
+    const account = evmAccountRef.current;
+    if (!account) return null;
+    return createWalletClientForWalletAccount({ walletAccount: account, chain: polygon });
+  }, []);
 
   useEffect(() => {
-    if (sdkHasLoaded && !initRef.current && chains?.length) {
+    if (loggedIn && !initRef.current && chains?.length) {
       try {
-        initializeLiFiConfig(wagmiConfig, getDynamicWalletClient);
+        initializeLiFiConfig(getDynamicWalletClient);
         initRef.current = true;
       } catch (error) {
         console.error("Failed to initialize LI.FI:", error);
       }
     }
-  }, [sdkHasLoaded, wagmiConfig, getDynamicWalletClient, chains]);
-
-  useSyncWagmiConfig(wagmiConfig, connectors, chains || undefined);
+  }, [loggedIn, getDynamicWalletClient, chains]);
 
   return <>{children}</>;
 };

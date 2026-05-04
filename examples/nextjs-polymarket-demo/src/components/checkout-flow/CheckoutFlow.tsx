@@ -1,7 +1,7 @@
 "use client";
 
 import { loadCheckoutWebComponents } from "@checkout.com/checkout-web-components";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+// No Dynamic SDK import needed — user email handled via checkout API directly
 import { useCallback, useEffect, useRef, useState } from "react";
 import { env } from "@/env";
 import { useCheckout } from "@/lib/hooks/useCheckout";
@@ -43,7 +43,6 @@ export function CheckoutFlow({
   const flowComponentRef = useRef<any>(null);
 
   const { createPaymentSession } = useCheckout();
-  const { user } = useDynamicContext();
 
   useEffect(() => {
     if (view === "amount") {
@@ -194,16 +193,11 @@ export function CheckoutFlow({
     setError(null);
 
     try {
-      const customerEmail = user?.email || "";
-      if (!customerEmail) {
-        throw new Error("User email is required for payment");
-      }
-
       const session = await createPaymentSession({
         amount: parseFloat(amount),
         currency: "USD",
-        customerEmail,
-        customerName: user?.firstName || user?.username || "Customer",
+        customerEmail: "",
+        customerName: "Customer",
         walletAddress,
       });
 
@@ -219,7 +213,7 @@ export function CheckoutFlow({
     } finally {
       setIsLoading(false);
     }
-  }, [amount, createPaymentSession, user, walletAddress, onViewChange]);
+  }, [amount, createPaymentSession, walletAddress, onViewChange]);
 
   const handleStartNewTransaction = useCallback(() => {
     setShowSuccess(false);

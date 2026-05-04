@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  useDynamicContext,
-  useFundWithWallet,
-} from "@dynamic-labs/sdk-react-core";
+import { useWallet } from "@/lib/providers";
 import { ArrowLeft, X } from "lucide-react";
 import { useId, useState } from "react";
 import { DepositOptionsView } from "./deposit/DepositOptionsView";
@@ -18,27 +15,19 @@ interface DepositModalProps {
 type View = "options" | "qr" | "lifi";
 
 export function DepositModal({ isOpen, onClose }: DepositModalProps) {
-  const { connectWalletForFunding, promptAmountAndFund } = useFundWithWallet();
-  const { primaryWallet } = useDynamicContext();
+  const { solanaAccount } = useWallet();
 
   const modalTitleId = useId();
   const [view, setView] = useState<View>("options");
 
-  const walletAddress = primaryWallet?.address || "";
+  const walletAddress = solanaAccount?.address || "";
 
   const handleReceiveByQR = () => setView("qr");
   const handleLiFi = () => setView("lifi");
 
   const handleFundWallet = async () => {
-    try {
-      const externalWallet = await connectWalletForFunding();
-      if (externalWallet) {
-        promptAmountAndFund({ wallet: externalWallet });
-      }
-      onClose();
-    } catch (err) {
-      console.error("Failed to connect wallet for funding:", err);
-    }
+    // Fund wallet functionality not available in JS SDK — show QR instead
+    setView("qr");
   };
 
   const handleBack = () => {

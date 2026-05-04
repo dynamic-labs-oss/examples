@@ -11,11 +11,9 @@
   "dependencies": {
     "@awesome-qrcode/react": "^1.0.0",
     "@checkout.com/checkout-web-components": "^1.7.1",
-    "@dynamic-labs/ethereum": "^4.50.5",
-    "@dynamic-labs/sdk-react-core": "^4.50.5",
-    "@dynamic-labs/wagmi-connector": "^4.50.5",
+    "@dynamic-labs-sdk/client": "^0.24.1",
+    "@dynamic-labs-sdk/evm": "^0.24.1",
     "@lifi/sdk": "^3.14.1",
-    "@lifi/wallet-management": "^3.21.0",
     "@polymarket/clob-client": "^5.1.1",
     "@t3-oss/env-nextjs": "^0.13.10",
     "@tanstack/react-query": "^5.90.12",
@@ -29,7 +27,6 @@
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.4.0",
     "viem": "^2.42.1",
-    "wagmi": "^3.1.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {

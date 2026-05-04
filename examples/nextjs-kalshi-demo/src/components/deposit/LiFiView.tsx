@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  useDynamicContext,
-  useTokenBalances,
-  ChainEnum,
-} from "@dynamic-labs/sdk-react-core";
+import { useWallet } from "@/lib/providers";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useLiFi } from "@/lib/hooks/useLiFi";
 import { loadLiFiTokens } from "@/lib/lifi";
@@ -32,7 +28,7 @@ const isSolNativeToken = (address?: string): boolean => {
 };
 
 export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
-  const { primaryWallet } = useDynamicContext();
+  const { solanaAccount } = useWallet();
   const [view, setView] = useState<View>("select");
   const [solanaTokens, setSolanaTokens] = useState<Token[]>([]);
   const [isLoadingTokens, setIsLoadingTokens] = useState(true);
@@ -40,15 +36,9 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
   const [selectedToToken, setSelectedToToken] = useState<Token | null>(null);
   const [tokenAmount, setTokenAmount] = useState("");
 
-  // chainName: "SOL" tells Dynamic to fetch Solana balances (networkId would be wrong here)
-  // filterSpamTokens: false so real tokens aren't filtered out
-  const { tokenBalances, isLoading: isLoadingBalances } = useTokenBalances({
-    accountAddress: primaryWallet?.address,
-    chainName: ChainEnum.Sol,
-    includeNativeBalance: true,
-    includeFiat: false,
-    filterSpamTokens: false,
-  });
+  // Without React SDK's useTokenBalances, disable balance pre-filtering.
+  const tokenBalances: { address?: string; balance: number }[] = [];
+  const isLoadingBalances = false;
 
   const { getRoutesForSwap, executeSwap, isLoading, error, clearError } =
     useLiFi();
@@ -105,7 +95,7 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
 
   const handleExecute = useCallback(async () => {
     if (
-      !primaryWallet?.address ||
+      !solanaAccount?.address ||
       !selectedFromToken ||
       !selectedToToken ||
       !tokenAmount
@@ -123,7 +113,7 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
         fromTokenDecimals: selectedFromToken.decimals,
         toTokenAddress: selectedToToken.address,
         fromAmount: tokenAmount,
-        fromAddress: primaryWallet.address,
+        fromAddress: solanaAccount.address,
         toAddress: embeddedWalletAddress,
       });
 
@@ -138,7 +128,7 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
       setView("amount");
     }
   }, [
-    primaryWallet,
+    solanaAccount,
     selectedFromToken,
     selectedToToken,
     tokenAmount,
@@ -159,13 +149,13 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
   }, [userBalance, selectedFromToken]);
 
   // No Solana wallet connected
-  if (!primaryWallet) {
+  if (!solanaAccount) {
     return (
       <div className="p-[16px] text-center">
-        <p className="font-['Clash_Display',sans-serif] text-[16px] text-white mb-[8px]">
+        <p className="font-medium text-[16px] text-[#030303] mb-[8px]">
           Connect a Solana Wallet
         </p>
-        <p className="text-sm font-['Clash_Display',sans-serif] text-[rgba(139,92,246,0.6)]">
+        <p className="text-sm text-[#606060]">
           Connect your Solana wallet to swap tokens.
         </p>
       </div>

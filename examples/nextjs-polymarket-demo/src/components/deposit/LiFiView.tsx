@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  useDynamicContext,
-  useTokenBalances,
-} from "@dynamic-labs/sdk-react-core";
+import { useWallet } from "@/lib/providers";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useLiFi } from "@/lib/hooks/useLiFi";
 import { loadLiFiChains, loadLiFiTokens } from "@/lib/lifi";
@@ -35,7 +32,7 @@ const isNativeToken = (address?: string): boolean => {
 };
 
 export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
-  const { primaryWallet } = useDynamicContext();
+  const { evmAccount } = useWallet();
   const [view, setView] = useState<View>("select");
   const [chains, setChains] = useState<SimpleChain[]>([]);
   const [fromChain, setFromChain] = useState<SimpleChain | null>({
@@ -53,13 +50,9 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
   const [selectedToToken, setSelectedToToken] = useState<Token | null>(null);
   const [tokenAmount, setTokenAmount] = useState("");
 
-  const { tokenBalances, isLoading: isLoadingBalances } = useTokenBalances({
-    accountAddress: primaryWallet?.address,
-    networkId: fromChain?.id || polygon.id,
-    includeNativeBalance: true,
-    includeFiat: true,
-    filterSpamTokens: false,
-  });
+  // Without React SDK's useTokenBalances, we disable balance pre-filtering.
+  const tokenBalances: { address?: string; balance: number; networkId: number }[] = [];
+  const isLoadingBalances = false;
 
   const { getRoutesForSwap, executeSwap, isLoading, error, clearError } =
     useLiFi();
@@ -127,7 +120,7 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
 
   const handleExecute = useCallback(async () => {
     if (
-      !primaryWallet?.address ||
+      !evmAccount?.address ||
       !selectedFromToken ||
       !selectedToToken ||
       !fromChain ||
@@ -145,25 +138,13 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
         fromTokenAddress: selectedFromToken.address,
         toTokenAddress: selectedToToken.address,
         fromAmount: tokenAmount,
-        fromAddress: primaryWallet.address,
+        fromAddress: evmAccount.address,
         toAddress: embeddedWalletAddress,
       });
 
       if (routes.length === 0) throw new Error("No routes found");
 
-      await executeSwap(
-        routes[0],
-        {
-          fromChainId: fromChain.id,
-          toChainId: toChain.id,
-          fromTokenAddress: selectedFromToken.address,
-          toTokenAddress: selectedToToken.address,
-          fromAmount: tokenAmount,
-          fromAddress: primaryWallet.address,
-          toAddress: embeddedWalletAddress,
-        },
-        primaryWallet
-      );
+      await executeSwap(routes[0], swapParams);
 
       // Dispatch event to refresh header balance after successful deposit
       window.dispatchEvent(new CustomEvent("tokenMinted"));
@@ -174,7 +155,7 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
       setView("amount");
     }
   }, [
-    primaryWallet,
+    evmAccount,
     selectedFromToken,
     selectedToToken,
     fromChain,

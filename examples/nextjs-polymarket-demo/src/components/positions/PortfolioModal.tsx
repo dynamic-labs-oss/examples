@@ -1,6 +1,6 @@
 "use client";
 
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { useWallet } from "@/lib/providers";
 import { RefreshCw, TrendingDown, TrendingUp, X } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,8 +30,8 @@ interface ConfirmAction {
 
 export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
   const modalTitleId = useId();
-  const { primaryWallet } = useDynamicContext();
-  const walletAddress = primaryWallet?.address;
+  const { evmAccount } = useWallet();
+  const walletAddress = evmAccount?.address;
   const queryClient = useQueryClient();
   const { showToast, updateToast } = useToast();
 

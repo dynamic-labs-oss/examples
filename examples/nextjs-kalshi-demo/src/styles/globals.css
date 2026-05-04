@@ -4,22 +4,22 @@
 
 :root {
   --font-size: 16px;
-  --background: #0a0b0f;
-  --foreground: #dde2f6;
-  --card: #12131a;
-  --card-foreground: #dde2f6;
-  --primary: #8b5cf6;
+  --background: rgb(249,249,249);
+  --foreground: #030303;
+  --card: #ffffff;
+  --card-foreground: #030303;
+  --primary: #4779FF;
   --primary-foreground: #ffffff;
-  --secondary: #06b6d4;
-  --secondary-foreground: #ffffff;
-  --accent: #14b8a6;
+  --secondary: #606060;
+  --secondary-foreground: #030303;
+  --accent: #4779FF;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #262a34;
+  --border: #DADADA;
   --input: transparent;
-  --input-background: #1a1b23;
-  --ring: #8b5cf6;
+  --input-background: #F9F9F9;
+  --ring: #4779FF;
   --radius: 0.625rem;
 }
 
@@ -60,7 +60,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Clash Display", "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
   #root {

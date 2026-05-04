@@ -1,159 +1,32 @@
 "use client";
 
-import {
-  useDynamicContext,
-  useIsLoggedIn,
-} from "@dynamic-labs/sdk-react-core";
-import { ChevronDown, Loader2, PieChart, Wallet } from "lucide-react";
+import { PieChart, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
+import { useWallet } from "@/lib/providers";
 import { useKalshiTrading } from "@/lib/hooks/useKalshiTrading";
 import { PortfolioModal } from "./positions/PortfolioModal";
 import Logo from "./LogoIcon";
+import DynamicButton from "./dynamic/DynamicButton";
 
-// Lazy load the deposit modal
 const DepositModal = dynamic(
   () => import("./DepositModal").then((mod) => ({ default: mod.DepositModal })),
-  {
-    ssr: false,
-  }
+  { ssr: false }
 );
-
-function AuthButton() {
-  const isLoggedIn = useIsLoggedIn();
-
-  const {
-    setShowAuthFlow,
-    setShowDynamicUserProfile,
-    sdkHasLoaded,
-    handleLogOut,
-  } = useDynamicContext();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false);
-      }
-    };
-
-    if (isDropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isDropdownOpen]);
-
-  const handleLogout = async () => {
-    await handleLogOut();
-    setIsDropdownOpen(false);
-  };
-
-  const handleProfileSettings = () => {
-    setShowDynamicUserProfile(true);
-    setIsDropdownOpen(false);
-  };
-
-  if (!sdkHasLoaded) {
-    return (
-      <div className="relative">
-        <button
-          type="button"
-          disabled
-          className="box-border flex gap-[6px] items-center justify-center pl-[5px] pr-[10px] py-[5px] relative rounded-[59.13px] shrink-0 bg-transparent cursor-not-allowed"
-        >
-          <div className="w-[31px] h-[31px] rounded-full flex items-center justify-center shrink-0">
-            <Loader2 className="w-[26px] h-[26px] text-[#8b5cf6] animate-spin" />
-          </div>
-        </button>
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <button
-        type="button"
-        onClick={() => setShowAuthFlow(true)}
-        className="bg-linear-to-r from-[#8b5cf6] to-[#06b6d4] box-border content-stretch flex gap-[22.837px] h-[41.107px] items-center justify-center px-[22.837px] py-[11.419px] relative rounded-[9.135px] shrink-0 w-[128.651px] cursor-pointer hover:opacity-90 transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90]"
-      >
-        <div className="flex flex-col font-['Clash_Display',sans-serif] justify-center leading-0 not-italic relative shrink-0 text-white text-[15.986px] text-nowrap text-right font-semibold">
-          <p className="leading-[28.547px] whitespace-pre">Login</p>
-        </div>
-      </button>
-    );
-  }
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-        className={`box-border flex gap-[6px] items-center justify-center pl-[5px] pr-[10px] py-[5px] relative rounded-[59.13px] shrink-0 cursor-pointer transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] ${
-          isDropdownOpen
-            ? "bg-[rgba(139,92,246,0.1)]"
-            : "bg-transparent hover:bg-[rgba(139,92,246,0.1)]"
-        }`}
-      >
-        <div className="w-[31px] h-[31px] rounded-full bg-linear-to-br from-[#8b5cf6] via-[#06b6d4] to-[#14b8a6] shrink-0" />
-        <ChevronDown
-          className={`w-[20px] h-[18px] text-[#8b5cf6] shrink-0 transition-transform duration-150 ${
-            isDropdownOpen ? "rotate-180" : ""
-          }`}
-          strokeWidth={2}
-        />
-      </button>
-
-      {isDropdownOpen && (
-        <div className="absolute top-[calc(100%+8px)] right-0 bg-[#1a1b23] rounded-[12px] min-w-[180px] z-50 overflow-hidden p-[4px] border border-[#262a34]">
-          <button
-            type="button"
-            onClick={handleProfileSettings}
-            className="w-full px-[16px] py-[12px] text-left text-[#8b5cf6] font-['Clash_Display',sans-serif] font-semibold text-[11.99px] leading-[100%] tracking-[0%] hover:bg-[#252630] rounded-[8px] transition-colors duration-150 cursor-pointer flex items-center"
-          >
-            Profile Settings
-          </button>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full pl-[16px] pr-[8px] py-[8px] text-left text-[#8b5cf6] font-['Clash_Display',sans-serif] font-semibold text-[11.99px] leading-[100%] tracking-[0%] bg-[#252630] rounded-[8px] hover:bg-[#2d2e3a] transition-colors duration-150 cursor-pointer mt-[4px] flex items-center"
-          >
-            Logout
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function PortfolioButton() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   return (
     <>
       <button
         type="button"
         onClick={() => setIsModalOpen(true)}
-        className="bg-[#1a1b23] box-border flex h-[41px] items-center justify-center gap-[6px] px-[12px] py-[8px] relative rounded-[8px] shrink-0 cursor-pointer hover:bg-[#252630] transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] border border-[#262a34]"
+        className="bg-white box-border flex h-[41px] items-center justify-center gap-[6px] px-[12px] py-[8px] relative rounded-[8px] shrink-0 cursor-pointer hover:bg-[#F9F9F9] transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] border border-[#DADADA]"
       >
-        <PieChart
-          className="w-[16px] h-[16px] text-[#8b5cf6]"
-          strokeWidth={2}
-        />
-        <span className="font-['Clash_Display',sans-serif] text-[16px] text-[#8b5cf6] leading-[100%] hidden sm:block font-medium">
-          Portfolio
-        </span>
+        <PieChart className="w-[16px] h-[16px] text-[#4779FF]" strokeWidth={2} />
+        <span className="font-medium text-[16px] text-[#030303] leading-[100%] hidden sm:block">Portfolio</span>
       </button>
-      <PortfolioModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      <PortfolioModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>
   );
 }
@@ -162,70 +35,54 @@ function DepositButton() {
   const { getSolBalance } = useKalshiTrading();
   const [balance, setBalance] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const isLoggedIn = useIsLoggedIn();
+  const { loggedIn } = useWallet();
 
   const fetchBalance = useCallback(async () => {
-    if (!isLoggedIn) return;
+    if (!loggedIn) return;
     const bal = await getSolBalance();
     setBalance(bal);
-  }, [isLoggedIn, getSolBalance]);
+  }, [loggedIn, getSolBalance]);
 
   useEffect(() => {
     fetchBalance();
     const interval = setInterval(fetchBalance, 30000);
-
-    // Listen for deposit events to refresh balance
-    const handleDeposit = () => {
-      setTimeout(() => {
-        fetchBalance();
-      }, 2000);
-    };
-
+    const handleDeposit = () => { setTimeout(() => { fetchBalance(); }, 2000); };
     window.addEventListener("depositComplete", handleDeposit);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("depositComplete", handleDeposit);
-    };
+    return () => { clearInterval(interval); window.removeEventListener("depositComplete", handleDeposit); };
   }, [fetchBalance]);
 
-  const displayText =
-    balance !== null && balance > 0 ? `${balance.toFixed(3)} SOL` : "Deposit";
+  const displayText = balance !== null && balance > 0 ? `${balance.toFixed(3)} SOL` : "Deposit";
 
   return (
     <>
       <button
         type="button"
         onClick={() => setIsModalOpen(true)}
-        className="bg-[#1a1b23] box-border flex h-[41px] items-center justify-center gap-[6px] pl-[12px] pr-[12px] py-[8px] relative rounded-[8px] shrink-0 w-[125px] cursor-pointer hover:bg-[#252630] transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] border border-[#262a34]"
+        className="bg-white box-border flex h-[41px] items-center justify-center gap-[6px] pl-[12px] pr-[12px] py-[8px] relative rounded-[8px] shrink-0 w-[125px] cursor-pointer hover:bg-[#F9F9F9] transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] border border-[#DADADA]"
       >
-        <Wallet className="w-[16px] h-[16px] text-[#14b8a6]" />
-        <div className="flex flex-col font-['Clash_Display',sans-serif] justify-center leading-[100%] not-italic relative shrink-0 text-[#14b8a6] text-[16px] text-nowrap tracking-[0%] text-right font-medium">
+        <Wallet className="w-[16px] h-[16px] text-[#4779FF]" />
+        <div className="flex flex-col font-medium justify-center leading-[100%] not-italic relative shrink-0 text-[#030303] text-[16px] text-nowrap tracking-[0%] text-right">
           <p className="leading-[100%] whitespace-pre">{displayText}</p>
         </div>
       </button>
-      <DepositModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      <DepositModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>
   );
 }
 
 function HeaderContent() {
-  const isLoggedIn = useIsLoggedIn();
-
+  const { loggedIn } = useWallet();
   return (
     <div className="content-stretch flex items-center gap-[16px] relative shrink-0 w-full">
       <Logo />
       <div className="flex items-center gap-[8px] ml-auto">
-        {isLoggedIn && (
+        {loggedIn && (
           <>
             <PortfolioButton />
             <DepositButton />
           </>
         )}
-        <AuthButton />
+        <DynamicButton />
       </div>
     </div>
   );
@@ -233,12 +90,12 @@ function HeaderContent() {
 
 export function Header() {
   return (
-    <div className="content-stretch flex flex-col gap-[19px] items-start pt-[21px] w-full">
-      <HeaderContent />
-      <div className="flex h-px items-center justify-center relative shrink-0 w-full">
-        <div className="w-full h-px bg-linear-to-r from-transparent via-[#8b5cf6]/20 to-transparent" />
+    <header className="sticky top-0 z-50 bg-white border-b border-[#DADADA]" style={{ boxShadow: "0 1px 2px 0 rgba(0,0,0,0.08)" }}>
+      <div className="h-16 flex items-center px-[20px] sm:px-[32px] md:px-[48px] lg:px-[64px] xl:px-[80px]">
+        <div className="w-full" style={{ maxWidth: "1440px", margin: "0 auto" }}>
+          <HeaderContent />
+        </div>
       </div>
-    </div>
+    </header>
   );
 }
-
