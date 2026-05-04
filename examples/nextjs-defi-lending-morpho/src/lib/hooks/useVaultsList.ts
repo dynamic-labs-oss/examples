@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useChainId } from "wagmi";
+import { useWallet } from "@/lib/providers";
 import { getApiForChain } from "../constants";
 
 export interface Vault {
@@ -72,7 +72,7 @@ interface VaultApiResponse {
 }
 
 export function useVaultsList(sortBy: SortOption = "netApy-desc") {
-  const chainId = useChainId();
+  const { chainId } = useWallet();
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

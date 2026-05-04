@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { parseUnits } from "viem";
-import { useReadContract, useWriteContract } from "wagmi";
+import { parseUnits, formatUnits, createPublicClient, http } from "viem";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
 import { ERC20_ABI, ERC4626_ABI } from "../ABIs";
 import { createTxStatusMessage, formatErrorMessage } from "../utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { useWallet } from "@/lib/providers";
 
 interface VaultInfo {
   address: string;
@@ -14,210 +16,206 @@ interface VaultInfo {
   };
 }
 
+function getViemChain(chainId: number) {
+  switch (chainId) {
+    case mainnet.id: return mainnet;
+    case arbitrum.id: return arbitrum;
+    case optimism.id: return optimism;
+    case polygon.id: return polygon;
+    default: return base;
+  }
+}
+
 export function useVaultOperations(
   address: string | undefined,
   vaultInfo: VaultInfo | null
 ) {
+  const { chainId, evmAccount } = useWallet();
   const [amount, setAmount] = useState("");
   const [txStatus, setTxStatus] = useState("");
   const [pendingDeposit, setPendingDeposit] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [assetBalance, setAssetBalance] = useState<bigint | undefined>();
+  const [vaultBalance, setVaultBalance] = useState<bigint | undefined>();
+  const [depositedAssets, setDepositedAssets] = useState<bigint | undefined>();
+  const [allowance, setAllowance] = useState<bigint | undefined>();
   const queryClient = useQueryClient();
 
-  // Function to refetch all relevant data after transaction success
-  const refetchData = () => {
-    // Invalidate all queries to trigger refetch
-    queryClient.invalidateQueries();
+  const chain = getViemChain(chainId);
+  const publicClient = createPublicClient({ chain, transport: http() });
+
+  const getWalletClient = () => {
+    if (!evmAccount) return null;
+    return createWalletClientForWalletAccount({ walletAccount: evmAccount, chain });
   };
 
-  // Read asset balance
-  const { data: assetBalance } = useReadContract({
-    address: vaultInfo?.asset.address as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!vaultInfo?.asset.address },
-  });
+  const refetchData = () => {
+    queryClient.invalidateQueries();
+    // Also refresh our local state
+    refreshBalances();
+  };
 
-  // Read vault share balance
-  const { data: vaultBalance } = useReadContract({
-    address: vaultInfo?.address as `0x${string}`,
-    abi: ERC4626_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!vaultInfo?.address },
-  });
+  const refreshBalances = async () => {
+    if (!address || !vaultInfo) return;
+    try {
+      const [ab, vb, al] = await Promise.all([
+        publicClient.readContract({
+          address: vaultInfo.asset.address as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [address as `0x${string}`],
+        }),
+        publicClient.readContract({
+          address: vaultInfo.address as `0x${string}`,
+          abi: ERC4626_ABI,
+          functionName: "balanceOf",
+          args: [address as `0x${string}`],
+        }),
+        publicClient.readContract({
+          address: vaultInfo.asset.address as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: "allowance",
+          args: [address as `0x${string}`, vaultInfo.address as `0x${string}`],
+        }),
+      ]);
+      setAssetBalance(ab as bigint);
+      setVaultBalance(vb as bigint);
+      setAllowance(al as bigint);
 
-  // Read user's deposited assets (convert shares to assets)
-  const { data: depositedAssets } = useReadContract({
-    address: vaultInfo?.address as `0x${string}`,
-    abi: ERC4626_ABI,
-    functionName: "convertToAssets",
-    args: vaultBalance ? [vaultBalance] : undefined,
-    query: { enabled: !!vaultInfo?.address && !!vaultBalance },
-  });
+      if ((vb as bigint) > 0n) {
+        const da = await publicClient.readContract({
+          address: vaultInfo.address as `0x${string}`,
+          abi: ERC4626_ABI,
+          functionName: "convertToAssets",
+          args: [vb as bigint],
+        });
+        setDepositedAssets(da as bigint);
+      } else {
+        setDepositedAssets(0n);
+      }
+    } catch {}
+  };
 
-  // Read allowance
-  const { data: allowance } = useReadContract({
-    address: vaultInfo?.asset.address as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args:
-      address && vaultInfo?.asset.address && vaultInfo?.address
-        ? [address, vaultInfo.address]
-        : undefined,
-    query: {
-      enabled: !!address && !!vaultInfo?.asset.address && !!vaultInfo?.address,
-    },
-  });
-
-  // Approve asset
-  const {
-    writeContract: writeApprove,
-    isPending: isApproving,
-    error: approveError,
-  } = useWriteContract({
-    mutation: {
-      onSuccess: () => {
-        setTxStatus(createTxStatusMessage("Approval", true));
-        refetchData();
-
-        // If there's a pending deposit, automatically trigger it
-        if (pendingDeposit && vaultInfo && address) {
-          setTimeout(() => {
-            handleDepositAfterApproval();
-          }, 1000); // Small delay to ensure approval is processed
-        }
-      },
-      onError: (error) => {
-        setTxStatus(
-          createTxStatusMessage("Approval", false, formatErrorMessage(error))
-        );
-        setPendingDeposit(false);
-      },
-    },
-  });
-
-  // Deposit
-  const {
-    writeContract: writeDeposit,
-    isPending: isDepositing,
-    error: depositError,
-  } = useWriteContract({
-    mutation: {
-      onSuccess: () => {
-        setTxStatus(createTxStatusMessage("Deposit", true));
-        refetchData();
-        setPendingDeposit(false);
-      },
-      onError: (error) => {
-        setTxStatus(
-          createTxStatusMessage("Deposit", false, formatErrorMessage(error))
-        );
-        setPendingDeposit(false);
-      },
-    },
-  });
-
-  // Withdraw
-  const {
-    writeContract: writeWithdraw,
-    isPending: isWithdrawing,
-    error: withdrawError,
-  } = useWriteContract({
-    mutation: {
-      onSuccess: () => {
-        setTxStatus(createTxStatusMessage("Withdraw", true));
-        refetchData();
-      },
-      onError: (error) => {
-        setTxStatus(
-          createTxStatusMessage("Withdraw", false, formatErrorMessage(error))
-        );
-      },
-    },
+  // Initialize balances
+  useState(() => {
+    refreshBalances();
   });
 
   const handleDepositAfterApproval = async () => {
     if (!vaultInfo?.address || !address) return;
+    const walletClient = getWalletClient();
+    if (!walletClient) return;
 
     try {
-      await writeDeposit({
+      const { request } = await publicClient.simulateContract({
         address: vaultInfo.address as `0x${string}`,
         abi: ERC4626_ABI,
         functionName: "deposit",
-        args: [parseUnits(amount, vaultInfo.asset.decimals), address],
+        args: [parseUnits(amount, vaultInfo.asset.decimals), address as `0x${string}`],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
     } catch (e: unknown) {
-      setTxStatus(
-        createTxStatusMessage("Deposit", false, formatErrorMessage(e))
-      );
+      setTxStatus(createTxStatusMessage("Deposit", false, formatErrorMessage(e)));
       setPendingDeposit(false);
     }
   };
 
   const handleApprove = async () => {
     if (!vaultInfo?.asset.address || !vaultInfo?.address) return;
+    const walletClient = getWalletClient();
+    if (!walletClient || !address) return;
 
     setTxStatus("");
-    setPendingDeposit(true); // Mark that we want to deposit after approval
+    setPendingDeposit(true);
+    setIsApproving(true);
     try {
-      await writeApprove({
+      const { request } = await publicClient.simulateContract({
         address: vaultInfo.asset.address as `0x${string}`,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [vaultInfo.address, parseUnits(amount, vaultInfo.asset.decimals)],
+        args: [vaultInfo.address as `0x${string}`, parseUnits(amount, vaultInfo.asset.decimals)],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
+      setTxStatus(createTxStatusMessage("Approval", true));
+      refetchData();
+      // Trigger deposit after a short delay
+      setTimeout(() => {
+        handleDepositAfterApproval();
+      }, 1000);
     } catch (e: unknown) {
-      setTxStatus(
-        createTxStatusMessage("Approval", false, formatErrorMessage(e))
-      );
+      setTxStatus(createTxStatusMessage("Approval", false, formatErrorMessage(e)));
       setPendingDeposit(false);
+    } finally {
+      setIsApproving(false);
     }
   };
 
   const handleDeposit = async (e: React.FormEvent) => {
     if (!vaultInfo?.address || !address) return;
+    const walletClient = getWalletClient();
+    if (!walletClient) return;
 
     e.preventDefault();
     setTxStatus("");
+    setIsDepositing(true);
     try {
-      await writeDeposit({
+      const { request } = await publicClient.simulateContract({
         address: vaultInfo.address as `0x${string}`,
         abi: ERC4626_ABI,
         functionName: "deposit",
-        args: [parseUnits(amount, vaultInfo.asset.decimals), address],
+        args: [parseUnits(amount, vaultInfo.asset.decimals), address as `0x${string}`],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
+      setTxStatus(createTxStatusMessage("Deposit", true));
+      refetchData();
+      setPendingDeposit(false);
     } catch (e: unknown) {
-      setTxStatus(
-        createTxStatusMessage("Deposit", false, formatErrorMessage(e))
-      );
+      setTxStatus(createTxStatusMessage("Deposit", false, formatErrorMessage(e)));
+      setPendingDeposit(false);
+    } finally {
+      setIsDepositing(false);
     }
   };
 
   const handleWithdraw = async (e: React.FormEvent) => {
     if (!vaultInfo?.address || !address) return;
+    const walletClient = getWalletClient();
+    if (!walletClient) return;
 
     e.preventDefault();
     setTxStatus("");
+    setIsWithdrawing(true);
     try {
-      await writeWithdraw({
+      const { request } = await publicClient.simulateContract({
         address: vaultInfo.address as `0x${string}`,
         abi: ERC4626_ABI,
         functionName: "withdraw",
-        args: [parseUnits(amount, vaultInfo.asset.decimals), address, address],
+        args: [
+          parseUnits(amount, vaultInfo.asset.decimals),
+          address as `0x${string}`,
+          address as `0x${string}`,
+        ],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
+      setTxStatus(createTxStatusMessage("Withdraw", true));
+      refetchData();
     } catch (e: unknown) {
-      setTxStatus(
-        createTxStatusMessage("Withdraw", false, formatErrorMessage(e))
-      );
+      setTxStatus(createTxStatusMessage("Withdraw", false, formatErrorMessage(e)));
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
   const needsApproval =
     (allowance !== undefined &&
-      vaultInfo?.asset.decimals &&
-      parseUnits(amount || "0", vaultInfo.asset.decimals) >
-        (allowance as bigint)) ||
+      vaultInfo?.asset.decimals !== undefined &&
+      parseUnits(amount || "0", vaultInfo.asset.decimals) > allowance) ||
     false;
 
   return {
@@ -233,9 +231,9 @@ export function useVaultOperations(
     isApproving,
     isDepositing,
     isWithdrawing,
-    approveError,
-    depositError,
-    withdrawError,
+    approveError: null,
+    depositError: null,
+    withdrawError: null,
     handleApprove,
     handleDeposit,
     handleWithdraw,
