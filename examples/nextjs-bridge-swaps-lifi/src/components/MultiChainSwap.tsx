@@ -1,5 +1,6 @@
 "use client";
 
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import {
   executeRoute,
   getActiveRoutes,
@@ -17,14 +18,13 @@ import {
 import { useEffect, useState, useCallback } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { type Chain } from "@lifi/sdk";
+import { useChainId } from "wagmi";
 
 import ActionButtons from "./ActionButtons";
 import ExecutionDisplay from "./ExecutionDisplay";
 import RouteDisplay from "./RouteDisplay";
 import StatusMessages from "./StatusMessages";
 import SwapForm from "./SwapForm";
-import { useWallet } from "@/lib/providers";
-import { LiFiProvider } from "@/lib/lifi-provider";
 
 interface SwapState {
   fromChain: Chain | null;
@@ -55,11 +55,13 @@ interface ExecutionProgress {
   message: string;
 }
 
-function SwapContent() {
-  const { evmAccount, loggedIn } = useWallet();
+export default function MultiChainSwap() {
+  const { primaryWallet, sdkHasLoaded } = useDynamicContext();
+  useChainId(); // subscribe to chain changes
 
-  const isConnected = loggedIn && !!evmAccount;
-  const address = evmAccount?.address;
+  const isConnected = !!primaryWallet;
+  const address = primaryWallet?.address;
+  const isReady = sdkHasLoaded && isConnected && !!address;
 
   const [swapState, setSwapState] = useState<SwapState>({
     fromChain: null,
@@ -92,11 +94,12 @@ function SwapContent() {
         if (step.execution?.process) {
           step.execution.process.forEach((process) => {
             let chainId: number | undefined;
-
             if (stepIndex === 0) {
               chainId = swapState.fromChain?.id;
-            } else {
+            } else if (stepIndex === route.steps.length - 1) {
               chainId = swapState.toChain?.id;
+            } else {
+              chainId = swapState.fromChain?.id;
             }
 
             progress.push({
@@ -122,7 +125,7 @@ function SwapContent() {
   );
 
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isReady) return;
 
     const checkActiveRoutes = () => {
       try {
@@ -137,18 +140,15 @@ function SwapContent() {
           monitorRouteExecution(route);
         }
       } catch {
-        setSwapState((prev) => ({
-          ...prev,
-          error: "Failed to check active routes",
-        }));
+        // ignore
       }
     };
 
     checkActiveRoutes();
-  }, [isConnected, monitorRouteExecution]);
+  }, [isReady, monitorRouteExecution]);
 
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isReady) return;
 
     const fetchChains = async () => {
       try {
@@ -171,16 +171,15 @@ function SwapContent() {
     };
 
     fetchChains();
-  }, [isConnected]);
+  }, [isReady]);
 
   useEffect(() => {
-    if (!swapState.fromChain || !swapState.toChain || !isConnected) return;
+    if (!swapState.fromChain || !swapState.toChain || !isReady) return;
 
     const fetchTokens = async () => {
       try {
         const fromChainId = swapState.fromChain?.id;
         const toChainId = swapState.toChain?.id;
-
         if (!fromChainId || !toChainId) return;
 
         const [fromTokensResponse, toTokensResponse] = await Promise.all([
@@ -209,7 +208,14 @@ function SwapContent() {
     };
 
     fetchTokens();
-  }, [swapState.fromChain, swapState.toChain, isConnected]);
+  }, [swapState.fromChain, swapState.toChain, isReady]);
+
+  const switchToChain = async (chainId: number) => {
+    if (!primaryWallet) return;
+    if (primaryWallet.connector.supportsNetworkSwitching()) {
+      await primaryWallet.switchNetwork(chainId);
+    }
+  };
 
   const getRoutesForSwap = async (
     fromChainId: number,
@@ -218,9 +224,7 @@ function SwapContent() {
     toTokenAddress: string,
     amount: string
   ) => {
-    if (!isConnected || !address) {
-      throw new Error("Not ready");
-    }
+    if (!isReady || !address) throw new Error("Not ready");
 
     const routes = await getRoutes({
       fromChainId,
@@ -242,9 +246,7 @@ function SwapContent() {
   };
 
   const executeSwapRoute = async (route: Route) => {
-    if (!isConnected || !address || !route) {
-      throw new Error("Not ready");
-    }
+    if (!isReady || !address || !route) throw new Error("Not ready");
 
     const executionOptions: ExecutionOptions = {
       updateRouteHook: (updatedRoute: RouteExtended) => {
@@ -265,11 +267,9 @@ function SwapContent() {
           }));
         }
       },
-      updateTransactionRequestHook: async (txRequest) => {
-        return txRequest;
-      },
+      updateTransactionRequestHook: async (txRequest) => txRequest,
       acceptExchangeRateUpdateHook: async (params) => {
-        const accepted = window.confirm(
+        return window.confirm(
           `Exchange rate has changed!\nOld amount: ${formatUnits(
             BigInt(params.oldToAmount),
             params.toToken.decimals
@@ -278,18 +278,16 @@ function SwapContent() {
             params.toToken.decimals
           )} ${params.toToken.symbol}\n\nDo you want to continue?`
         );
-        return accepted;
       },
-      switchChainHook: async (_chainId) => {
-        // Chain switching is handled automatically by the EVM provider
+      switchChainHook: async (chainId) => {
+        await switchToChain(chainId);
         return undefined;
       },
       executeInBackground: false,
       disableMessageSigning: false,
     };
 
-    const result = await executeRoute(route, executionOptions);
-    return result;
+    return executeRoute(route, executionOptions);
   };
 
   const handleGetRoutes = async () => {
@@ -369,10 +367,7 @@ function SwapContent() {
 
     try {
       await executeSwapRoute(swapState.selectedRoute);
-      setSwapState((prev) => ({
-        ...prev,
-        isLoading: false,
-      }));
+      setSwapState((prev) => ({ ...prev, isLoading: false }));
     } catch (error) {
       setSwapState((prev) => ({
         ...prev,
@@ -385,7 +380,6 @@ function SwapContent() {
 
   const handleResumeRoute = async () => {
     if (!swapState.activeRoute) return;
-
     try {
       setSwapState((prev) => ({ ...prev, isLoading: true }));
       await resumeRoute(swapState.activeRoute);
@@ -401,7 +395,6 @@ function SwapContent() {
 
   const handleStopRoute = () => {
     if (!swapState.activeRoute) return;
-
     try {
       stopRouteExecution(swapState.activeRoute);
       setSwapState((prev) => ({
@@ -411,29 +404,17 @@ function SwapContent() {
         executionProgress: [],
       }));
     } catch {
-      setSwapState((prev) => ({
-        ...prev,
-        error: "Failed to stop route execution",
-      }));
+      setSwapState((prev) => ({ ...prev, error: "Failed to stop route execution" }));
     }
   };
 
   const handleMoveToBackground = () => {
     if (!swapState.activeRoute) return;
-
     try {
-      updateRouteExecution(swapState.activeRoute, {
-        executeInBackground: true,
-      });
-      setSwapState((prev) => ({
-        ...prev,
-        isExecuting: false,
-      }));
+      updateRouteExecution(swapState.activeRoute, { executeInBackground: true });
+      setSwapState((prev) => ({ ...prev, isExecuting: false }));
     } catch {
-      setSwapState((prev) => ({
-        ...prev,
-        error: "Failed to move route to background",
-      }));
+      setSwapState((prev) => ({ ...prev, error: "Failed to move route to background" }));
     }
   };
 
@@ -467,11 +448,21 @@ function SwapContent() {
   };
 
   const handleShowExecutionDisplay = () => {
-    setSwapState((prev) => ({
-      ...prev,
-      showExecutionDisplay: true,
-    }));
+    setSwapState((prev) => ({ ...prev, showExecutionDisplay: true }));
   };
+
+  if (!sdkHasLoaded) {
+    return (
+      <main className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="bg-card text-card-foreground rounded-2xl shadow-lg p-6 border border-border text-center">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading wallet connection...</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 flex items-center justify-center p-6">
@@ -494,14 +485,10 @@ function SwapContent() {
               selectedRoute={swapState.selectedRoute}
               toTokenSymbol={swapState.toToken?.symbol}
               onRouteSelect={(route) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  selectedRoute: route,
-                }))
+                setSwapState((prev) => ({ ...prev, selectedRoute: route }))
               }
               onBackToForm={handleBackToForm}
             />
-
             <ActionButtons
               isLoading={swapState.isLoading}
               isExecuting={swapState.isExecuting}
@@ -516,7 +503,6 @@ function SwapContent() {
               onBackToForm={handleBackToForm}
               onShowExecutionDisplay={handleShowExecutionDisplay}
             />
-
             <StatusMessages
               error={swapState.error}
               txHash={swapState.txHash}
@@ -535,39 +521,21 @@ function SwapContent() {
               fromTokens={fromTokens}
               toTokens={toTokens}
               onFromChainChange={(chain) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  fromChain: chain,
-                  fromToken: null,
-                }))
+                setSwapState((prev) => ({ ...prev, fromChain: chain, fromToken: null }))
               }
               onToChainChange={(chain) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  toChain: chain,
-                  toToken: null,
-                }))
+                setSwapState((prev) => ({ ...prev, toChain: chain, toToken: null }))
               }
               onFromTokenChange={(token) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  fromToken: token,
-                }))
+                setSwapState((prev) => ({ ...prev, fromToken: token }))
               }
               onToTokenChange={(token) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  toToken: token,
-                }))
+                setSwapState((prev) => ({ ...prev, toToken: token }))
               }
               onAmountChange={(amount) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  amount,
-                }))
+                setSwapState((prev) => ({ ...prev, amount }))
               }
             />
-
             <ActionButtons
               isLoading={swapState.isLoading}
               isExecuting={swapState.isExecuting}
@@ -582,7 +550,6 @@ function SwapContent() {
               onBackToForm={handleBackToForm}
               onShowExecutionDisplay={handleShowExecutionDisplay}
             />
-
             <StatusMessages
               error={swapState.error}
               txHash={swapState.txHash}
@@ -592,30 +559,5 @@ function SwapContent() {
         )}
       </div>
     </main>
-  );
-}
-
-export default function MultiChainSwap() {
-  const { loggedIn } = useWallet();
-
-  if (!loggedIn) {
-    return (
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          <div className="rounded-xl border border-[#DADADA] bg-white shadow-sm p-6 text-center">
-            <h2 className="text-2xl font-bold text-[#030303] mb-4">Cross-Chain Swap</h2>
-            <p className="text-[#606060] mb-4">
-              Please sign in to use the multi-chain swap feature.
-            </p>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  return (
-    <LiFiProvider>
-      <SwapContent />
-    </LiFiProvider>
   );
 }

@@ -1,18 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { parseUnits } from "viem";
+import { createPublicClient, createWalletClient, custom, erc20Abi, http, parseUnits, type Chain } from "viem";
+import { mainnet, polygon, bsc, avalanche, arbitrum, optimism, base } from "viem/chains";
 import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 
-import { ALL_CHAINS, type ChainKey, isEVMChain } from "@/constants/chains";
+import { ALL_CHAINS, EVM_CHAINS, type ChainKey, isEVMChain } from "@/constants/chains";
 import { fetchTokensForChain, type TokenData } from "@/lib/mayan-api";
 import { useWallet } from "@/lib/providers";
 import ActionButtons from "./ActionButtons";
 import RouteDisplay from "./RouteDisplay";
 import StatusMessages from "./StatusMessages";
 import SwapForm from "./SwapForm";
-import { fetchQuote, swapFromEvm } from "@mayanfinance/swap-sdk";
+import { fetchQuote, getSwapFromEvmTxPayload, getEvmChainIdByName, addresses } from "@mayanfinance/swap-sdk";
 import type { Quote, Token } from "@mayanfinance/swap-sdk";
+
+const VIEM_CHAINS: Record<string, Chain> = {
+  ethereum: mainnet,
+  polygon,
+  bsc,
+  avalanche,
+  arbitrum,
+  optimism,
+  base,
+};
 
 interface SimpleChain {
   id: number | string;
@@ -177,24 +188,86 @@ export default function MultiChainSwap() {
       throw new Error("Not ready");
     }
 
-    // Use the JS SDK viem wallet client for signing
-    const walletClient = createWalletClientForWalletAccount({
+    const viemChain = VIEM_CHAINS[quote.fromChain];
+    if (!viemChain) throw new Error(`Unsupported source chain: ${quote.fromChain}`);
+
+    const chainId = getEvmChainIdByName(quote.fromChain);
+
+    const dynamicWalletClient = await createWalletClientForWalletAccount({
       walletAccount: evmAccount,
     });
 
-    const result = await swapFromEvm(
+    // Switch the wallet to the target chain before sending any transactions.
+    // For injected wallets (MetaMask etc.) this triggers the chain-switch prompt.
+    // For WaaS wallets it updates the active network in Dynamic's context.
+    await dynamicWalletClient.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: `0x${viemChain.id.toString(16)}` }],
+    });
+
+    // Build a fresh wallet client now that the wallet is on the correct chain.
+    const walletClient = createWalletClient({
+      account: dynamicWalletClient.account,
+      chain: viemChain,
+      transport: custom({
+        request: async ({ method, params }: { method: string; params?: unknown[] }) => {
+          if (method === "eth_chainId") {
+            return `0x${viemChain.id.toString(16)}`;
+          }
+          return dynamicWalletClient.request({ method, params } as Parameters<typeof dynamicWalletClient.request>[0]);
+        },
+      }),
+    });
+
+    const fromTokenContract = quote.fromToken.contract as `0x${string}`;
+    const isNativeToken =
+      !fromTokenContract ||
+      fromTokenContract === "0x0000000000000000000000000000000000000000";
+
+    if (!isNativeToken) {
+      const publicClient = createPublicClient({ chain: viemChain, transport: http() });
+      const forwarderAddress = addresses.MAYAN_FORWARDER_CONTRACT as `0x${string}`;
+      const allowance = await publicClient.readContract({
+        address: fromTokenContract,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [address as `0x${string}`, forwarderAddress],
+      });
+      const requiredAmount = BigInt(quote.effectiveAmountIn64);
+      if (allowance < requiredAmount) {
+        const approveTxHash = await walletClient.writeContract({
+          address: fromTokenContract,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [forwarderAddress, requiredAmount],
+          account: address as `0x${string}`,
+          chain: viemChain,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+      }
+    }
+
+    const txPayload = getSwapFromEvmTxPayload(
       quote,
       address,
       address,
       null,
-      walletClient as Parameters<typeof swapFromEvm>[3],
+      address,
+      chainId,
       null,
-      null,
-      null,
-      {}
+      null
     );
 
-    return result;
+    const txHash = await walletClient.sendTransaction({
+      to: txPayload.to as `0x${string}`,
+      data: txPayload.data as `0x${string}`,
+      value: txPayload.value != null ? BigInt(txPayload.value.toString()) : BigInt(0),
+      account: address as `0x${string}`,
+      chain: viemChain,
+      gas: txPayload.gasLimit != null ? BigInt(txPayload.gasLimit.toString()) : undefined,
+    });
+
+    return txHash;
   };
 
   const handleGetQuote = async () => {
@@ -325,7 +398,8 @@ export default function MultiChainSwap() {
         fromToken={swapState.fromToken}
         toToken={swapState.toToken}
         amount={swapState.amount}
-        chains={ALL_CHAINS}
+        fromChains={EVM_CHAINS}
+        toChains={ALL_CHAINS}
         fromTokens={fromTokens}
         toTokens={toTokens}
         isLoadingTokens={isLoadingTokens}

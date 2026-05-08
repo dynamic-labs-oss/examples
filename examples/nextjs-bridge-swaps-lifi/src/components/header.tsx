@@ -1,22 +1,23 @@
 import Link from "next/link";
+import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
 import DynamicLogo from "./dynamic/logo";
+import { HamburgerMenu } from "./hamburger-menu";
 import DynamicButton from "./dynamic/dynamic-button";
 
 export default function Header() {
   return (
-    <header
-      className="sticky top-0 z-50 flex items-center justify-between h-16 px-6 bg-white"
-      style={{
-        borderBottom: "1px solid #DADADA",
-        boxShadow: "0 1px 2px 0 rgba(0,0,0,0.08)",
-      }}
-    >
+    <header className="sticky top-0 z-50 flex items-center justify-between h-16 px-6 bg-background border-b">
       <Link href="/" className="flex items-center">
-        <DynamicLogo width={120} height={24} className="text-[#030303]" />
+        <DynamicLogo width={120} height={24} />
       </Link>
 
-      <div className="flex items-center gap-3">
-        <DynamicButton />
+      <div className="hidden md:flex gap-2 pr-4">
+        <DynamicWidget />
+      </div>
+      <div className="md:hidden pr-4">
+        <HamburgerMenu>
+          <DynamicButton />
+        </HamburgerMenu>
       </div>
     </header>
   );

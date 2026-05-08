@@ -6,4 +6,6 @@ export const dynamicClient = createDynamicClient({
   metadata: { name: "Mayan Bridge" },
 });
 
-addEvmExtension();
+if (typeof window !== "undefined") {
+  addEvmExtension();
+}

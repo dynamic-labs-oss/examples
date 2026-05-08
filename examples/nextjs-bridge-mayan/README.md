@@ -1,75 +1,71 @@
-# Mayan Cross-Chain Swap
+# Mayan Cross-Chain Swap with Dynamic JS SDK
 
-A modern web application for performing cross-chain token swaps using the Mayan protocol. Built with Next.js, TypeScript, and Tailwind CSS.
+A cross-chain swap demo using **Dynamic's JavaScript SDK** (no React SDK dependency) and the **Mayan Finance** protocol. Supports swapping from any EVM chain to EVM or non-EVM destinations (Solana, Sui, HyperCore).
 
 ## Features
 
-- **Cross-Chain Swaps**: Swap tokens between different blockchain networks
-- **Supported Chains**: Ethereum, Polygon, BSC, Avalanche, Arbitrum, Optimism, and Base
-- **Wallet Integration**: Connect with various wallets through Dynamic Labs
-- **Real-Time Quotes**: Get instant quotes for your swaps
-- **Modern UI**: Beautiful, responsive interface built with Tailwind CSS
+- **Dynamic JS SDK**: Headless auth with email OTP, Google OAuth, and injected EVM wallets via `@dynamic-labs-sdk/client`
+- **Embedded EVM Wallets**: WaaS wallets created automatically on sign-up via `@dynamic-labs-sdk/evm`
+- **Mayan Routing**: Cross-chain quotes and swap execution using `@mayanfinance/swap-sdk`
+- **EVM → Any Chain**: Source chain must be EVM; destination supports Solana, Sui, HyperCore, and all EVM chains
+- **ERC-20 Approvals**: Automatic allowance check and approval before swap execution
+- **Chain Switching**: `wallet_switchEthereumChain` called automatically when the selected FROM chain differs from the wallet's active network
 
-## Technology Stack
+## Tech Stack
 
-- **Frontend**: Next.js 15, React 19, TypeScript
-- **Styling**: Tailwind CSS
-- **Wallet Integration**: Dynamic Labs SDK
-- **Cross-Chain Protocol**: Mayan Finance SDK
-- **Package Manager**: pnpm
+| Layer | Library |
+|---|---|
+| Auth & Wallets | `@dynamic-labs-sdk/client` + `@dynamic-labs-sdk/evm` |
+| Chain interaction | `viem` |
+| Cross-chain swaps | `@mayanfinance/swap-sdk` |
+| UI | Next.js 15, Tailwind CSS |
 
 ## Getting Started
 
-1. **Install dependencies**:
+### 1. Install dependencies
 
-   ```bash
-   pnpm install
-   ```
+```bash
+pnpm install
+```
 
-2. **Set up environment variables**:
-   Create a `.env.local` file with your Dynamic Labs environment ID:
+### 2. Set up environment variables
 
-   ```env
-   NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=your_environment_id_here
-   ```
+```bash
+cp .env.example .env
+```
 
-3. **Run the development server**:
+```env
+NEXT_PUBLIC_DYNAMIC_ENV_ID=your_dynamic_environment_id
+```
 
-   ```bash
-   pnpm run dev
-   ```
+Get a Dynamic environment ID at [app.dynamic.xyz](https://app.dynamic.xyz).
 
-4. **Open your browser**:
-   Navigate to [http://localhost:3000](http://localhost:3000)
+### 3. Run the dev server
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
 
 ## How It Works
 
-1. **Connect Wallet**: Connect your wallet using Dynamic Labs
-2. **Select Chains**: Choose source and destination chains
-3. **Select Tokens**: Pick the tokens you want to swap
-4. **Enter Amount**: Specify the amount to swap
-5. **Get Quotes**: Fetch available swap routes from Mayan
-6. **Execute Swap**: Choose a route and execute the swap
+1. **Sign in** — email OTP, Google, or connect MetaMask via the custom Dynamic button
+2. **Select FROM chain** — EVM chains only (Ethereum, Polygon, BSC, Avalanche, Arbitrum, Optimism, Base)
+3. **Select TO chain** — any chain supported by Mayan (including Solana, Sui, HyperCore)
+4. **Pick tokens & amount** — tokens fetched from Mayan's token API
+5. **Get quote** — Mayan returns best available route with estimated output and fees
+6. **Execute swap** — ERC-20 approval (if needed) then swap transaction sent via viem wallet client
 
 ## Supported Networks
 
-- **Ethereum**: Mainnet and Layer 2s
-- **Polygon**: Polygon PoS
-- **BSC**: Binance Smart Chain
-- **Avalanche**: Avalanche C-Chain
-- **Arbitrum**: Arbitrum One
-- **Optimism**: Optimism
-- **Base**: Coinbase Base
-
-## Development
-
-- **Build**: `pnpm run build`
-- **Start**: `pnpm run start`
-- **Lint**: `pnpm run lint`
+| Direction | Chains |
+|---|---|
+| FROM (source) | Ethereum, Polygon, BSC, Avalanche, Arbitrum, Optimism, Base |
+| TO (destination) | All of the above + Solana, Sui, HyperCore |
 
 ## Learn More
 
-- [Mayan Finance Documentation](https://docs.mayan.finance/)
-- [Mayan API Reference](https://price-api.mayan.finance/swagger/)
-- [Dynamic Labs Documentation](https://docs.dynamic.xyz/)
-- [Next.js Documentation](https://nextjs.org/docs)
+- [Dynamic JS SDK Documentation](https://docs.dynamic.xyz/javascript)
+- [Mayan Finance Documentation](https://docs.mayan.finance)
+- [Mayan SDK on npm](https://www.npmjs.com/package/@mayanfinance/swap-sdk)

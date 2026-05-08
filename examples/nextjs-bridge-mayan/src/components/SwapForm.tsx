@@ -16,7 +16,8 @@ interface SwapFormProps {
   fromToken: Token | null;
   toToken: Token | null;
   amount: string;
-  chains: SimpleChain[];
+  fromChains: SimpleChain[];
+  toChains: SimpleChain[];
   fromTokens: Token[];
   toTokens: Token[];
   isLoadingTokens: boolean;
@@ -34,7 +35,8 @@ export default function SwapForm({
   fromToken,
   toToken,
   amount,
-  chains,
+  fromChains,
+  toChains,
   fromTokens,
   toTokens,
   isLoadingTokens,
@@ -93,13 +95,13 @@ export default function SwapForm({
                 value={fromChain?.id || ""}
                 onChange={(e) => {
                   const chainId = e.target.value;
-                  const chain = chains.find((c) => c.id.toString() === chainId);
+                  const chain = fromChains.find((c) => c.id.toString() === chainId);
                   onFromChainChange(chain || null);
                 }}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
               >
                 <option value="">Select chain</option>
-                {chains.map((chain) => (
+                {fromChains.map((chain) => (
                   <option key={chain.id} value={chain.id}>
                     {chain.name}
                   </option>
@@ -287,13 +289,13 @@ export default function SwapForm({
                 value={toChain?.id || ""}
                 onChange={(e) => {
                   const chainId = e.target.value;
-                  const chain = chains.find((c) => c.id.toString() === chainId);
+                  const chain = toChains.find((c) => c.id.toString() === chainId);
                   onToChainChange(chain || null);
                 }}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
               >
                 <option value="">Select chain</option>
-                {chains.map((chain) => (
+                {toChains.map((chain) => (
                   <option key={chain.id} value={chain.id}>
                     {chain.name}
                   </option>
