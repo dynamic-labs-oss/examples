@@ -1,9 +1,4 @@
-// Chain IDs
-const BASE_ID = 8453;
-const MAINNET_ID = 1;
-const ARBITRUM_ID = 42161;
-const OPTIMISM_ID = 10;
-const POLYGON_ID = 137;
+import { base, mainnet, arbitrum, optimism, polygon } from "wagmi/chains";
 
 export interface NetworkConfig {
   chainId: number;
@@ -31,8 +26,8 @@ export interface NetworkConfig {
 
 export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
   // Base (Primary network)
-  [BASE_ID]: {
-    chainId: BASE_ID,
+  [base.id]: {
+    chainId: base.id,
     name: "base",
     displayName: "Base",
     contracts: {
@@ -54,10 +49,10 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
       weth: 18,
     },
   },
-
+  
   // Ethereum Mainnet
-  [MAINNET_ID]: {
-    chainId: MAINNET_ID,
+  [mainnet.id]: {
+    chainId: mainnet.id,
     name: "mainnet",
     displayName: "Ethereum",
     contracts: {
@@ -72,10 +67,10 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
       weth: 18,
     },
   },
-
+  
   // Arbitrum
-  [ARBITRUM_ID]: {
-    chainId: ARBITRUM_ID,
+  [arbitrum.id]: {
+    chainId: arbitrum.id,
     name: "arbitrum",
     displayName: "Arbitrum",
     contracts: {
@@ -90,10 +85,10 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
       weth: 18,
     },
   },
-
+  
   // Optimism
-  [OPTIMISM_ID]: {
-    chainId: OPTIMISM_ID,
+  [optimism.id]: {
+    chainId: optimism.id,
     name: "optimism",
     displayName: "Optimism",
     contracts: {
@@ -108,10 +103,10 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
       weth: 18,
     },
   },
-
+  
   // Polygon
-  [POLYGON_ID]: {
-    chainId: POLYGON_ID,
+  [polygon.id]: {
+    chainId: polygon.id,
     name: "polygon",
     displayName: "Polygon",
     contracts: {
@@ -128,7 +123,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
   },
 };
 
-export const DEFAULT_NETWORK = BASE_ID;
+export const DEFAULT_NETWORK = base.id;
 export const SUPPORTED_CHAIN_IDS = Object.keys(SUPPORTED_NETWORKS).map(Number);
 
 export function getNetworkConfig(chainId: number): NetworkConfig | undefined {

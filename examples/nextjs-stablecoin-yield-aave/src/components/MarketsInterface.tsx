@@ -7,8 +7,11 @@ import {
   useUserBorrows,
   useUserSupplies,
 } from "@aave/react";
+import { isEthereumWallet } from "@dynamic-labs/ethereum";
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useEffect, useState } from "react";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { WalletClient } from "viem";
+import { useChainId } from "wagmi";
 import { mainnet, base, polygon } from "viem/chains";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,17 +21,15 @@ import { getChainName } from "../lib/utils";
 import { BorrowCard } from "./BorrowCard";
 import { MarketCard } from "./MarketCard";
 import { SupplyCard } from "./SupplyCard";
-import { useWallet } from "@/lib/providers";
 
 // urql (used inside @aave/react hooks) triggers a synchronous setState on its
 // first render, which React 19 rejects in concurrent mode.  We work around this
 // by deferring the mount of the inner component by one commit so its hooks
 // always execute in their own render cycle.
 export function MarketsInterface() {
-  const { evmAccount } = useWallet();
-  const address = evmAccount?.address ?? "disconnected";
-  // Use Base as default chain — users can switch via the chain switching buttons
-  const [chainId, setChainId] = useState<number>(base.id);
+  const chainId = useChainId();
+  const { primaryWallet } = useDynamicContext();
+  const address = primaryWallet?.address ?? "disconnected";
   const mountKey = `${chainId}-${address}`;
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -44,34 +45,38 @@ export function MarketsInterface() {
     );
   }
 
-  return <MarketsInterfaceInner key={mountKey} chainId={chainId} onChainChange={setChainId} />;
+  return <MarketsInterfaceInner key={mountKey} />;
 }
 
-function MarketsInterfaceInner({
-  chainId,
-  onChainChange,
-}: {
-  chainId: number;
-  onChainChange: (id: number) => void;
-}) {
-  const { evmAccount } = useWallet();
+function MarketsInterfaceInner() {
+  const { primaryWallet } = useDynamicContext();
+  const chainId = useChainId();
+  const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
   const [chainError, setChainError] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
 
-  // Build a viem WalletClient from the JS SDK EVM account
-  const walletClient = evmAccount
-    ? createWalletClientForWalletAccount({
-        walletAccount: evmAccount,
-        chain: chainId === mainnet.id ? mainnet : chainId === base.id ? base : polygon,
-      })
-    : null;
+  useEffect(() => {
+    if (primaryWallet && isEthereumWallet(primaryWallet)) {
+      primaryWallet.getWalletClient().then(setWalletClient);
+    }
+  }, [primaryWallet]);
 
   const handleSwitchChain = async (targetChainId: number) => {
+    if (!primaryWallet || !isEthereumWallet(primaryWallet)) {
+      setChainError("Wallet not connected");
+      return;
+    }
+
     setIsSwitching(true);
     setChainError(null);
+
     try {
-      onChainChange(targetChainId);
+      if (primaryWallet.connector.supportsNetworkSwitching()) {
+        await primaryWallet.switchNetwork(targetChainId);
+      } else {
+        setChainError("Your wallet doesn't support network switching");
+      }
     } catch {
       setChainError("Failed to switch chain. Please try again.");
     } finally {
@@ -95,8 +100,8 @@ function MarketsInterfaceInner({
     error: marketsError,
   } = useAaveMarkets({
     chainIds: [aaveChainId(chainId)],
-    user: evmAccount?.address
-      ? evmAddress(evmAccount.address)
+    user: primaryWallet?.address
+      ? evmAddress(primaryWallet.address)
       : undefined,
   });
 
@@ -122,8 +127,8 @@ function MarketsInterfaceInner({
     error: userSuppliesError,
   } = useUserSupplies({
     markets: marketRefs,
-    user: evmAccount?.address
-      ? evmAddress(evmAccount.address)
+    user: primaryWallet?.address
+      ? evmAddress(primaryWallet.address)
       : undefined,
   });
 
@@ -133,8 +138,8 @@ function MarketsInterfaceInner({
     error: userBorrowsError,
   } = useUserBorrows({
     markets: marketRefs,
-    user: evmAccount?.address
-      ? evmAddress(evmAccount.address)
+    user: primaryWallet?.address
+      ? evmAddress(primaryWallet.address)
       : undefined,
   });
 
@@ -285,7 +290,7 @@ function MarketsInterfaceInner({
                 key={market.address}
                 market={market}
                 isOperating={isOperating}
-                primaryWallet={evmAccount ? { address: evmAccount.address } : null}
+                primaryWallet={primaryWallet}
                 onSupply={handleSupply}
                 onBorrow={handleBorrow}
               />
@@ -334,7 +339,7 @@ function MarketsInterfaceInner({
         )}
       </section>
 
-      {evmAccount && (
+      {primaryWallet && (
         <>
           <section>
             <h2 className="text-sm font-semibold text-earn-text-secondary uppercase tracking-wide mb-3">
@@ -357,7 +362,7 @@ function MarketsInterfaceInner({
                     key={`${supply.market.address}-${supply.currency.address}`}
                     supply={supply}
                     isOperating={isOperating}
-                    primaryWallet={{ address: evmAccount.address }}
+                    primaryWallet={primaryWallet}
                     onSupply={handleSupply}
                     onBorrow={handleBorrow}
                     onWithdraw={handleWithdraw}
@@ -392,7 +397,7 @@ function MarketsInterfaceInner({
                     key={`${borrow.market.address}-${borrow.currency.address}`}
                     borrow={borrow}
                     isOperating={isOperating}
-                    primaryWallet={{ address: evmAccount.address }}
+                    primaryWallet={primaryWallet}
                     onRepay={handleRepay}
                   />
                 ))}

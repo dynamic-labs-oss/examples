@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useWallet } from "@/lib/providers";
+import { useChainId } from "wagmi";
 import { getApiForChain } from "../constants";
 
 export interface Market {
@@ -56,7 +56,7 @@ interface GraphQLResponse {
 }
 
 export function useMarketsList() {
-  const { chainId } = useWallet();
+  const chainId = useChainId();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

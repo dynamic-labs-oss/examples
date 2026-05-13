@@ -1,15 +1,11 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { Inter } from "next/font/google";
 import Providers from "@/lib/providers";
 import { Header } from "@/components/header";
 import Footer from "@/components/footer";
 
-const roboto = Roboto({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
-  variable: "--font-roboto",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "EuroRamp - Fiat ↔ Crypto for Europe",
@@ -24,10 +20,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${roboto.variable} font-sans bg-[rgb(249,249,249)]`}>
+      <body className={inter.className}>
         <Providers>
           <Header />
-          <div className="min-h-screen">{children}</div>
+          <div className="min-h-screen bg-background">{children}</div>
           <Footer />
         </Providers>
       </body>

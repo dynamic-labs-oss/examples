@@ -2,18 +2,16 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useAccount } from "wagmi";
 import { useVaultsList, useVaultPositions } from "../../lib/hooks";
 import { VaultCard } from "@/components/VaultCard";
 import { PositionCard } from "@/components/PositionCard";
-import { useWallet } from "@/lib/providers";
 
 const VAULTS_PER_PAGE = 6;
 
 export default function EarnPage() {
   const [page, setPage] = useState(0);
-  const { evmAccount, loggedIn } = useWallet();
-  const address = evmAccount?.address;
-  const isConnected = loggedIn && !!evmAccount;
+  const { address, isConnected } = useAccount();
   const { vaults, loading, error } = useVaultsList("tvl-desc");
   const { positions, loading: positionsLoading } = useVaultPositions(address, vaults);
 

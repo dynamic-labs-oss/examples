@@ -1,59 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { parseUnits, createPublicClient, http } from "viem";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
-import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
+import { parseUnits } from "viem";
+import { useAccount, useWriteContract } from "wagmi";
 import { ERC4626_ABI } from "@/lib/ABIs";
 import { VaultPosition } from "@/lib/hooks/useVaultPositions";
-import { useWallet } from "@/lib/providers";
 
 interface PositionCardProps {
   position: VaultPosition;
   onWithdrawn?: () => void;
 }
 
-function getViemChain(chainId: number) {
-  switch (chainId) {
-    case mainnet.id: return mainnet;
-    case arbitrum.id: return arbitrum;
-    case optimism.id: return optimism;
-    case polygon.id: return polygon;
-    default: return base;
-  }
-}
-
 export function PositionCard({ position, onWithdrawn }: PositionCardProps) {
   const { vault, assetsFormatted } = position;
-  const { evmAccount, chainId } = useWallet();
-  const address = evmAccount?.address;
+  const { address } = useAccount();
   const [txStatus, setTxStatus] = useState("");
-  const [isPending, setIsPending] = useState(false);
 
-  const handleWithdrawAll = async () => {
-    if (!address || !evmAccount) return;
-    const chain = getViemChain(chainId);
-    const publicClient = createPublicClient({ chain, transport: http() });
-    const walletClient = createWalletClientForWalletAccount({ walletAccount: evmAccount, chain });
+  const { writeContract, isPending } = useWriteContract({
+    mutation: {
+      onSuccess: () => {
+        setTxStatus("Withdraw sent!");
+        onWithdrawn?.();
+      },
+      onError: (e) => setTxStatus(`Failed: ${e.message.split("\n")[0]}`),
+    },
+  });
 
-    setIsPending(true);
-    try {
-      const { request } = await publicClient.simulateContract({
-        address: vault.address as `0x${string}`,
-        abi: ERC4626_ABI,
-        functionName: "withdraw",
-        args: [parseUnits(assetsFormatted, vault.assetDecimals), address as `0x${string}`, address as `0x${string}`],
-        account: address as `0x${string}`,
-      });
-      await walletClient.writeContract(request);
-      setTxStatus("Withdraw sent!");
-      onWithdrawn?.();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message.split("\n")[0] : String(e);
-      setTxStatus(`Failed: ${msg}`);
-    } finally {
-      setIsPending(false);
-    }
+  const handleWithdrawAll = () => {
+    if (!address) return;
+    writeContract({
+      address: vault.address as `0x${string}`,
+      abi: ERC4626_ABI,
+      functionName: "withdraw",
+      args: [parseUnits(assetsFormatted, vault.assetDecimals), address, address],
+    });
   };
 
   return (
@@ -97,13 +77,13 @@ export function PositionCard({ position, onWithdrawn }: PositionCardProps) {
 
         <button
           onClick={handleWithdrawAll}
-          disabled={isPending || !address}
+          disabled={isPending}
           className="w-full px-3 py-2 text-xs font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ borderColor: "#EA580C", color: "#EA580C" }}
           onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.background = "#FFF7ED"; }}
           onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
         >
-          {isPending ? "Processing..." : "Withdraw All"}
+          {isPending ? "Processing…" : "Withdraw All"}
         </button>
       </div>
     </div>

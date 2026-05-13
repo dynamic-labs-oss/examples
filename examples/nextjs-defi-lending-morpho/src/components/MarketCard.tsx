@@ -1,19 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useAccount } from "wagmi";
 import { MarketsBalanceDisplay, MarketsForm, MarketsModeSelector } from ".";
 import { useMarketsData, useMarketOperations } from "@/lib/hooks";
 import { Market } from "@/lib/hooks/useMarketsList";
-import { useWallet } from "@/lib/providers";
 
 interface MarketCardProps {
   market: Market;
 }
 
 export function MarketCard({ market }: MarketCardProps) {
-  const { evmAccount, loggedIn } = useWallet();
-  const address = evmAccount?.address;
-  const isConnected = loggedIn && !!evmAccount;
+  const { address, isConnected } = useAccount();
   const [marketsMode, setMarketsMode] = useState<
     "supply" | "withdraw" | "borrow" | "repay"
   >("supply");

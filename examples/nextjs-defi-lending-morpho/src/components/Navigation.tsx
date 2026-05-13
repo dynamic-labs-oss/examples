@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import DynamicButton from "./dynamic/DynamicButton";
+import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
 import DynamicLogo from "./dynamic/Logo";
 
 export default function Navigation() {
@@ -13,7 +13,7 @@ export default function Navigation() {
 
   return (
     <header
-      className="sticky top-0 left-0 right-0 h-16 bg-white z-40 flex items-center px-6 gap-4"
+      className="fixed top-0 left-0 right-0 h-16 bg-white z-40 flex items-center px-6 gap-4"
       style={{ borderBottom: "1px solid #DADADA", boxShadow: "0 1px 2px 0 rgba(0,0,0,0.08)" }}
     >
       <Link href="/" className="flex items-center">
@@ -46,7 +46,7 @@ export default function Navigation() {
       </nav>
 
       <div className="ml-auto">
-        <DynamicButton />
+        <DynamicWidget />
       </div>
     </header>
   );
