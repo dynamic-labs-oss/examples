@@ -9,7 +9,7 @@ import {
 } from "@aave/react";
 import { useEffect, useState } from "react";
 import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
-import { getNetworksData, switchActiveNetwork } from "@dynamic-labs-sdk/client";
+import { getNetworksData, switchActiveNetwork, getActiveNetworkId } from "@dynamic-labs-sdk/client";
 import { dynamicClient } from "@/lib/dynamic";
 import { mainnet, base, polygon } from "viem/chains";
 import type { WalletClient } from "viem";
@@ -81,6 +81,18 @@ function MarketsInterfaceInner({
     let cancelled = false;
     const build = async () => {
       try {
+        const targetNetworkId = String(chainId);
+        const { networkId: currentNetworkId } = await getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient);
+        if (currentNetworkId !== targetNetworkId) {
+          const targetNetwork = getNetworksData(dynamicClient).find(
+            (n) => n.networkId === targetNetworkId && n.chain === "EVM"
+          );
+          if (targetNetwork) {
+            if (!cancelled) setIsSwitching(true);
+            await switchActiveNetwork({ networkId: targetNetworkId, walletAccount: evmAccount }, dynamicClient);
+            if (!cancelled) setIsSwitching(false);
+          }
+        }
         const client = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
         if (!cancelled) setWalletClient(client);
       } catch (err) {
@@ -107,6 +119,7 @@ function MarketsInterfaceInner({
           console.error("Wallet client creation failed:", err);
           if (!cancelled) setWalletClient(null);
         }
+        if (!cancelled) setIsSwitching(false);
       }
     };
     build();
@@ -307,7 +320,7 @@ function MarketsInterfaceInner({
           <p className="text-sm text-destructive flex-1">{txError}</p>
           <button
             onClick={() => setTxError(null)}
-            className="text-destructive/60 hover:text-destructive text-lg leading-none"
+            className="cursor-pointer text-destructive/60 hover:text-destructive text-lg leading-none"
           >
             &times;
           </button>

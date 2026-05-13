@@ -112,7 +112,7 @@ export default function DynamicButton() {
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setShowDropdown((v) => !v)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors"
+          className="cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors"
           style={{
             borderColor: "#DADADA",
             color: "#030303",
@@ -137,7 +137,7 @@ export default function DynamicButton() {
                 setShowDropdown(false);
                 disconnect();
               }}
-              className="w-full text-left px-4 py-3 text-sm transition-colors hover:bg-[#F9F9F9]"
+              className="cursor-pointer w-full text-left px-4 py-3 text-sm transition-colors hover:bg-[#F9F9F9]"
               style={{ color: "#606060" }}
             >
               Disconnect
@@ -156,7 +156,7 @@ export default function DynamicButton() {
           setStep("menu");
           setError(null);
         }}
-        className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
+        className="cursor-pointer px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
         style={{ background: "#4779FF" }}
       >
         Sign in
@@ -176,7 +176,7 @@ export default function DynamicButton() {
               <button
                 onClick={handleGoogleAuth}
                 disabled={loading}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9] disabled:opacity-50"
+                className="cursor-pointer w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9] disabled:opacity-50"
                 style={{ borderColor: "#DADADA", color: "#030303" }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24">
@@ -190,7 +190,7 @@ export default function DynamicButton() {
 
               <button
                 onClick={() => setStep("email")}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9]"
+                className="cursor-pointer w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9]"
                 style={{ borderColor: "#DADADA", color: "#030303" }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -204,7 +204,7 @@ export default function DynamicButton() {
                 <button
                   onClick={handleConnectWallet}
                   disabled={loading}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9] disabled:opacity-50"
+                  className="cursor-pointer w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9] disabled:opacity-50"
                   style={{ borderColor: "#DADADA", color: "#030303" }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -222,7 +222,7 @@ export default function DynamicButton() {
             <>
               <button
                 onClick={() => { setStep("menu"); setError(null); }}
-                className="text-xs flex items-center gap-1"
+                className="cursor-pointer text-xs flex items-center gap-1"
                 style={{ color: "#606060" }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -240,7 +240,7 @@ export default function DynamicButton() {
                     key={p.key}
                     onClick={() => handleSelectWallet(p.key)}
                     disabled={loading}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9] disabled:opacity-50"
+                    className="cursor-pointer w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9] disabled:opacity-50"
                     style={{ borderColor: "#DADADA", color: "#030303" }}
                   >
                     {p.metadata.icon && (
@@ -257,7 +257,7 @@ export default function DynamicButton() {
             <>
               <button
                 onClick={() => { setStep("menu"); setError(null); }}
-                className="text-xs flex items-center gap-1"
+                className="cursor-pointer text-xs flex items-center gap-1"
                 style={{ color: "#606060" }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -278,7 +278,7 @@ export default function DynamicButton() {
               <button
                 onClick={handleEmailSubmit}
                 disabled={loading || !email}
-                className="w-full py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
+                className="cursor-pointer w-full py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
                 style={{ background: "#4779FF" }}
               >
                 {loading ? "Sending..." : "Send Code"}
@@ -290,7 +290,7 @@ export default function DynamicButton() {
             <>
               <button
                 onClick={() => { setStep("email"); setError(null); }}
-                className="text-xs flex items-center gap-1"
+                className="cursor-pointer text-xs flex items-center gap-1"
                 style={{ color: "#606060" }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -314,7 +314,7 @@ export default function DynamicButton() {
               <button
                 onClick={handleOtpSubmit}
                 disabled={loading || otp.length < 6}
-                className="w-full py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
+                className="cursor-pointer w-full py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
                 style={{ background: "#4779FF" }}
               >
                 {loading ? "Verifying..." : "Verify"}

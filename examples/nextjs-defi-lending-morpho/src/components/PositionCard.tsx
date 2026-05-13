@@ -98,7 +98,7 @@ export function PositionCard({ position, onWithdrawn }: PositionCardProps) {
         <button
           onClick={handleWithdrawAll}
           disabled={isPending || !address}
-          className="w-full px-3 py-2 text-xs font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="cursor-pointer w-full px-3 py-2 text-xs font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ borderColor: "#EA580C", color: "#EA580C" }}
           onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.background = "#FFF7ED"; }}
           onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}

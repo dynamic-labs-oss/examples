@@ -127,7 +127,7 @@ export function VaultCard({ vault }: VaultCardProps) {
             <button
               key={tab}
               onClick={() => setMode(tab)}
-              className="flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-all"
+              className="cursor-pointer flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-all"
               style={
                 mode === tab
                   ? { background: "#fff", color: "#030303", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
@@ -167,7 +167,7 @@ export function VaultCard({ vault }: VaultCardProps) {
             <button
               type="button"
               onClick={() => setAmount(maxAmount)}
-              className="text-xs hover:underline"
+              className="cursor-pointer text-xs hover:underline"
               style={{ color: "#4779FF" }}
               disabled={isLoading}
             >
@@ -194,7 +194,7 @@ export function VaultCard({ vault }: VaultCardProps) {
               <button
                 onClick={handleApprove}
                 disabled={isLoading || !amount || parseFloat(amount) <= 0 || exceedsBalance}
-                className="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                className="cursor-pointer px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: "#EAB308" }}
               >
                 {isApproving ? "..." : "Approve"}
@@ -203,7 +203,7 @@ export function VaultCard({ vault }: VaultCardProps) {
               <button
                 onClick={(e) => { e.preventDefault(); mode === "deposit" ? handleDeposit(e) : handleWithdraw(e); }}
                 disabled={isLoading || !amount || parseFloat(amount) <= 0 || exceedsBalance}
-                className="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                className="cursor-pointer px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: mode === "deposit" ? "#4779FF" : "#606060" }}
               >
                 {isLoading ? "..." : mode === "deposit" ? "Deposit" : "Withdraw"}

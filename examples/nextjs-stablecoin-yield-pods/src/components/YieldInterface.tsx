@@ -264,7 +264,7 @@ export function YieldInterface() {
                 key={chain.id}
                 onClick={() => handleSwitchChain(chain.id)}
                 disabled={isSwitching || chainId === chain.id}
-                className="px-2 py-1 text-xs rounded-md border transition-colors disabled:opacity-50"
+                className="cursor-pointer px-2 py-1 text-xs rounded-md border transition-colors disabled:opacity-50"
                 style={
                   chainId === chain.id
                     ? { background: "#4779FF", color: "#fff", borderColor: "#4779FF" }
@@ -380,7 +380,7 @@ function PositionCard({
               parseFloat(amount) <= 0 ||
               parseFloat(amount) > position.balance.humanized
             }
-            className="w-full py-2 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="cursor-pointer w-full py-2 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ borderColor: "#DADADA", color: "#606060" }}
           >
             Withdraw
@@ -425,7 +425,7 @@ function StrategyCard({
           <button
             onClick={() => setIsDeposit(true)}
             disabled={isOperating}
-            className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors"
+            className="cursor-pointer flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors"
             style={
               isDeposit
                 ? { background: "#4779FF", color: "#fff", borderColor: "#4779FF" }
@@ -437,7 +437,7 @@ function StrategyCard({
           <button
             onClick={() => setIsDeposit(false)}
             disabled={isOperating}
-            className="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors"
+            className="cursor-pointer flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors"
             style={
               !isDeposit
                 ? { background: "#606060", color: "#fff", borderColor: "#606060" }
@@ -465,7 +465,7 @@ function StrategyCard({
               !amount ||
               parseFloat(amount) <= 0
             }
-            className="w-full py-2 text-sm font-medium rounded-lg text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="cursor-pointer w-full py-2 text-sm font-medium rounded-lg text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: isDeposit ? "#4779FF" : "#606060" }}
           >
             {isDeposit ? "Deposit" : "Withdraw"}
