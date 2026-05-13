@@ -220,7 +220,7 @@ export function useTransactionOperations(
   const executeWithdraw = async (
     marketAddress: string,
     currencyAddress: string,
-    amount: string
+    amount: string | "max"
   ) => {
     if (!walletClient?.account?.address) {
       return;
@@ -232,9 +232,10 @@ export function useTransactionOperations(
         amount: {
           erc20: {
             currency: evmAddress(currencyAddress),
-            value: {
-              exact: bigDecimal(parseFloat(amount)),
-            },
+            value:
+              amount === "max"
+                ? { max: true }
+                : { exact: bigDecimal(parseFloat(amount)) },
           },
         },
         sender: evmAddress(walletClient.account.address),

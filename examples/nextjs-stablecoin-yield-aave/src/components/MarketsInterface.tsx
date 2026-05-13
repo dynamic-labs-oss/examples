@@ -9,8 +9,6 @@ import {
 } from "@aave/react";
 import { useEffect, useState } from "react";
 import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
-import { getNetworksData, switchActiveNetwork, getActiveNetworkId } from "@dynamic-labs-sdk/client";
-import { dynamicClient } from "@/lib/dynamic";
 import { mainnet, base, polygon } from "viem/chains";
 import type { WalletClient } from "viem";
 
@@ -28,10 +26,8 @@ import { useWallet } from "@/lib/providers";
 // by deferring the mount of the inner component by one commit so its hooks
 // always execute in their own render cycle.
 export function MarketsInterface() {
-  const { evmAccount } = useWallet();
+  const { evmAccount, chainId, setChainId } = useWallet();
   const address = evmAccount?.address ?? "disconnected";
-  // Use Base as default chain — users can switch via the chain switching buttons
-  const [chainId, setChainId] = useState<number>(base.id);
   const [refreshKey, setRefreshKey] = useState(0);
   const mountKey = `${chainId}-${address}-${refreshKey}`;
 
@@ -68,74 +64,39 @@ function MarketsInterfaceInner({
   onRefresh: () => void;
 }) {
   const { evmAccount } = useWallet();
-  const [isSwitching, setIsSwitching] = useState(false);
+  const isSwitching = false;
   const [chainError, setChainError] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
+  const [walletChainId, setWalletChainId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!evmAccount) {
       setWalletClient(null);
+      setWalletChainId(null);
       return;
     }
     let cancelled = false;
     const build = async () => {
       try {
-        const targetNetworkId = String(chainId);
-        const { networkId: currentNetworkId } = await getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient);
-        if (currentNetworkId !== targetNetworkId) {
-          const targetNetwork = getNetworksData(dynamicClient).find(
-            (n) => n.networkId === targetNetworkId && n.chain === "EVM"
-          );
-          if (targetNetwork) {
-            if (!cancelled) setIsSwitching(true);
-            await switchActiveNetwork({ networkId: targetNetworkId, walletAccount: evmAccount }, dynamicClient);
-            if (!cancelled) setIsSwitching(false);
-          }
-        }
         const client = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
-        if (!cancelled) setWalletClient(client);
+        if (!cancelled) {
+          setWalletClient(client);
+          if (client.chain?.id) setWalletChainId(client.chain.id);
+        }
       } catch (err) {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("No network data")) {
-          const baseNetwork = getNetworksData(dynamicClient).find(
-            (n) => n.networkId === "8453" && n.chain === "EVM"
-          );
-          if (baseNetwork) {
-            try {
-              await switchActiveNetwork({ networkId: baseNetwork.networkId, walletAccount: evmAccount }, dynamicClient);
-              const client = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
-              if (!cancelled) setWalletClient(client);
-            } catch (retryErr) {
-              console.error("Wallet client creation failed after network switch:", retryErr);
-              if (!cancelled) setWalletClient(null);
-            }
-          } else {
-            console.error("Wallet client creation failed, no Base network found:", err);
-            if (!cancelled) setWalletClient(null);
-          }
-        } else {
-          console.error("Wallet client creation failed:", err);
-          if (!cancelled) setWalletClient(null);
-        }
-        if (!cancelled) setIsSwitching(false);
+        console.error("Wallet client creation failed:", err);
+        if (!cancelled) setWalletClient(null);
       }
     };
     build();
     return () => { cancelled = true; };
   }, [evmAccount, chainId]);
 
-  const handleSwitchChain = async (targetChainId: number) => {
-    setIsSwitching(true);
+  const handleSwitchChain = (targetChainId: number) => {
     setChainError(null);
-    try {
-      onChainChange(targetChainId);
-    } catch {
-      setChainError("Failed to switch chain. Please try again.");
-    } finally {
-      setIsSwitching(false);
-    }
+    onChainChange(targetChainId);
   };
 
   const {
@@ -256,7 +217,7 @@ function MarketsInterfaceInner({
   const handleWithdraw = async (
     marketAddress: string,
     currencyAddress: string,
-    amount: string
+    amount: string | "max"
   ) => {
     setTxError(null);
     try {
@@ -324,6 +285,14 @@ function MarketsInterfaceInner({
           >
             &times;
           </button>
+        </div>
+      )}
+
+      {evmAccount && walletChainId !== null && walletChainId !== chainId && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-sm text-amber-800">
+            Wallet is on {getChainName(walletChainId)}. Switch in the network menu.
+          </p>
         </div>
       )}
 

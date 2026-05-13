@@ -17,7 +17,7 @@ import { useWallet } from "@/lib/providers";
 type AuthStep = "idle" | "menu" | "email" | "otp" | "wallets" | "networks";
 
 export default function DynamicButton() {
-  const { evmAccount, loggedIn, ensureEvmWallet, disconnect } = useWallet();
+  const { evmAccount, loggedIn, ensureEvmWallet, disconnect, setChainId } = useWallet();
   const [step, setStep] = useState<AuthStep>("idle");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -195,6 +195,7 @@ export default function DynamicButton() {
                         try {
                           await switchActiveNetwork({ networkId: n.networkId, walletAccount: evmAccount }, dynamicClient);
                           setActiveNetworkId(n.networkId);
+                          setChainId(Number(n.networkId));
                           setShowDropdown(false);
                           setStep("idle");
                         } catch {

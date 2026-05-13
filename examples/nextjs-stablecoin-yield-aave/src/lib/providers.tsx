@@ -15,6 +15,7 @@ import {
   logout,
   detectOAuthRedirect,
   completeSocialAuthentication,
+  getActiveNetworkId,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
 import {
@@ -23,12 +24,15 @@ import {
 } from "@dynamic-labs-sdk/evm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AaveProvider } from "@aave/react";
+import { base } from "viem/chains";
 import { client } from "./aave";
 import { dynamicClient } from "./dynamic";
 
 interface WalletContextValue {
   evmAccount: EvmWalletAccount | null;
   loggedIn: boolean;
+  chainId: number;
+  setChainId: (id: number) => void;
   ensureEvmWallet: () => Promise<void>;
   disconnect: () => Promise<void>;
 }
@@ -36,6 +40,8 @@ interface WalletContextValue {
 const WalletContext = createContext<WalletContextValue>({
   evmAccount: null,
   loggedIn: false,
+  chainId: base.id,
+  setChainId: () => {},
   ensureEvmWallet: async () => {},
   disconnect: async () => {},
 });
@@ -56,6 +62,7 @@ const queryClient = new QueryClient({
 export default function Providers({ children }: { children: ReactNode }) {
   const [evmAccount, setEvmAccount] = useState<EvmWalletAccount | null>(null);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [chainId, setChainId] = useState<number>(base.id);
 
   const refresh = useCallback(() => {
     const accounts = getWalletAccounts(dynamicClient);
@@ -63,6 +70,13 @@ export default function Providers({ children }: { children: ReactNode }) {
     setEvmAccount(evm);
     setLoggedIn(isSignedIn(dynamicClient));
   }, []);
+
+  useEffect(() => {
+    if (!evmAccount) return;
+    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient)
+      .then((result) => setChainId(Number(result.networkId)))
+      .catch(() => {});
+  }, [evmAccount]);
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);
@@ -118,7 +132,7 @@ export default function Providers({ children }: { children: ReactNode }) {
 
   return (
     <WalletContext.Provider
-      value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}
+      value={{ evmAccount, loggedIn, chainId, setChainId, ensureEvmWallet, disconnect }}
     >
       <QueryClientProvider client={queryClient}>
         <AaveProvider client={client}>{children}</AaveProvider>
