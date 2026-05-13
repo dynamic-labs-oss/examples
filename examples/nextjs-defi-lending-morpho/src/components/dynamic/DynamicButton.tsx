@@ -11,7 +11,7 @@ import {
 import { dynamicClient } from "@/lib/dynamic";
 import { useWallet } from "@/lib/providers";
 
-type AuthStep = "idle" | "menu" | "email" | "otp";
+type AuthStep = "idle" | "menu" | "email" | "otp" | "wallets";
 
 export default function DynamicButton() {
   const { evmAccount, loggedIn, ensureEvmWallet, disconnect } = useWallet();
@@ -82,21 +82,22 @@ export default function DynamicButton() {
     }
   };
 
-  const handleConnectWallet = async () => {
+  const handleConnectWallet = () => {
+    setStep("wallets");
+    setError(null);
+  };
+
+  const handleSelectWallet = async (providerKey: string) => {
     setLoading(true);
     setError(null);
     try {
-      const providers = getAvailableWalletProvidersData(dynamicClient);
-      const evmProviders = providers.filter((p) => p.chain === "EVM");
-      if (evmProviders.length > 0) {
-        await connectAndVerifyWithWalletProvider(
-          { walletProviderKey: evmProviders[0].key },
-          dynamicClient
-        );
-        await ensureEvmWallet();
-        setShowDropdown(false);
-        setStep("idle");
-      }
+      await connectAndVerifyWithWalletProvider(
+        { walletProviderKey: providerKey },
+        dynamicClient
+      );
+      await ensureEvmWallet();
+      setShowDropdown(false);
+      setStep("idle");
     } catch {
       setError("Wallet connection failed. Please try again.");
     } finally {
@@ -214,6 +215,41 @@ export default function DynamicButton() {
                   Connect EVM Wallet
                 </button>
               </div>
+            </>
+          )}
+
+          {step === "wallets" && (
+            <>
+              <button
+                onClick={() => { setStep("menu"); setError(null); }}
+                className="text-xs flex items-center gap-1"
+                style={{ color: "#606060" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+                Back
+              </button>
+              <p className="text-xs font-medium" style={{ color: "#030303" }}>
+                Choose a wallet
+              </p>
+              {getAvailableWalletProvidersData(dynamicClient)
+                .filter((p) => p.chain === "EVM")
+                .map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => handleSelectWallet(p.key)}
+                    disabled={loading}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-[#F9F9F9] disabled:opacity-50"
+                    style={{ borderColor: "#DADADA", color: "#030303" }}
+                  >
+                    {p.metadata.icon && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.metadata.icon} alt={p.metadata.displayName} width={16} height={16} className="rounded" />
+                    )}
+                    {p.metadata.displayName}
+                  </button>
+                ))}
             </>
           )}
 

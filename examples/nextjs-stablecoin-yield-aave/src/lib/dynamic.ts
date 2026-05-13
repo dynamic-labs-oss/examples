@@ -6,4 +6,6 @@ export const dynamicClient = createDynamicClient({
   metadata: { name: "Aave Yield" },
 });
 
-addEvmExtension();
+if (typeof window !== "undefined") {
+  addEvmExtension();
+}

@@ -6,4 +6,6 @@ export const dynamicClient = createDynamicClient({
   metadata: { name: "Morpho Lending" },
 });
 
-addEvmExtension();
+if (typeof window !== "undefined") {
+  addEvmExtension();
+}
