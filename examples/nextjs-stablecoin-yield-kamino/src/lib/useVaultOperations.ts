@@ -47,17 +47,18 @@ async function fetchTokenBalance(
   const mint = new PublicKey(mintAddress);
 
   // Legacy SPL Token program
+  interface ParsedTokenAccountData {
+    parsed?: { info?: { mint?: string; tokenAmount?: { uiAmount?: number } } };
+  }
+
   try {
     const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
       mint,
       programId: TOKEN_PROGRAM_ID,
     });
     if (accounts.value.length > 0) {
-      return (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (accounts.value[0].account.data as any).parsed?.info?.tokenAmount
-          ?.uiAmount ?? 0
-      );
+      const data = accounts.value[0].account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.tokenAmount?.uiAmount ?? 0;
     }
   } catch {
     // no account in this program
@@ -69,13 +70,13 @@ async function fetchTokenBalance(
     const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
       programId: TOKEN_2022_PROGRAM_ID,
     });
-    const match = accounts.value.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (a) => (a.account.data as any).parsed?.info?.mint === mintStr
-    );
+    const match = accounts.value.find((a) => {
+      const data = a.account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.mint === mintStr;
+    });
     if (match) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (match.account.data as any).parsed?.info?.tokenAmount?.uiAmount ?? 0;
+      const data = match.account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.tokenAmount?.uiAmount ?? 0;
     }
   } catch {
     // no Token-2022 account
@@ -130,9 +131,8 @@ async function signSendAndConfirm(
   walletAccount: SolanaWalletAccount
 ): Promise<string> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { signature } = await signAndSendSponsoredTransaction(
-      { transaction: tx as any, walletAccount },
+      { transaction: tx, walletAccount },
       dynamicClient
     );
     const connection = new Connection(getSolanaRpcUrl(), "confirmed");
