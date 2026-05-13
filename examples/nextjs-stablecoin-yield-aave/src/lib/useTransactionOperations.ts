@@ -1,4 +1,5 @@
 import { useSendTransaction } from "@aave/react/viem";
+import { useRef } from "react";
 import { WalletClient } from "viem";
 import {
   bigDecimal,
@@ -21,6 +22,11 @@ export function useTransactionOperations(
   const [sendTransaction, sending] = useSendTransaction(
     walletClient || undefined
   );
+
+  // Keep a stable ref so .andThen() callbacks in multi-step flows (approval → tx)
+  // always call the latest sendTransaction even if a re-render occurs between steps.
+  const sendTxRef = useRef(sendTransaction);
+  sendTxRef.current = sendTransaction;
 
   const isOperating =
     supplying.loading ||
@@ -59,7 +65,7 @@ export function useTransactionOperations(
           return sendTransaction(plan);
         case "ApprovalRequired":
           return sendTransaction(plan.approval).andThen(() =>
-            sendTransaction(plan.originalTransaction)
+            sendTxRef.current(plan.originalTransaction)
           );
         case "InsufficientBalanceError":
           throw new Error(`Insufficient balance: ${plan.required.value} required.`);
@@ -95,7 +101,7 @@ export function useTransactionOperations(
           return sendTransaction(plan);
         case "ApprovalRequired":
           return sendTransaction(plan.approval).andThen(() =>
-            sendTransaction(plan.originalTransaction)
+            sendTxRef.current(plan.originalTransaction)
           );
         case "InsufficientBalanceError":
           throw new Error(`Insufficient balance: ${plan.required.value} required.`);
@@ -134,7 +140,7 @@ export function useTransactionOperations(
           return sendTransaction(plan);
         case "ApprovalRequired":
           return sendTransaction(plan.approval).andThen(() =>
-            sendTransaction(plan.originalTransaction)
+            sendTxRef.current(plan.originalTransaction)
           );
         case "InsufficientBalanceError":
           throw new Error(`Insufficient balance: ${plan.required.value} required.`);
@@ -173,7 +179,7 @@ export function useTransactionOperations(
           return sendTransaction(plan);
         case "ApprovalRequired":
           return sendTransaction(plan.approval).andThen(() =>
-            sendTransaction(plan.originalTransaction)
+            sendTxRef.current(plan.originalTransaction)
           );
         case "InsufficientBalanceError":
           throw new Error(`Insufficient balance: ${plan.required.value} required.`);
