@@ -20,6 +20,7 @@ export default function DynamicButton() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [otpVerification, setOtpVerification] = useState<Awaited<ReturnType<typeof sendEmailOTP>> | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +43,7 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      await authenticateWithSocial({ provider: "google" }, dynamicClient);
+      await authenticateWithSocial({ provider: "google", redirectUrl: globalThis.location.href }, dynamicClient);
     } catch {
       setError("Google sign-in failed. Please try again.");
     } finally {
@@ -55,7 +56,8 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      await sendEmailOTP({ email }, dynamicClient);
+      const verification = await sendEmailOTP({ email }, dynamicClient);
+      setOtpVerification(verification);
       setStep("otp");
     } catch {
       setError("Failed to send code. Please try again.");
@@ -65,16 +67,17 @@ export default function DynamicButton() {
   };
 
   const handleOtpSubmit = async () => {
-    if (!otp) return;
+    if (!otp || !otpVerification) return;
     setLoading(true);
     setError(null);
     try {
-      await verifyOTP({ email, otp }, dynamicClient);
+      await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
       await ensureEvmWallet();
       setStep("idle");
       setShowDropdown(false);
       setEmail("");
       setOtp("");
+      setOtpVerification(null);
     } catch {
       setError("Invalid code. Please try again.");
     } finally {
