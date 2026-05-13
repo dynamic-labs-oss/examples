@@ -3,9 +3,11 @@
 import { useState } from "react";
 import {
   signAndSendSponsoredTransaction,
+  signAndSendTransaction,
   SponsorTransactionError,
   type SolanaWalletAccount,
 } from "@dynamic-labs-sdk/solana";
+import { MethodNotImplementedError } from "@dynamic-labs-sdk/client/core";
 import { Connection, PublicKey, VersionedTransaction, SendTransactionError } from "@solana/web3.js";
 import {
   createSolanaRpc,
@@ -129,29 +131,39 @@ async function signSendAndConfirm(
   lastValidBlockHeight: bigint,
   walletAccount: SolanaWalletAccount
 ): Promise<string> {
-  try {
-    const { signature } = await signAndSendSponsoredTransaction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { transaction: tx as any, walletAccount },
-      dynamicClient
-    );
-    const connection = new Connection(getSolanaRpcUrl(), "confirmed");
+  const connection = new Connection(getSolanaRpcUrl(), "confirmed");
+
+  const confirm = async (sig: string) => {
     const result = await connection.confirmTransaction(
-      { signature, blockhash, lastValidBlockHeight: Number(lastValidBlockHeight) },
+      { signature: sig, blockhash, lastValidBlockHeight: Number(lastValidBlockHeight) },
       "confirmed"
     );
     if (result.value.err) {
       throw new Error(`Transaction failed: ${JSON.stringify(result.value.err)}`);
     }
-    return signature;
+    return sig;
+  };
+
+  try {
+    const { signature } = await signAndSendSponsoredTransaction(
+      { transaction: tx as any, walletAccount }, // eslint-disable-line @typescript-eslint/no-explicit-any
+      dynamicClient
+    );
+    return confirm(signature);
   } catch (err) {
+    if (err instanceof MethodNotImplementedError) {
+      // Provider doesn't support sponsorship (e.g. external wallet) — send normally
+      const { signature } = await signAndSendTransaction(
+        { transaction: tx as any, walletAccount } // eslint-disable-line @typescript-eslint/no-explicit-any
+      );
+      return confirm(signature);
+    }
     if (err instanceof SponsorTransactionError) {
       throw new Error(
         "Gas sponsorship failed. Enable SVM Gas Sponsorship in your Dynamic dashboard under Settings → Embedded Wallets."
       );
     }
     if (err instanceof SendTransactionError) {
-      const connection = new Connection(getSolanaRpcUrl(), "confirmed");
       const logs = await err.getLogs(connection);
       throw new Error(
         err.message + (logs?.length ? `\n\nLogs:\n${logs.join("\n")}` : "")
