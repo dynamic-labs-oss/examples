@@ -48,6 +48,10 @@ async function fetchTokenBalance(
   const owner = new PublicKey(ownerAddress);
   const mint = new PublicKey(mintAddress);
 
+  interface ParsedTokenAccountData {
+    parsed?: { info?: { mint?: string; tokenAmount?: { uiAmount?: number } } };
+  }
+
   // Legacy SPL Token program
   try {
     const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
@@ -55,11 +59,8 @@ async function fetchTokenBalance(
       programId: TOKEN_PROGRAM_ID,
     });
     if (accounts.value.length > 0) {
-      return (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (accounts.value[0].account.data as any).parsed?.info?.tokenAmount
-          ?.uiAmount ?? 0
-      );
+      const data = accounts.value[0].account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.tokenAmount?.uiAmount ?? 0;
     }
   } catch {
     // no account in this program
@@ -71,13 +72,13 @@ async function fetchTokenBalance(
     const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
       programId: TOKEN_2022_PROGRAM_ID,
     });
-    const match = accounts.value.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (a) => (a.account.data as any).parsed?.info?.mint === mintStr
-    );
+    const match = accounts.value.find((a) => {
+      const data = a.account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.mint === mintStr;
+    });
     if (match) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (match.account.data as any).parsed?.info?.tokenAmount?.uiAmount ?? 0;
+      const data = match.account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.tokenAmount?.uiAmount ?? 0;
     }
   } catch {
     // no Token-2022 account
@@ -146,7 +147,7 @@ async function signSendAndConfirm(
 
   try {
     const { signature } = await signAndSendSponsoredTransaction(
-      { transaction: tx as any, walletAccount }, // eslint-disable-line @typescript-eslint/no-explicit-any
+      { transaction: tx, walletAccount },
       dynamicClient
     );
     return confirm(signature);
@@ -154,7 +155,7 @@ async function signSendAndConfirm(
     if (err instanceof MethodNotImplementedError) {
       // Provider doesn't support sponsorship (e.g. external wallet) — send normally
       const { signature } = await signAndSendTransaction(
-        { transaction: tx as any, walletAccount } // eslint-disable-line @typescript-eslint/no-explicit-any
+        { transaction: tx, walletAccount }
       );
       return confirm(signature);
     }
