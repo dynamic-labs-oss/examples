@@ -9,7 +9,10 @@ import {
 } from "@aave/react";
 import { useEffect, useState } from "react";
 import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { getNetworksData, switchActiveNetwork } from "@dynamic-labs-sdk/client";
+import { dynamicClient } from "@/lib/dynamic";
 import { mainnet, base, polygon } from "viem/chains";
+import type { WalletClient } from "viem";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +32,8 @@ export function MarketsInterface() {
   const address = evmAccount?.address ?? "disconnected";
   // Use Base as default chain — users can switch via the chain switching buttons
   const [chainId, setChainId] = useState<number>(base.id);
-  const mountKey = `${chainId}-${address}`;
+  const [refreshKey, setRefreshKey] = useState(0);
+  const mountKey = `${chainId}-${address}-${refreshKey}`;
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   useEffect(() => {
@@ -44,28 +48,70 @@ export function MarketsInterface() {
     );
   }
 
-  return <MarketsInterfaceInner key={mountKey} chainId={chainId} onChainChange={setChainId} />;
+  return (
+    <MarketsInterfaceInner
+      key={mountKey}
+      chainId={chainId}
+      onChainChange={setChainId}
+      onRefresh={() => setRefreshKey((k) => k + 1)}
+    />
+  );
 }
 
 function MarketsInterfaceInner({
   chainId,
   onChainChange,
+  onRefresh,
 }: {
   chainId: number;
   onChainChange: (id: number) => void;
+  onRefresh: () => void;
 }) {
   const { evmAccount } = useWallet();
   const [isSwitching, setIsSwitching] = useState(false);
   const [chainError, setChainError] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
+  const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
 
-  // Build a viem WalletClient from the JS SDK EVM account
-  const walletClient = evmAccount
-    ? createWalletClientForWalletAccount({
-        walletAccount: evmAccount,
-        chain: chainId === mainnet.id ? mainnet : chainId === base.id ? base : polygon,
-      })
-    : null;
+  useEffect(() => {
+    if (!evmAccount) {
+      setWalletClient(null);
+      return;
+    }
+    let cancelled = false;
+    const build = async () => {
+      try {
+        const client = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
+        if (!cancelled) setWalletClient(client);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("No network data")) {
+          const baseNetwork = getNetworksData(dynamicClient).find(
+            (n) => n.networkId === "8453" && n.chain === "EVM"
+          );
+          if (baseNetwork) {
+            try {
+              await switchActiveNetwork({ networkId: baseNetwork.networkId, walletAccount: evmAccount }, dynamicClient);
+              const client = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
+              if (!cancelled) setWalletClient(client);
+            } catch (retryErr) {
+              console.error("Wallet client creation failed after network switch:", retryErr);
+              if (!cancelled) setWalletClient(null);
+            }
+          } else {
+            console.error("Wallet client creation failed, no Base network found:", err);
+            if (!cancelled) setWalletClient(null);
+          }
+        } else {
+          console.error("Wallet client creation failed:", err);
+          if (!cancelled) setWalletClient(null);
+        }
+      }
+    };
+    build();
+    return () => { cancelled = true; };
+  }, [evmAccount, chainId]);
 
   const handleSwitchChain = async (targetChainId: number) => {
     setIsSwitching(true);
@@ -160,6 +206,7 @@ function MarketsInterfaceInner({
     setTxError(null);
     try {
       await executeSupply(marketAddress, currencyAddress, amount);
+      onRefresh();
     } catch (error) {
       setTxError(friendlyError("Supply", error));
     }
@@ -173,6 +220,7 @@ function MarketsInterfaceInner({
     setTxError(null);
     try {
       await executeBorrow(marketAddress, currencyAddress, amount);
+      onRefresh();
     } catch (error) {
       setTxError(friendlyError("Borrow", error));
     }
@@ -186,6 +234,7 @@ function MarketsInterfaceInner({
     setTxError(null);
     try {
       await executeRepay(marketAddress, currencyAddress, amount);
+      onRefresh();
     } catch (error) {
       setTxError(friendlyError("Repay", error));
     }
@@ -199,6 +248,7 @@ function MarketsInterfaceInner({
     setTxError(null);
     try {
       await executeWithdraw(marketAddress, currencyAddress, amount);
+      onRefresh();
     } catch (error) {
       setTxError(friendlyError("Withdraw", error));
     }

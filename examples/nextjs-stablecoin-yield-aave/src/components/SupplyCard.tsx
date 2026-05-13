@@ -1,3 +1,6 @@
+import { useState, useEffect } from "react";
+import { createPublicClient, http, formatUnits } from "viem";
+import { base } from "viem/chains";
 import { safeParseFloat, safeParseUSD } from "../lib/utils";
 import type { MarketUserReserveSupplyPosition } from "@aave/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +33,8 @@ interface SupplyCardProps {
   ) => void;
 }
 
+const publicClient = createPublicClient({ chain: base, transport: http() });
+
 export function SupplyCard({
   supply,
   isOperating,
@@ -38,6 +43,40 @@ export function SupplyCard({
   onBorrow,
   onWithdraw,
 }: SupplyCardProps) {
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!primaryWallet?.address || !supply.currency.address) {
+      setWalletBalance(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [rawBalance, decimals] = await Promise.all([
+          publicClient.readContract({
+            address: supply.currency.address as `0x${string}`,
+            abi: [{ name: "balanceOf", type: "function", inputs: [{ name: "owner", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view" }],
+            functionName: "balanceOf",
+            args: [primaryWallet.address as `0x${string}`],
+          }) as Promise<bigint>,
+          publicClient.readContract({
+            address: supply.currency.address as `0x${string}`,
+            abi: [{ name: "decimals", type: "function", inputs: [], outputs: [{ type: "uint8" }], stateMutability: "view" }],
+            functionName: "decimals",
+          }) as Promise<number>,
+        ]);
+        if (!cancelled) {
+          const formatted = parseFloat(formatUnits(rawBalance, decimals));
+          setWalletBalance(formatted.toLocaleString(undefined, { maximumFractionDigits: 6 }));
+        }
+      } catch {
+        if (!cancelled) setWalletBalance(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [supply.currency.address, primaryWallet?.address]);
+
   return (
     <Card className="w-full bg-white border border-earn-border rounded-xl shadow-sm">
       <CardHeader className="pb-3">
@@ -66,6 +105,11 @@ export function SupplyCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
+        {walletBalance !== null && (
+          <p className="text-xs text-earn-text-secondary">
+            Wallet balance: {walletBalance} {supply.currency.symbol}
+          </p>
+        )}
         <div className="flex gap-2">
           <input
             type="number"

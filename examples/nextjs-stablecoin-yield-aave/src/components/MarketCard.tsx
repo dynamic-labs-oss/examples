@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPublicClient, http, formatUnits } from "viem";
+import { base } from "viem/chains";
 import { safeParseUSD, safeParseHealthFactor } from "../lib/utils";
 import type { Market } from "@aave/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +41,31 @@ function preferredReserve<T extends { underlyingToken: { symbol: string; address
   return reserves[0]?.underlyingToken.address ?? "";
 }
 
+const publicClient = createPublicClient({ chain: base, transport: http() });
+
+async function fetchErc20Balance(tokenAddress: string, ownerAddress: string): Promise<string | null> {
+  try {
+    const [rawBalance, decimals] = await Promise.all([
+      publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: [{ name: "balanceOf", type: "function", inputs: [{ name: "owner", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view" }],
+        functionName: "balanceOf",
+        args: [ownerAddress as `0x${string}`],
+      }) as Promise<bigint>,
+      publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: [{ name: "decimals", type: "function", inputs: [], outputs: [{ type: "uint8" }], stateMutability: "view" }],
+        functionName: "decimals",
+      }) as Promise<number>,
+    ]);
+    const formatted = formatUnits(rawBalance, decimals);
+    const num = parseFloat(formatted);
+    return num.toLocaleString(undefined, { maximumFractionDigits: 6 });
+  } catch {
+    return null;
+  }
+}
+
 export function MarketCard({
   market,
   isOperating,
@@ -52,6 +79,7 @@ export function MarketCard({
   const [selectedBorrowToken, setSelectedBorrowToken] = useState<string>(
     () => preferredReserve(market.borrowReserves)
   );
+  const [supplyBalance, setSupplyBalance] = useState<string | null>(null);
 
   const selectedSupplyReserve = market.supplyReserves.find(
     (reserve) => reserve.underlyingToken.address === selectedSupplyToken
@@ -59,6 +87,18 @@ export function MarketCard({
   const selectedBorrowReserve = market.borrowReserves.find(
     (reserve) => reserve.underlyingToken.address === selectedBorrowToken
   );
+
+  useEffect(() => {
+    if (!primaryWallet?.address || !selectedSupplyToken) {
+      setSupplyBalance(null);
+      return;
+    }
+    let cancelled = false;
+    fetchErc20Balance(selectedSupplyToken, primaryWallet.address).then((bal) => {
+      if (!cancelled) setSupplyBalance(bal);
+    });
+    return () => { cancelled = true; };
+  }, [selectedSupplyToken, primaryWallet?.address]);
 
   return (
     <Card className="w-full bg-white border border-earn-border rounded-xl shadow-sm">
@@ -171,6 +211,11 @@ export function MarketCard({
             </div>
           )}
 
+          {supplyBalance !== null && selectedSupplyReserve && (
+            <p className="text-xs text-earn-text-secondary">
+              Balance: {supplyBalance} {selectedSupplyReserve.underlyingToken.symbol}
+            </p>
+          )}
           <div className="flex gap-2">
             <input
               type="number"
