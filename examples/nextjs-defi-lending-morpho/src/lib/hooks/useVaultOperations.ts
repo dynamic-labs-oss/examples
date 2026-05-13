@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { parseUnits, formatUnits, createPublicClient, http } from "viem";
 import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
@@ -28,7 +28,8 @@ function getViemChain(chainId: number) {
 
 export function useVaultOperations(
   address: string | undefined,
-  vaultInfo: VaultInfo | null
+  vaultInfo: VaultInfo | null,
+  onSuccess?: () => void
 ) {
   const { chainId, evmAccount } = useWallet();
   const [amount, setAmount] = useState("");
@@ -46,14 +47,19 @@ export function useVaultOperations(
   const chain = getViemChain(chainId);
   const publicClient = createPublicClient({ chain, transport: http() });
 
-  const getWalletClient = () => {
+  const getWalletClient = async () => {
     if (!evmAccount) return null;
-    return createWalletClientForWalletAccount({ walletAccount: evmAccount, chain });
+    return createWalletClientForWalletAccount({ walletAccount: evmAccount });
+  };
+
+  const setSuccessStatus = (message: string) => {
+    setTxStatus(message);
+    setTimeout(() => setTxStatus(""), 4000);
+    onSuccess?.();
   };
 
   const refetchData = () => {
     queryClient.invalidateQueries();
-    // Also refresh our local state
     refreshBalances();
   };
 
@@ -98,14 +104,20 @@ export function useVaultOperations(
     } catch {}
   };
 
-  // Initialize balances
-  useState(() => {
-    refreshBalances();
-  });
+  useEffect(() => {
+    if (!address || !vaultInfo) return;
+    const client = createPublicClient({ chain: getViemChain(chainId), transport: http() });
+    client.readContract({
+      address: vaultInfo.asset.address as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "allowance",
+      args: [address as `0x${string}`, vaultInfo.address as `0x${string}`],
+    }).then((al) => setAllowance(al as bigint)).catch(() => {});
+  }, [address, vaultInfo?.address, chainId]);
 
   const handleDepositAfterApproval = async () => {
     if (!vaultInfo?.address || !address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient) return;
 
     try {
@@ -117,6 +129,9 @@ export function useVaultOperations(
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
+      setPendingDeposit(false);
+      setSuccessStatus(createTxStatusMessage("Deposit", true));
+      refetchData();
     } catch (e: unknown) {
       setTxStatus(createTxStatusMessage("Deposit", false, formatErrorMessage(e)));
       setPendingDeposit(false);
@@ -125,7 +140,7 @@ export function useVaultOperations(
 
   const handleApprove = async () => {
     if (!vaultInfo?.asset.address || !vaultInfo?.address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient || !address) return;
 
     setTxStatus("");
@@ -140,9 +155,8 @@ export function useVaultOperations(
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
-      setTxStatus(createTxStatusMessage("Approval", true));
+      setSuccessStatus(createTxStatusMessage("Approval", true));
       refetchData();
-      // Trigger deposit after a short delay
       setTimeout(() => {
         handleDepositAfterApproval();
       }, 1000);
@@ -156,7 +170,7 @@ export function useVaultOperations(
 
   const handleDeposit = async (e: React.FormEvent) => {
     if (!vaultInfo?.address || !address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient) return;
 
     e.preventDefault();
@@ -171,9 +185,9 @@ export function useVaultOperations(
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
-      setTxStatus(createTxStatusMessage("Deposit", true));
-      refetchData();
       setPendingDeposit(false);
+      setSuccessStatus(createTxStatusMessage("Deposit", true));
+      refetchData();
     } catch (e: unknown) {
       setTxStatus(createTxStatusMessage("Deposit", false, formatErrorMessage(e)));
       setPendingDeposit(false);
@@ -184,7 +198,7 @@ export function useVaultOperations(
 
   const handleWithdraw = async (e: React.FormEvent) => {
     if (!vaultInfo?.address || !address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient) return;
 
     e.preventDefault();
@@ -203,7 +217,7 @@ export function useVaultOperations(
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
-      setTxStatus(createTxStatusMessage("Withdraw", true));
+      setSuccessStatus(createTxStatusMessage("Withdraw", true));
       refetchData();
     } catch (e: unknown) {
       setTxStatus(createTxStatusMessage("Withdraw", false, formatErrorMessage(e)));

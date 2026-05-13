@@ -128,8 +128,8 @@ export function useMarketsList() {
         console.log("Raw market items from API:", marketItems);
 
         const validMarkets = marketItems.filter((market) => {
-          // Filter out markets with missing or invalid asset data
           return (
+            market.state &&
             market.collateralAsset &&
             market.loanAsset &&
             market.collateralAsset.symbol &&
@@ -147,7 +147,7 @@ export function useMarketsList() {
 
         const formattedMarkets: Market[] = validMarkets.map((market) => {
           // Calculate TVL from supply assets
-          const tvlUsd = market.state.supplyAssetsUsd;
+          const tvlUsd = market.state?.supplyAssetsUsd ?? 0;
           const tvlFormatted =
             tvlUsd >= 1000000
               ? `$${(tvlUsd / 1000000).toFixed(1)}M`

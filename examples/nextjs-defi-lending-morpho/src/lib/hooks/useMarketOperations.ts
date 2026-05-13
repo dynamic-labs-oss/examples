@@ -51,9 +51,9 @@ export function useMarketOperations(
   const chain = getViemChain(chainId);
   const publicClient = createPublicClient({ chain, transport: http() });
 
-  const getWalletClient = () => {
+  const getWalletClient = async () => {
     if (!evmAccount) return null;
-    return createWalletClientForWalletAccount({ walletAccount: evmAccount, chain });
+    return createWalletClientForWalletAccount({ walletAccount: evmAccount });
   };
 
   const refreshBalances = async () => {
@@ -94,7 +94,7 @@ export function useMarketOperations(
 
   const handleApproveLoanToken = async () => {
     if (!market?.loanToken.address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient || !address) return;
 
     setTxStatus("");
@@ -124,7 +124,7 @@ export function useMarketOperations(
 
   const handleApproveCollateral = async () => {
     if (!market?.collateralToken.address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient || !address) return;
 
     setTxStatus("");
@@ -155,7 +155,7 @@ export function useMarketOperations(
   const handleSupply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!market?.collateralToken.address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient || !address) return;
 
     setTxStatus("");
@@ -190,7 +190,7 @@ export function useMarketOperations(
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!market?.collateralToken.address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient || !address) return;
 
     setTxStatus("");
@@ -225,7 +225,7 @@ export function useMarketOperations(
   const handleBorrow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!market?.loanToken.address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient || !address) return;
 
     setTxStatus("");
@@ -260,7 +260,7 @@ export function useMarketOperations(
   const handleRepay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!market?.loanToken.address) return;
-    const walletClient = getWalletClient();
+    const walletClient = await getWalletClient();
     if (!walletClient || !address) return;
 
     setTxStatus("");

@@ -15,6 +15,7 @@ import {
   logout,
   detectOAuthRedirect,
   completeSocialAuthentication,
+  getActiveNetworkId,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
 import {
@@ -27,6 +28,8 @@ import { dynamicClient } from "./dynamic";
 interface WalletContextValue {
   evmAccount: EvmWalletAccount | null;
   loggedIn: boolean;
+  chainId: number;
+  setChainId: (id: number) => void;
   ensureEvmWallet: () => Promise<void>;
   disconnect: () => Promise<void>;
 }
@@ -34,6 +37,8 @@ interface WalletContextValue {
 const WalletContext = createContext<WalletContextValue>({
   evmAccount: null,
   loggedIn: false,
+  chainId: 8453,
+  setChainId: () => {},
   ensureEvmWallet: async () => {},
   disconnect: async () => {},
 });
@@ -54,6 +59,14 @@ const queryClient = new QueryClient({
 export default function Providers({ children }: { children: ReactNode }) {
   const [evmAccount, setEvmAccount] = useState<EvmWalletAccount | null>(null);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [chainId, setChainId] = useState<number>(8453);
+
+  useEffect(() => {
+    if (!evmAccount) return;
+    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient)
+      .then(({ networkId }) => setChainId(Number(networkId)))
+      .catch(() => {});
+  }, [evmAccount]);
 
   const refresh = useCallback(() => {
     const accounts = getWalletAccounts(dynamicClient);
@@ -116,7 +129,7 @@ export default function Providers({ children }: { children: ReactNode }) {
 
   return (
     <WalletContext.Provider
-      value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}
+      value={{ evmAccount, loggedIn, chainId, setChainId, ensureEvmWallet, disconnect }}
     >
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WalletContext.Provider>

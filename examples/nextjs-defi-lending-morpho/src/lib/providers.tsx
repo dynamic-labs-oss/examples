@@ -15,6 +15,7 @@ import {
   logout,
   detectOAuthRedirect,
   completeSocialAuthentication,
+  getActiveNetworkId,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
 import {
@@ -66,6 +67,13 @@ export default function Providers({ children }: { children: ReactNode }) {
     setEvmAccount(evm);
     setLoggedIn(isSignedIn(dynamicClient));
   }, []);
+
+  useEffect(() => {
+    if (!evmAccount) return;
+    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient)
+      .then(({ networkId }) => setChainId(Number(networkId)))
+      .catch(() => {});
+  }, [evmAccount]);
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);

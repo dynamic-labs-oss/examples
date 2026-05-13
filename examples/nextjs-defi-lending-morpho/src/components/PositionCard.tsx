@@ -34,7 +34,7 @@ export function PositionCard({ position, onWithdrawn }: PositionCardProps) {
     if (!address || !evmAccount) return;
     const chain = getViemChain(chainId);
     const publicClient = createPublicClient({ chain, transport: http() });
-    const walletClient = createWalletClientForWalletAccount({ walletAccount: evmAccount, chain });
+    const walletClient = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
 
     setIsPending(true);
     try {

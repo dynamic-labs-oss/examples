@@ -61,12 +61,13 @@ export interface Reward {
 }
 
 export interface Position {
+  name: string;
   protocol: string;
   asset: TokenInfo;
   balance: Balance;
   balanceUSD: string;
+  earnedUSD: string;
   apy: string;
-  rewards: Reward[];
   strategyId?: string;
 }
 
@@ -129,30 +130,32 @@ export interface StrategyCardProps {
   onWithdraw: (strategy: Strategy, amount: string) => void;
 }
 
-// Raw API response types (before normalization)
-export interface RawPosition {
-  spotPosition?: {
-    currentPosition?: {
-      decimals?: string | number;
-      humanized?: number | string;
-      value?: string;
-      asset?: string;
-    };
-    underlyingBalanceUSD?: string;
-    apy?: string | number;
-  };
+// Raw API response types matching the actual /wallets/{address} schema
+export interface RawWalletPosition {
   strategy?: {
+    _id?: string;
+    name?: string;
+    slug?: string;
     protocol?: string;
-    asset?: string;
-    underlyingAsset?: string;
-    assetName?: string;
-    assetDecimals?: number;
-    id?: string;
+    network?: string;
+    apy?: number;
+    tvl?: string;
+    asset?: {
+      symbol?: string;
+      contract?: string;
+      decimals?: number;
+    };
+    paused?: boolean;
   };
-  rewards?: Reward[];
+  balance?: string;
+  balanceUSD?: string;
+  earned?: string;
+  earnedUSD?: string;
 }
 
 export interface RawWalletPositions {
-  positions?: RawPosition[];
+  address?: string;
+  positions?: RawWalletPosition[];
+  totalValueUSD?: string;
 }
 

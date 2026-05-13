@@ -8,9 +8,11 @@ import { useWallet } from "@/lib/providers";
 
 interface VaultCardProps {
   vault: Vault;
+  assetBalance?: string;
+  onSuccess?: () => void;
 }
 
-export function VaultCard({ vault }: VaultCardProps) {
+export function VaultCard({ vault, assetBalance: assetBalanceProp = "0", onSuccess }: VaultCardProps) {
   const { evmAccount, loggedIn } = useWallet();
   const address = evmAccount?.address;
   const isConnected = loggedIn && !!evmAccount;
@@ -30,7 +32,6 @@ export function VaultCard({ vault }: VaultCardProps) {
     setAmount,
     txStatus,
     pendingDeposit,
-    assetBalance,
     depositedAssets,
     handleApprove,
     handleDeposit,
@@ -39,12 +40,12 @@ export function VaultCard({ vault }: VaultCardProps) {
     isDepositing,
     isWithdrawing,
     needsApproval,
-  } = useVaultOperations(address, vaultInfo);
+  } = useVaultOperations(address, vaultInfo, onSuccess);
 
   const isLoading = isApproving || isDepositing || isWithdrawing;
 
   const maxAmount = mode === "deposit"
-    ? assetBalance ? formatUnits(assetBalance as bigint, vault.assetDecimals) : "0"
+    ? assetBalanceProp
     : depositedAssets ? formatUnits(depositedAssets as bigint, vault.assetDecimals) : "0";
 
   const depositedDisplay = depositedAssets

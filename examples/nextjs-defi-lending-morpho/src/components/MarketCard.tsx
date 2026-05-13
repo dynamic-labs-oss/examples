@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { MarketsBalanceDisplay, MarketsForm, MarketsModeSelector } from ".";
-import { useMarketsData, useMarketOperations } from "@/lib/hooks";
+import { useMarketOperations, useMarketsData } from "@/lib/hooks";
 import { Market } from "@/lib/hooks/useMarketsList";
 import { useWallet } from "@/lib/providers";
 
 interface MarketCardProps {
   market: Market;
+  marketsData: ReturnType<typeof useMarketsData>;
 }
 
-export function MarketCard({ market }: MarketCardProps) {
+export function MarketCard({ market, marketsData }: MarketCardProps) {
   const { evmAccount, loggedIn } = useWallet();
   const address = evmAccount?.address;
   const isConnected = loggedIn && !!evmAccount;
@@ -18,7 +19,6 @@ export function MarketCard({ market }: MarketCardProps) {
     "supply" | "withdraw" | "borrow" | "repay"
   >("supply");
 
-  const marketsData = useMarketsData(address);
   const marketOperations = useMarketOperations(address, market);
 
   const getMarketsSubmitHandler = () => {

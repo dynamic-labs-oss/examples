@@ -8,7 +8,7 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Link href="/">
-            <DynamicLogo />
+            <DynamicLogo className="text-[#141839]" />
           </Link>
         </div>
         <DynamicButton />
