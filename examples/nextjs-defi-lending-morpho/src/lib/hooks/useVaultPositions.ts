@@ -1,9 +1,7 @@
-import { useState, useEffect } from "react";
-import { formatUnits, createPublicClient, http } from "viem";
-import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
+import { useReadContracts } from "wagmi";
+import { formatUnits } from "viem";
 import { ERC4626_ABI } from "../ABIs";
 import { Vault } from "./useVaultsList";
-import { useWallet } from "@/lib/providers";
 
 export interface VaultPosition {
   vault: Vault;
@@ -12,84 +10,44 @@ export interface VaultPosition {
   assetsFormatted: string;
 }
 
-function getViemChain(chainId: number) {
-  switch (chainId) {
-    case mainnet.id: return mainnet;
-    case arbitrum.id: return arbitrum;
-    case optimism.id: return optimism;
-    case polygon.id: return polygon;
-    default: return base;
-  }
-}
-
 export function useVaultPositions(address: string | undefined, vaults: Vault[]) {
-  const { chainId } = useWallet();
-  const [positions, setPositions] = useState<VaultPosition[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Batch-read share balances for all vaults
+  const { data: balances, isLoading: balancesLoading } = useReadContracts({
+    contracts: vaults.map((vault) => ({
+      address: vault.address as `0x${string}`,
+      abi: ERC4626_ABI,
+      functionName: "balanceOf" as const,
+      args: [address as `0x${string}`],
+    })),
+    query: { enabled: !!address && vaults.length > 0 },
+  });
 
-  useEffect(() => {
-    if (!address || vaults.length === 0) {
-      setPositions([]);
-      return;
-    }
+  // Batch-read convertToAssets using the share balances above
+  const { data: assetAmounts, isLoading: assetsLoading } = useReadContracts({
+    contracts: vaults.map((vault, i) => ({
+      address: vault.address as `0x${string}`,
+      abi: ERC4626_ABI,
+      functionName: "convertToAssets" as const,
+      args: [(balances?.[i]?.result as bigint) ?? 0n],
+    })),
+    query: { enabled: !!balances && balances.some((b) => b.result && (b.result as bigint) > 0n) },
+  });
 
-    async function fetchPositions() {
-      setLoading(true);
-      try {
-        const chain = getViemChain(chainId);
-        const publicClient = createPublicClient({ chain, transport: http() });
+  const positions: VaultPosition[] = vaults
+    .map((vault, i) => {
+      const shares = (balances?.[i]?.result as bigint) ?? 0n;
+      const assets = (assetAmounts?.[i]?.result as bigint) ?? 0n;
+      return {
+        vault,
+        shares,
+        assets,
+        assetsFormatted: formatUnits(assets, vault.assetDecimals),
+      };
+    })
+    .filter((p) => p.shares > 0n);
 
-        // Batch read share balances for all vaults
-        const balanceResults = await Promise.all(
-          vaults.map((vault) =>
-            publicClient.readContract({
-              address: vault.address as `0x${string}`,
-              abi: ERC4626_ABI,
-              functionName: "balanceOf",
-              args: [address as `0x${string}`],
-            }).catch(() => 0n)
-          )
-        );
-
-        // Read asset amounts for vaults with non-zero balances
-        const assetResults = await Promise.all(
-          vaults.map((vault, i) => {
-            const shares = balanceResults[i] as bigint;
-            if (shares > 0n) {
-              return publicClient.readContract({
-                address: vault.address as `0x${string}`,
-                abi: ERC4626_ABI,
-                functionName: "convertToAssets",
-                args: [shares],
-              }).catch(() => 0n);
-            }
-            return Promise.resolve(0n);
-          })
-        );
-
-        const newPositions: VaultPosition[] = vaults
-          .map((vault, i) => {
-            const shares = balanceResults[i] as bigint;
-            const assets = assetResults[i] as bigint;
-            return {
-              vault,
-              shares,
-              assets,
-              assetsFormatted: formatUnits(assets, vault.assetDecimals),
-            };
-          })
-          .filter((p) => p.shares > 0n);
-
-        setPositions(newPositions);
-      } catch {
-        setPositions([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchPositions();
-  }, [address, vaults, chainId]);
-
-  return { positions, loading };
+  return {
+    positions,
+    loading: balancesLoading || assetsLoading,
+  };
 }

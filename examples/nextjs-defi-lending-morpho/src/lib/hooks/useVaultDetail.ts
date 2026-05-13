@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useWallet } from "@/lib/providers";
+import { useChainId } from "wagmi";
 import { getApiForChain } from "../constants";
 
 export interface VaultDetail {
@@ -76,7 +76,7 @@ interface VaultDetailApiResponse {
 }
 
 export function useVaultDetail(vaultId: string | undefined) {
-  const { chainId } = useWallet();
+  const chainId = useChainId();
   const [vault, setVault] = useState<VaultDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

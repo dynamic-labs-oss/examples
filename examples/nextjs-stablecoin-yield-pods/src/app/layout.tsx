@@ -1,15 +1,11 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { Inter } from "next/font/google";
 import Providers from "@/lib/providers";
 import Footer from "@/components/footer";
 import { Header } from "@/components/header";
 
-const roboto = Roboto({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
-  variable: "--font-roboto",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "DeFi Yield with Dynamic",
@@ -23,14 +19,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${roboto.variable} font-sans bg-[#F9F9F9] text-[#030303]`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
         <Providers>
-          <div className="min-h-screen flex flex-col">
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </div>
+          <Header />
+          <div className="min-h-screen bg-background">{children}</div>
+          <Footer />
         </Providers>
       </body>
     </html>

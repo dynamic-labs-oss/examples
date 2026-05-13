@@ -1,5 +1,6 @@
 "use client";
 
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useState, useCallback } from "react";
 import { config } from "@/lib/config";
 import { CheckCircle2, Loader2, RotateCcw } from "lucide-react";
@@ -9,8 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { useWallet } from "@/lib/providers";
-import { dynamicClient } from "@/lib/dynamic";
 
 interface RequiredSigning {
   id: string;
@@ -30,7 +29,7 @@ const STEPS: { key: OnboardStep; label: string }[] = [
 ];
 
 export default function OnboardPage() {
-  const { evmAccount, loggedIn } = useWallet();
+  const { user, primaryWallet } = useDynamicContext();
   const {
     customerId,
     identificationId,
@@ -76,7 +75,6 @@ export default function OnboardPage() {
   }, [reset]);
 
   const handleCreateCustomer = async () => {
-    const user = dynamicClient.user;
     if (!user?.email) return;
     setLoading(true);
     setError("");
@@ -175,6 +173,7 @@ export default function OnboardPage() {
         throw new Error(errorData.error || "Failed to approve identification");
       }
 
+      // Attempt to auto-fetch and auto-sign all required documents in sandbox.
       const signingsRes = await fetch(
         `${config.api.baseUrl}/api/iron/customers/${customerId}/signings`
       );
@@ -206,6 +205,7 @@ export default function OnboardPage() {
         if (signingsMsg.includes("does not require signings") || signingsMsg.includes("no required signings")) {
           await updateState({ step: "wallet" });
         } else {
+          // KYC approval is async — fall back to signings step for manual retry.
           await updateState({ step: "signings" });
         }
       }
@@ -226,10 +226,12 @@ export default function OnboardPage() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         const errorMsg = errorData.error || "";
+        // Customer hasn't transitioned to SigningsRequired yet — KYC approval is async.
         if (errorMsg.includes("not in status SigningsRequired")) {
           setError("KYC still pending. Please wait a moment and try again.");
           return false;
         }
+        // No signings required for this customer — advance to wallet.
         if (res.status === 404 || errorMsg.includes("does not require signings") || errorMsg.includes("no required signings")) {
           setRequiredSignings([]);
           await updateState({ step: "wallet" });
@@ -284,25 +286,40 @@ export default function OnboardPage() {
     setLoading(true);
     setError("");
     try {
-      if (!evmAccount) throw new Error("No wallet connected.");
-      let walletAddress = evmAccount.address;
+      if (!primaryWallet) throw new Error("No wallet connected.");
+      let walletAddress = primaryWallet.address;
       if (!walletAddress) throw new Error("Unable to get wallet address");
       walletAddress = walletAddress.toLowerCase();
+
+      const chainId = primaryWallet.chain;
+      let blockchain = "Base";
+      if (chainId && chainId !== "EVM") {
+        const n = typeof chainId === "string" ? parseInt(chainId) : chainId;
+        if (!isNaN(n)) {
+          switch (n) {
+            case 1: blockchain = "Ethereum"; break;
+            case 137: blockchain = "Polygon"; break;
+            case 42161: blockchain = "Arbitrum"; break;
+            case 8453: blockchain = "Base"; break;
+          }
+        }
+      }
 
       const now = new Date();
       const dateStr = `${now.getUTCDate().toString().padStart(2, "0")}/${(now.getUTCMonth() + 1).toString().padStart(2, "0")}/${now.getUTCFullYear()}`;
       const proofMessage = `I am verifying ownership of the wallet address ${walletAddress} as customer ${customerId}. This message was signed on ${dateStr} to confirm my control over this wallet.`;
-      const signature = await evmAccount.signMessage(proofMessage);
+      const signature = await primaryWallet.signMessage(proofMessage);
       if (!signature) throw new Error("Failed to sign message");
 
       const walletPayload = {
         customer_id: customerId,
-        blockchain: "Base",
+        blockchain,
         address: walletAddress,
         message: proofMessage,
         signature,
       };
 
+      // Retry up to 6 times (12s total) — Iron activates customers async after signing.
       let lastMsg = "";
       for (let attempt = 0; attempt < 6; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
@@ -320,6 +337,7 @@ export default function OnboardPage() {
           if (lastMsg.includes("not active") || lastMsg.includes("Customer is not active")) {
             throw new Error("Your account is still being activated by Iron Finance. Please wait a moment and try again.");
           }
+          // Wallet already registered — look up the existing one and advance.
           const isAlreadyRegistered =
             lastMsg.toLowerCase().includes("already") ||
             lastMsg.toLowerCase().includes("duplicate") ||
@@ -408,10 +426,10 @@ export default function OnboardPage() {
     }
   };
 
-  if (!loggedIn) {
+  if (!user) {
     return (
       <div className="container mx-auto px-4 py-20 text-center">
-        <p className="text-[#606060]">Sign in to begin onboarding.</p>
+        <p className="text-muted-foreground">Connect your wallet to begin onboarding.</p>
       </div>
     );
   }
@@ -419,7 +437,7 @@ export default function OnboardPage() {
   if (initializing) {
     return (
       <div className="container mx-auto px-4 py-20 flex justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[#606060]" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -449,18 +467,18 @@ export default function OnboardPage() {
                 <div
                   className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
                     isCurrent
-                      ? "bg-[#4779FF] text-white"
+                      ? "bg-primary text-primary-foreground"
                       : isCompleted
                       ? "bg-green-500 text-white"
-                      : "bg-[#F9F9F9] text-[#606060] border border-[#DADADA]"
+                      : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                 </div>
-                <span className="text-xs mt-1 text-[#606060] hidden sm:block">{label}</span>
+                <span className="text-xs mt-1 text-muted-foreground hidden sm:block">{label}</span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`h-0.5 flex-1 mx-1 ${isCompleted ? "bg-green-500" : "bg-[#DADADA]"}`} />
+                <div className={`h-0.5 flex-1 mx-1 ${isCompleted ? "bg-green-500" : "bg-border"}`} />
               )}
             </div>
           );
@@ -468,14 +486,14 @@ export default function OnboardPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+        <div className="mb-4 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
       {/* Step 1: Customer Profile */}
       {step === "customer" && (
-        <Card className="rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -546,7 +564,7 @@ export default function OnboardPage() {
               </div>
             </div>
             <Button
-              className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white"
+              className="w-full"
               onClick={handleCreateCustomer}
               disabled={loading || !formData.firstName || !formData.lastName || !formData.dateOfBirth}
             >
@@ -559,7 +577,7 @@ export default function OnboardPage() {
 
       {/* Step 2: KYC */}
       {step === "kyc" && (
-        <Card className="rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card>
           <CardHeader>
             <CardTitle>Identity Verification</CardTitle>
             <CardDescription>Complete KYC to verify your identity with Iron Finance.</CardDescription>
@@ -567,7 +585,7 @@ export default function OnboardPage() {
           <CardContent className="space-y-4">
             {kycUrl ? (
               <>
-                <p className="text-sm text-[#606060]">
+                <p className="text-sm text-muted-foreground">
                   Your KYC session is ready. Complete verification in the link below.
                 </p>
                 <Button variant="outline" className="w-full" asChild>
@@ -576,7 +594,7 @@ export default function OnboardPage() {
                   </a>
                 </Button>
                 {isSandbox && (
-                  <Button className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white" onClick={handleSandboxApproveKYC} disabled={loading}>
+                  <Button className="w-full" onClick={handleSandboxApproveKYC} disabled={loading}>
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Sandbox: Approve KYC
                   </Button>
@@ -588,10 +606,10 @@ export default function OnboardPage() {
               </>
             ) : (
               <>
-                <p className="text-sm text-[#606060]">
+                <p className="text-sm text-muted-foreground">
                   Start KYC verification to confirm your identity.
                 </p>
-                <Button className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white" onClick={handleStartKYC} disabled={loading}>
+                <Button className="w-full" onClick={handleStartKYC} disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Start KYC Verification
                 </Button>
@@ -603,7 +621,7 @@ export default function OnboardPage() {
 
       {/* Step 3: Signings */}
       {step === "signings" && (
-        <Card className="rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card>
           <CardHeader>
             <CardTitle>Sign Documents</CardTitle>
             <CardDescription>Review and sign the required terms.</CardDescription>
@@ -611,10 +629,10 @@ export default function OnboardPage() {
           <CardContent className="space-y-4">
             {requiredSignings.length === 0 ? (
               <>
-                <p className="text-sm text-[#606060]">
+                <p className="text-sm text-muted-foreground">
                   Fetch required signings to continue.
                 </p>
-                <Button className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white" onClick={handleFetchSignings} disabled={loading}>
+                <Button className="w-full" onClick={handleFetchSignings} disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Check Required Signings
                 </Button>
@@ -622,7 +640,7 @@ export default function OnboardPage() {
             ) : (
               <div className="space-y-3">
                 {requiredSignings.map((signing) => (
-                  <div key={signing.id} className="rounded-xl border border-[#DADADA] p-3 flex items-center justify-between gap-3">
+                  <div key={signing.id} className="rounded-md border p-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium">{signing.display_name}</p>
                       {signing.url && (
@@ -630,14 +648,13 @@ export default function OnboardPage() {
                           href={signing.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-[#4779FF] underline"
+                          className="text-xs text-primary underline"
                         >
                           View document
                         </a>
                       )}
                     </div>
-                    <Button size="sm" onClick={() => handleSignDocument(signing)} disabled={loading}
-                      className="bg-[#4779FF] hover:bg-[#3366ee] text-white">
+                    <Button size="sm" onClick={() => handleSignDocument(signing)} disabled={loading}>
                       Sign
                     </Button>
                   </div>
@@ -650,7 +667,7 @@ export default function OnboardPage() {
 
       {/* Step 4: Wallet */}
       {step === "wallet" && (
-        <Card className="rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card>
           <CardHeader>
             <CardTitle>Register Wallet</CardTitle>
             <CardDescription>
@@ -658,15 +675,15 @@ export default function OnboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-[#606060]">
+            <p className="text-sm text-muted-foreground">
               Your wallet address:{" "}
-              <span className="font-mono text-[#030303]">
-                {evmAccount?.address
-                  ? `${evmAccount.address.slice(0, 6)}...${evmAccount.address.slice(-4)}`
+              <span className="font-mono text-foreground">
+                {primaryWallet?.address
+                  ? `${primaryWallet.address.slice(0, 6)}...${primaryWallet.address.slice(-4)}`
                   : "Not connected"}
               </span>
             </p>
-            <Button className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white" onClick={handleCreateWallet} disabled={loading || !evmAccount}>
+            <Button className="w-full" onClick={handleCreateWallet} disabled={loading || !primaryWallet}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Register Wallet
             </Button>
@@ -676,7 +693,7 @@ export default function OnboardPage() {
 
       {/* Step 5: Bank Account */}
       {step === "bank" && (
-        <Card className="rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -740,8 +757,8 @@ export default function OnboardPage() {
                 />
               </div>
             </div>
-            <div className="border-t border-[#DADADA] pt-4">
-              <p className="text-xs text-[#606060] mb-3">Account Holder Address</p>
+            <div className="border-t pt-4">
+              <p className="text-xs text-muted-foreground mb-3">Account Holder Address</p>
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label>Street</Label>
@@ -791,7 +808,7 @@ export default function OnboardPage() {
               </div>
             </div>
             <Button
-              className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white"
+              className="w-full"
               onClick={handleAddBankAccount}
               disabled={
                 loading ||
@@ -811,18 +828,18 @@ export default function OnboardPage() {
 
       {/* Step 6: Complete */}
       {step === "complete" && (
-        <Card className="rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card>
           <CardContent className="pt-8 pb-8 text-center space-y-4">
             <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
               <CheckCircle2 className="h-8 w-8 text-green-500" />
             </div>
             <div>
               <h2 className="text-xl font-semibold mb-1">All Set!</h2>
-              <p className="text-sm text-[#606060]">
+              <p className="text-sm text-muted-foreground">
                 Your account is ready. Start ramping fiat to crypto.
               </p>
             </div>
-            <Button asChild className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white">
+            <Button asChild className="w-full">
               <Link href="/">Go to Ramp →</Link>
             </Button>
           </CardContent>

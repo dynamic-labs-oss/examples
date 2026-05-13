@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { Loader2, ArrowLeft } from "lucide-react";
 
 interface ActionButtonsProps {
@@ -10,7 +11,6 @@ interface ActionButtonsProps {
   hasSelectedRoute: boolean;
   showRouteDisplay: boolean;
   hasActiveRoute: boolean;
-  isConnected: boolean;
   onGetRoutes: () => void;
   onExecuteSwap: () => void;
   onClear: () => void;
@@ -25,14 +25,16 @@ export default function ActionButtons({
   hasSelectedRoute,
   showRouteDisplay,
   hasActiveRoute,
-  isConnected,
   onGetRoutes,
   onExecuteSwap,
   onClear,
   onBackToForm,
   onShowExecutionDisplay,
 }: ActionButtonsProps) {
+  const { primaryWallet, setShowAuthFlow } = useDynamicContext();
+
   if (showRouteDisplay) {
+    // Route display view - show Execute Swap, View Execution (if active), and Back buttons
     return (
       <div className="w-full max-w-md mb-6">
         <div className="flex flex-col gap-4">
@@ -87,12 +89,19 @@ export default function ActionButtons({
     );
   }
 
+  // Form view - show Get Routes, View Execution (if active), and Clear buttons
   return (
     <div className="w-full max-w-md mb-6">
       <div className="flex flex-col gap-4">
         <Button
-          onClick={onGetRoutes}
-          disabled={isLoading || !isConnected}
+          onClick={() => {
+            if (!primaryWallet) {
+              setShowAuthFlow(true);
+            } else {
+              onGetRoutes();
+            }
+          }}
+          disabled={isLoading}
           className="w-full h-12 text-lg font-semibold"
         >
           {isLoading ? (
@@ -100,8 +109,8 @@ export default function ActionButtons({
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Getting Routes...
             </>
-          ) : !isConnected ? (
-            "Sign in to Get Routes"
+          ) : !primaryWallet ? (
+            "Connect Wallet"
           ) : (
             "Get Routes"
           )}

@@ -1,15 +1,20 @@
-import { createDynamicClient } from "@dynamic-labs-sdk/client";
-import { addEvmExtension } from "@dynamic-labs-sdk/evm";
-import { addSolanaExtension } from "@dynamic-labs-sdk/solana";
+import { createDynamicClient, initializeClient, type DynamicClient } from "@dynamic-labs-sdk/client";
+import { addWaasEvmExtension } from "@dynamic-labs-sdk/evm/waas";
+import { addWaasSolanaExtension } from "@dynamic-labs-sdk/solana/waas";
 import { env } from "./env";
 
-// Create the Dynamic client once. Extensions must be registered immediately
-// after createDynamicClient() and before initialization completes.
-export const dynamicClient = createDynamicClient({
+export const dynamicClient: DynamicClient = createDynamicClient({
   environmentId: env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID,
+  autoInitialize: false,
   metadata: { name: "MoneyGram Ramp Demo" },
 });
 
-// Register EVM and Solana extensions
-addEvmExtension();
-addSolanaExtension();
+let initialized = false;
+
+export async function initDynamic(): Promise<void> {
+  if (initialized) return;
+  initialized = true;
+  addWaasEvmExtension(dynamicClient);
+  addWaasSolanaExtension(dynamicClient);
+  await initializeClient(dynamicClient);
+}

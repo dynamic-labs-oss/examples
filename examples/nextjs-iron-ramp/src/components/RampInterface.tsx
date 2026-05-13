@@ -1,9 +1,9 @@
 "use client";
 
+import { useDynamicContext, DynamicWidget } from "@dynamic-labs/sdk-react-core";
 import { useState, useEffect, useCallback } from "react";
 import { config } from "@/lib/config";
 import { useKYCMetadata } from "@/lib/hooks/useKYCMetadata";
-import { useWallet } from "@/lib/providers";
 import {
   Loader2,
   Copy,
@@ -42,7 +42,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import DynamicButton from "@/components/dynamic/dynamic-button";
 import type {
   RampType,
   RegisteredWallet,
@@ -106,7 +105,7 @@ const ONBOARD_STEPS = [
 ];
 
 export function RampInterface() {
-  const { evmAccount, loggedIn } = useWallet();
+  const { user } = useDynamicContext();
   const {
     customerId: metaCustomerId,
     step: onboardingStep,
@@ -128,18 +127,26 @@ export function RampInterface() {
   const [selectedChain, setSelectedChain] = useState("");
   const [selectedToken, setSelectedToken] = useState("");
   const [selectedFiatCurrency, setSelectedFiatCurrency] = useState("");
-  const [selectedBankIndex, setSelectedBankIndex] = useState<number | null>(null);
-  const [selectedWalletIndex, setSelectedWalletIndex] = useState<number | null>(null);
+  const [selectedBankIndex, setSelectedBankIndex] = useState<number | null>(
+    null
+  );
+  const [selectedWalletIndex, setSelectedWalletIndex] = useState<
+    number | null
+  >(null);
   const [amount, setAmount] = useState("100");
 
   const [quote, setQuote] = useState<QuoteData | null>(null);
   const [result, setResult] = useState<TransactionResult | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const [registeredWallets, setRegisteredWallets] = useState<RegisteredWallet[]>([]);
+  const [registeredWallets, setRegisteredWallets] = useState<
+    RegisteredWallet[]
+  >([]);
   const [registeredBanks, setRegisteredBanks] = useState<RegisteredBank[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
-  const [fiatCurrencies, setFiatCurrencies] = useState<FiatCurrency[]>(FIAT_CURRENCIES_FALLBACK);
+  const [fiatCurrencies, setFiatCurrencies] = useState<FiatCurrency[]>(
+    FIAT_CURRENCIES_FALLBACK
+  );
 
   const [transactions, setTransactions] = useState<AutoRamp[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
@@ -150,13 +157,21 @@ export function RampInterface() {
     if (metaCustomerId) setCustomerId(metaCustomerId);
     if (metaWalletAddress) setWalletAddress(metaWalletAddress);
     if (metaBankIban) setBankIban(metaBankIban);
-  }, [metadataLoading, isOnboarded, metaCustomerId, metaWalletAddress, metaBankIban]);
+  }, [
+    metadataLoading,
+    isOnboarded,
+    metaCustomerId,
+    metaWalletAddress,
+    metaBankIban,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
     async function fetchFiat() {
       try {
-        const res = await fetch(`${config.api.baseUrl}/api/iron/fiatcurrencies`);
+        const res = await fetch(
+          `${config.api.baseUrl}/api/iron/fiatcurrencies`
+        );
         if (!res.ok || cancelled) return;
         const json = await res.json();
         const data = json.data ?? json;
@@ -174,7 +189,9 @@ export function RampInterface() {
       }
     }
     fetchFiat();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const fetchRegisteredAccounts = useCallback(async () => {
@@ -182,11 +199,18 @@ export function RampInterface() {
     setLoadingAccounts(true);
     try {
       const [walletsRes, banksRes] = await Promise.all([
-        fetch(`${config.api.baseUrl}/api/iron/customers/${customerId}/wallets`, {
-          headers: { "x-dynamic-environment-id": config.dynamic.environmentId },
-        }),
+        fetch(
+          `${config.api.baseUrl}/api/iron/customers/${customerId}/wallets`,
+          {
+            headers: {
+              "x-dynamic-environment-id": config.dynamic.environmentId,
+            },
+          }
+        ),
         fetch(`${config.api.baseUrl}/api/iron/customers/${customerId}/banks`, {
-          headers: { "x-dynamic-environment-id": config.dynamic.environmentId },
+          headers: {
+            "x-dynamic-environment-id": config.dynamic.environmentId,
+          },
         }),
       ]);
       if (walletsRes.ok) {
@@ -211,23 +235,35 @@ export function RampInterface() {
   useEffect(() => {
     if (registeredWallets.length > 0 && selectedWalletIndex === null) {
       const i = metaWalletAddress
-        ? registeredWallets.findIndex((w) => w.address.toLowerCase() === metaWalletAddress.toLowerCase())
+        ? registeredWallets.findIndex(
+            (w) =>
+              w.address.toLowerCase() === metaWalletAddress.toLowerCase()
+          )
         : 0;
       const idx = i >= 0 ? i : 0;
       setSelectedWalletIndex(idx);
       setWalletAddress(registeredWallets[idx].address);
-      if (registeredWallets[idx].blockchain) setSelectedChain(registeredWallets[idx].blockchain);
+      if (registeredWallets[idx].blockchain) {
+        setSelectedChain(registeredWallets[idx].blockchain);
+      }
     }
   }, [registeredWallets, selectedWalletIndex, metaWalletAddress]);
 
   useEffect(() => {
     if (registeredBanks.length > 0 && selectedBankIndex === null) {
       const i = metaBankIban
-        ? registeredBanks.findIndex((b) => (b.iban || b.account_identifier?.iban) === metaBankIban)
+        ? registeredBanks.findIndex(
+            (b) =>
+              (b.iban || b.account_identifier?.iban) === metaBankIban
+          )
         : 0;
       const idx = i >= 0 ? i : 0;
       setSelectedBankIndex(idx);
-      setBankIban(registeredBanks[idx].iban || registeredBanks[idx].account_identifier?.iban || "");
+      setBankIban(
+        registeredBanks[idx].iban ||
+          registeredBanks[idx].account_identifier?.iban ||
+          ""
+      );
     }
   }, [registeredBanks, selectedBankIndex, metaBankIban]);
 
@@ -239,7 +275,11 @@ export function RampInterface() {
       try {
         const res = await fetch(
           `${config.api.baseUrl}/api/iron/customers/${customerId}/autoramps`,
-          { headers: { "x-dynamic-environment-id": config.dynamic.environmentId } }
+          {
+            headers: {
+              "x-dynamic-environment-id": config.dynamic.environmentId,
+            },
+          }
         );
         if (!res.ok || cancelled) return;
         const json = await res.json();
@@ -252,7 +292,9 @@ export function RampInterface() {
       }
     }
     fetchTransactions();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [customerId, isOnboarded, success]);
 
   const handleCopy = async (text: string, field: string) => {
@@ -267,42 +309,61 @@ export function RampInterface() {
 
   const handleGetQuote = async () => {
     setError("");
-    if (!customerId) { setError("Complete onboarding first."); return; }
-    if (!selectedChain || !selectedToken || !selectedFiatCurrency) { setError("Select all fields."); return; }
-    if (rampType === "offramp" && selectedBankIndex === null) { setError("Select a bank account."); return; }
-    if (!amount || parseFloat(amount) <= 0) { setError("Enter a valid amount."); return; }
+    if (!customerId) {
+      setError("Complete onboarding first.");
+      return;
+    }
+    if (!selectedChain || !selectedToken || !selectedFiatCurrency) {
+      setError("Select all fields.");
+      return;
+    }
+    if (rampType === "offramp" && selectedBankIndex === null) {
+      setError("Select a bank account.");
+      return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
 
     setLoading(true);
     setQuote(null);
     try {
-      const endpoint = rampType === "onramp"
-        ? `${config.api.baseUrl}/api/onramp`
-        : `${config.api.baseUrl}/api/offramp`;
-      const selectedBank = selectedBankIndex !== null ? registeredBanks[selectedBankIndex] : null;
-      const selectedWallet = selectedWalletIndex !== null ? registeredWallets[selectedWalletIndex] : null;
-      const selectedIban = selectedBank?.iban || selectedBank?.account_identifier?.iban;
+      const endpoint =
+        rampType === "onramp"
+          ? `${config.api.baseUrl}/api/onramp`
+          : `${config.api.baseUrl}/api/offramp`;
+      const selectedBank =
+        selectedBankIndex !== null ? registeredBanks[selectedBankIndex] : null;
+      const selectedWallet =
+        selectedWalletIndex !== null
+          ? registeredWallets[selectedWalletIndex]
+          : null;
+      const selectedIban =
+        selectedBank?.iban || selectedBank?.account_identifier?.iban;
       const selectedWalletAddr = selectedWallet?.address || walletAddress;
 
-      const body = rampType === "onramp"
-        ? {
-            action: "quote",
-            customer_id: customerId,
-            source_currency: selectedFiatCurrency,
-            destination_currency: selectedToken,
-            source_amount: parseFloat(amount) * 100,
-            payment_rail: "sepa" as const,
-            wallet_address: selectedWalletAddr,
-            blockchain: selectedChain,
-          }
-        : {
-            action: "quote",
-            customer_id: customerId,
-            source_currency: selectedToken,
-            destination_currency: selectedFiatCurrency,
-            source_amount: parseFloat(amount) * 1000000,
-            bank_account_id: selectedIban,
-            blockchain: selectedChain,
-          };
+      const body =
+        rampType === "onramp"
+          ? {
+              action: "quote",
+              customer_id: customerId,
+              source_currency: selectedFiatCurrency,
+              destination_currency: selectedToken,
+              source_amount: parseFloat(amount) * 100,
+              payment_rail: "sepa" as const,
+              wallet_address: selectedWalletAddr,
+              blockchain: selectedChain,
+            }
+          : {
+              action: "quote",
+              customer_id: customerId,
+              source_currency: selectedToken,
+              destination_currency: selectedFiatCurrency,
+              source_amount: parseFloat(amount) * 1000000,
+              bank_account_id: selectedIban,
+              blockchain: selectedChain,
+            };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -324,7 +385,9 @@ export function RampInterface() {
       const data = await res.json();
       setQuote(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to get ${rampType} quote`);
+      setError(
+        err instanceof Error ? err.message : `Failed to get ${rampType} quote`
+      );
     } finally {
       setLoading(false);
     }
@@ -336,33 +399,40 @@ export function RampInterface() {
     setError("");
     setSuccess("");
     try {
-      const endpoint = rampType === "onramp"
-        ? `${config.api.baseUrl}/api/onramp`
-        : `${config.api.baseUrl}/api/offramp`;
-      const selectedBank = selectedBankIndex !== null ? registeredBanks[selectedBankIndex] : null;
-      const selectedWallet = selectedWalletIndex !== null ? registeredWallets[selectedWalletIndex] : null;
-      const selectedIban = selectedBank?.iban || selectedBank?.account_identifier?.iban;
+      const endpoint =
+        rampType === "onramp"
+          ? `${config.api.baseUrl}/api/onramp`
+          : `${config.api.baseUrl}/api/offramp`;
+      const selectedBank =
+        selectedBankIndex !== null ? registeredBanks[selectedBankIndex] : null;
+      const selectedWallet =
+        selectedWalletIndex !== null
+          ? registeredWallets[selectedWalletIndex]
+          : null;
+      const selectedIban =
+        selectedBank?.iban || selectedBank?.account_identifier?.iban;
       const selectedWalletAddr = selectedWallet?.address || walletAddress;
 
-      const body = rampType === "onramp"
-        ? {
-            action: "execute",
-            quote_id: quote.id || quote.data?.id,
-            customer_id: customerId,
-            wallet_address: selectedWalletAddr,
-            blockchain: selectedChain,
-            source_currency: selectedFiatCurrency,
-            destination_currency: selectedToken,
-          }
-        : {
-            action: "execute",
-            quote_id: quote.id || quote.data?.id,
-            customer_id: customerId,
-            bank_account_id: selectedIban,
-            blockchain: selectedChain,
-            source_currency: selectedToken,
-            destination_currency: selectedFiatCurrency,
-          };
+      const body =
+        rampType === "onramp"
+          ? {
+              action: "execute",
+              quote_id: quote.id || quote.data?.id,
+              customer_id: customerId,
+              wallet_address: selectedWalletAddr,
+              blockchain: selectedChain,
+              source_currency: selectedFiatCurrency,
+              destination_currency: selectedToken,
+            }
+          : {
+              action: "execute",
+              quote_id: quote.id || quote.data?.id,
+              customer_id: customerId,
+              bank_account_id: selectedIban,
+              blockchain: selectedChain,
+              source_currency: selectedToken,
+              destination_currency: selectedFiatCurrency,
+            };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -383,38 +453,44 @@ export function RampInterface() {
       }
       const data = await res.json();
       setResult(data);
-      setSuccess(`${rampType === "onramp" ? "Onramp" : "Offramp"} created successfully!`);
+      setSuccess(
+        `${rampType === "onramp" ? "Onramp" : "Offramp"} created successfully!`
+      );
       setQuote(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to execute ${rampType}`);
+      setError(
+        err instanceof Error ? err.message : `Failed to execute ${rampType}`
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // Determine which onboarding steps are done
   const stepOrder = ["customer", "kyc", "signings", "wallet", "bank", "complete"];
   const currentStepIdx = stepOrder.indexOf(onboardingStep || "customer");
 
   const quoteData = quote?.data || quote;
-  const paymentInstructions = result?.data?.payment_instructions || result?.payment_instructions;
+  const paymentInstructions =
+    result?.data?.payment_instructions || result?.payment_instructions;
 
   return (
     <div className="space-y-6 mt-6 pb-20">
       {/* Onboarding Status Card */}
-      <Card className="max-w-5xl mx-auto rounded-xl border border-[#DADADA] bg-white shadow-sm">
+      <Card className="max-w-5xl mx-auto">
         <CardHeader>
           <CardTitle>Onboarding Status</CardTitle>
         </CardHeader>
         <CardContent>
-          {!loggedIn ? (
+          {!user ? (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <p className="text-sm text-[#606060]">
-                Sign in to start onramping and offramping.
+              <p className="text-sm text-muted-foreground">
+                Connect your wallet to start onramping and offramping.
               </p>
-              <DynamicButton />
+              <DynamicWidget />
             </div>
           ) : metadataLoading ? (
-            <div className="flex items-center gap-2 text-[#606060]">
+            <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="text-sm">Loading status...</span>
             </div>
@@ -426,14 +502,17 @@ export function RampInterface() {
                 </div>
                 <div>
                   <p className="font-medium text-sm">Onboarding Complete</p>
-                  <p className="text-xs text-[#606060]">
-                    Customer ID: <span className="font-mono">{customerId || metaCustomerId}</span>
+                  <p className="text-xs text-muted-foreground">
+                    Customer ID:{" "}
+                    <span className="font-mono">{customerId || metaCustomerId}</span>
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-[#DADADA] text-sm">
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t text-sm">
                 <div>
-                  <p className="text-[#606060] text-xs uppercase tracking-wide mb-1">Wallet</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+                    Wallet
+                  </p>
                   <div className="flex items-center gap-1">
                     <p className="font-mono text-xs">
                       {metaWalletAddress
@@ -457,10 +536,14 @@ export function RampInterface() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-[#606060] text-xs uppercase tracking-wide mb-1">Bank (IBAN)</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+                    Bank (IBAN)
+                  </p>
                   <div className="flex items-center gap-1">
                     <p className="font-mono text-xs">
-                      {metaBankIban ? `...${metaBankIban.slice(-8)}` : "—"}
+                      {metaBankIban
+                        ? `...${metaBankIban.slice(-8)}`
+                        : "—"}
                     </p>
                     {metaBankIban && (
                       <Button
@@ -484,11 +567,14 @@ export function RampInterface() {
             <div className="space-y-4">
               <div className="grid grid-cols-5 gap-2">
                 {ONBOARD_STEPS.map((s, i) => {
-                  const stepKey = s.key === "connect" ? "customer" : s.key;
-                  const stepPos = s.key === "connect" ? 0 : stepOrder.indexOf(stepKey);
+                  const stepKey =
+                    s.key === "connect" ? "customer" : s.key;
+                  const stepPos =
+                    s.key === "connect" ? 0 : stepOrder.indexOf(stepKey);
                   const isDone = currentStepIdx > stepPos;
                   const isCurrent =
-                    onboardingStep === stepKey || (s.key === "connect" && !onboardingStep);
+                    onboardingStep === stepKey ||
+                    (s.key === "connect" && !onboardingStep);
                   return (
                     <div key={s.key} className="flex flex-col items-center gap-1">
                       <div
@@ -496,21 +582,28 @@ export function RampInterface() {
                           isDone
                             ? "bg-green-500 text-white"
                             : isCurrent
-                            ? "bg-[#4779FF] text-white"
-                            : "bg-[#F9F9F9] text-[#606060] border border-[#DADADA]"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {isDone ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+                        {isDone ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : (
+                          i + 1
+                        )}
                       </div>
-                      <span className="text-xs text-center text-[#606060] leading-tight">{s.label}</span>
+                      <span className="text-xs text-center text-muted-foreground leading-tight">
+                        {s.label}
+                      </span>
                     </div>
                   );
                 })}
               </div>
               <div className="pt-2">
-                <Button asChild className="bg-[#4779FF] hover:bg-[#3366ee] text-white">
+                <Button asChild>
                   <Link href="/onboard">
-                    Complete Onboarding <ArrowRight className="ml-2 h-4 w-4" />
+                    Complete Onboarding{" "}
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
               </div>
@@ -521,14 +614,16 @@ export function RampInterface() {
 
       {/* Ramp Card */}
       {isOnboarded && (
-        <Card className="max-w-5xl mx-auto rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card className="max-w-5xl mx-auto">
           <CardHeader>
             <CardTitle>Quick Ramp</CardTitle>
-            <CardDescription>Convert between fiat and stablecoins</CardDescription>
+            <CardDescription>
+              Convert between fiat and stablecoins
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {/* Ramp type toggle */}
-            <div className="flex rounded-lg border border-[#DADADA] bg-[#F9F9F9] p-1 mb-6 max-w-xs">
+            <div className="flex rounded-lg border bg-muted p-1 mb-6 max-w-xs">
               {(["onramp", "offramp"] as const).map((type) => (
                 <button
                   key={type}
@@ -541,8 +636,8 @@ export function RampInterface() {
                   }}
                   className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                     rampType === type
-                      ? "bg-white shadow-sm text-[#030303]"
-                      : "text-[#606060] hover:text-[#030303]"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {type === "onramp" ? "Onramp" : "Offramp"}
@@ -551,12 +646,12 @@ export function RampInterface() {
             </div>
 
             {error && (
-              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+              <div className="mb-4 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
                 {error}
               </div>
             )}
             {success && (
-              <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-600">
+              <div className="mb-4 rounded-md bg-green-500/10 border border-green-500/20 px-4 py-3 text-sm text-green-600 dark:text-green-400">
                 {success}
               </div>
             )}
@@ -569,26 +664,40 @@ export function RampInterface() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label>Chain</Label>
-                        <Select value={selectedChain} onValueChange={setSelectedChain}>
+                        <Select
+                          value={selectedChain}
+                          onValueChange={setSelectedChain}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select chain" />
                           </SelectTrigger>
                           <SelectContent>
                             {CHAINS.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label>{rampType === "onramp" ? "Receive Token" : "Send Token"}</Label>
-                        <Select value={selectedToken} onValueChange={setSelectedToken}>
+                        <Label>
+                          {rampType === "onramp"
+                            ? "Receive Token"
+                            : "Send Token"}
+                        </Label>
+                        <Select
+                          value={selectedToken}
+                          onValueChange={setSelectedToken}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select token" />
                           </SelectTrigger>
                           <SelectContent>
                             {TOKENS.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.name}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -596,8 +705,15 @@ export function RampInterface() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label>{rampType === "onramp" ? "Send Currency" : "Receive Currency"}</Label>
-                      <Select value={selectedFiatCurrency} onValueChange={setSelectedFiatCurrency}>
+                      <Label>
+                        {rampType === "onramp"
+                          ? "Send Currency"
+                          : "Receive Currency"}
+                      </Label>
+                      <Select
+                        value={selectedFiatCurrency}
+                        onValueChange={setSelectedFiatCurrency}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select currency" />
                         </SelectTrigger>
@@ -632,7 +748,9 @@ export function RampInterface() {
                               const idx = parseInt(v);
                               setSelectedWalletIndex(idx);
                               setWalletAddress(registeredWallets[idx]?.address || "");
-                              if (registeredWallets[idx]?.blockchain) setSelectedChain(registeredWallets[idx].blockchain);
+                              if (registeredWallets[idx]?.blockchain) {
+                                setSelectedChain(registeredWallets[idx].blockchain);
+                              }
                             }}
                             disabled={loadingAccounts}
                           >
@@ -642,7 +760,9 @@ export function RampInterface() {
                             <SelectContent>
                               {registeredWallets.map((w, i) => (
                                 <SelectItem key={w.id} value={i.toString()}>
-                                  {w.blockchain} — {w.address.slice(0, 6)}...{w.address.slice(-4)}
+                                  {w.blockchain} —{" "}
+                                  {w.address.slice(0, 6)}...
+                                  {w.address.slice(-4)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -666,7 +786,12 @@ export function RampInterface() {
                             onValueChange={(v) => {
                               const idx = parseInt(v);
                               setSelectedBankIndex(idx);
-                              setBankIban(registeredBanks[idx]?.iban || registeredBanks[idx]?.account_identifier?.iban || "");
+                              setBankIban(
+                                registeredBanks[idx]?.iban ||
+                                  registeredBanks[idx]?.account_identifier
+                                    ?.iban ||
+                                  ""
+                              );
                             }}
                             disabled={loadingAccounts}
                           >
@@ -676,7 +801,12 @@ export function RampInterface() {
                             <SelectContent>
                               {registeredBanks.map((b, i) => (
                                 <SelectItem key={b.id} value={i.toString()}>
-                                  {b.bank_name || b.label || "Bank"} — {(b.iban || b.account_identifier?.iban || "").slice(-8)}
+                                  {b.bank_name || b.label || "Bank"} —{" "}
+                                  {(
+                                    b.iban ||
+                                    b.account_identifier?.iban ||
+                                    ""
+                                  ).slice(-8)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -692,12 +822,14 @@ export function RampInterface() {
                     )}
 
                     <Button
-                      className="w-full bg-[#4779FF] hover:bg-[#3366ee] text-white"
+                      className="w-full"
                       onClick={handleGetQuote}
                       disabled={loading}
                       variant={quote ? "outline" : "default"}
                     >
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {loading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
                       {quote ? "Refresh Quote" : "Get Quote"}
                     </Button>
                   </>
@@ -707,47 +839,67 @@ export function RampInterface() {
               {/* Right: Quote / Result */}
               <div>
                 {quote && (
-                  <div className="rounded-xl border border-[#4779FF]/20 bg-[#4779FF]/5 p-4 space-y-3">
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
                     <p className="font-medium text-sm">Quote</p>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-[#606060]">You send</span>
-                        <span className="font-medium">{quoteData?.source_amount} {quoteData?.source_currency}</span>
+                        <span className="text-muted-foreground">You send</span>
+                        <span className="font-medium">
+                          {quoteData?.source_amount} {quoteData?.source_currency}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[#606060]">You receive</span>
-                        <span className="font-medium">{quoteData?.destination_amount} {quoteData?.destination_currency}</span>
+                        <span className="text-muted-foreground">
+                          You receive
+                        </span>
+                        <span className="font-medium">
+                          {quoteData?.destination_amount}{" "}
+                          {quoteData?.destination_currency}
+                        </span>
                       </div>
                       {quoteData?.exchange_rate && (
                         <div className="flex justify-between">
-                          <span className="text-[#606060]">Rate</span>
+                          <span className="text-muted-foreground">Rate</span>
                           <span>{quoteData.exchange_rate}</span>
                         </div>
                       )}
                       {quoteData?.fees?.total_fee !== undefined && (
                         <div className="flex justify-between">
-                          <span className="text-[#606060]">Fee</span>
+                          <span className="text-muted-foreground">Fee</span>
                           <span>{quoteData.fees.total_fee}</span>
                         </div>
                       )}
                     </div>
                     <div className="flex gap-2 pt-1">
-                      <Button className="flex-1 bg-[#4779FF] hover:bg-[#3366ee] text-white" onClick={handleExecute} disabled={loading}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <Button
+                        className="flex-1"
+                        onClick={handleExecute}
+                        disabled={loading}
+                      >
+                        {loading && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
                         Confirm
                       </Button>
-                      <Button variant="outline" onClick={() => setQuote(null)}>Cancel</Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setQuote(null)}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   </div>
                 )}
 
                 {result && paymentInstructions && (
-                  <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4 space-y-3">
+                  <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4 space-y-3">
                     <div>
                       <p className="font-medium text-sm">
-                        {rampType === "onramp" ? "Send Payment To" : "Payout Initiated"}
+                        {rampType === "onramp"
+                          ? "Send Payment To"
+                          : "Payout Initiated"}
                       </p>
-                      <p className="text-xs text-[#606060] mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {rampType === "onramp"
                           ? "Transfer funds to this account to complete your onramp."
                           : "Your crypto will be converted and sent to your bank."}
@@ -756,28 +908,55 @@ export function RampInterface() {
                     <div className="space-y-2 text-sm">
                       {Object.entries(paymentInstructions).map(([key, value]) =>
                         value ? (
-                          <div key={key} className="flex justify-between items-center">
-                            <span className="text-[#606060] capitalize">{key.replace(/_/g, " ")}</span>
+                          <div
+                            key={key}
+                            className="flex justify-between items-center"
+                          >
+                            <span className="text-muted-foreground capitalize">
+                              {key.replace(/_/g, " ")}
+                            </span>
                             <div className="flex items-center gap-1">
-                              <span className="font-mono text-xs">{String(value)}</span>
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(String(value), key)}>
-                                {copiedField === key ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                              <span className="font-mono text-xs">
+                                {String(value)}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() =>
+                                  handleCopy(String(value), key)
+                                }
+                              >
+                                {copiedField === key ? (
+                                  <Check className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
                               </Button>
                             </div>
                           </div>
                         ) : null
                       )}
                     </div>
-                    <Button variant="outline" className="w-full" onClick={() => { setResult(null); setSuccess(""); }}>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setResult(null);
+                        setSuccess("");
+                      }}
+                    >
                       New Transaction
                     </Button>
                   </div>
                 )}
 
                 {!quote && !result && (
-                  <div className="h-full flex items-center justify-center text-center p-6 rounded-xl border border-dashed border-[#DADADA]">
-                    <p className="text-sm text-[#606060]">
-                      Fill in the form and click <span className="font-medium text-[#030303]">Get Quote</span> to see your rate.
+                  <div className="h-full flex items-center justify-center text-center p-6 rounded-lg border border-dashed">
+                    <p className="text-sm text-muted-foreground">
+                      Fill in the form and click{" "}
+                      <span className="font-medium">Get Quote</span> to see
+                      your rate.
                     </p>
                   </div>
                 )}
@@ -789,24 +968,26 @@ export function RampInterface() {
 
       {/* Transactions Card */}
       {isOnboarded && (
-        <Card className="max-w-2xl mx-auto mb-6 rounded-xl border border-[#DADADA] bg-white shadow-sm">
+        <Card className="max-w-2xl mx-auto mb-6">
           <CardHeader>
             <CardTitle>Recent Transactions</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingTransactions ? (
-              <div className="flex items-center gap-2 text-[#606060]">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Loading transactions...</span>
               </div>
             ) : transactions.length === 0 ? (
-              <p className="text-sm text-[#606060]">No transactions yet.</p>
+              <p className="text-sm text-muted-foreground">
+                No transactions yet.
+              </p>
             ) : (
               <div className="space-y-0">
                 {transactions.slice(0, 10).map((tx) => (
                   <button
                     key={tx.id}
-                    className="w-full text-left py-3 border-b border-[#DADADA] last:border-0 text-sm space-y-1 hover:bg-[#F9F9F9] -mx-1 px-1 rounded transition-colors cursor-pointer"
+                    className="w-full text-left py-3 border-b last:border-0 text-sm space-y-1 hover:bg-muted/40 -mx-1 px-1 rounded transition-colors cursor-pointer"
                     onClick={() => setSelectedTx(tx)}
                   >
                     <div className="flex items-center justify-between">
@@ -820,7 +1001,9 @@ export function RampInterface() {
                         >
                           {tx.type === "onramp" ? "Onramp" : "Offramp"}
                         </span>
-                        <span className="text-[#606060] text-xs font-mono">{tx.id.slice(0, 12)}...</span>
+                        <span className="text-muted-foreground text-xs font-mono">
+                          {tx.id.slice(0, 12)}...
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span
@@ -828,16 +1011,16 @@ export function RampInterface() {
                             tx.status === "Approved" || tx.status === "completed"
                               ? "text-green-600"
                               : tx.status === "Rejected" || tx.status === "failed"
-                              ? "text-red-600"
-                              : "text-[#606060]"
+                              ? "text-destructive"
+                              : "text-muted-foreground"
                           }`}
                         >
                           {tx.status}
                         </span>
-                        <ChevronRight className="h-3.5 w-3.5 text-[#606060]" />
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-[#606060]">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>
                         {tx.quote?.amount_in?.amount
                           ? `${tx.quote.amount_in.amount} ${tx.quote.amount_in.currency?.code ?? ""}`
@@ -846,7 +1029,9 @@ export function RampInterface() {
                           ? ` → ${tx.quote.amount_out.amount} ${tx.quote.amount_out.currency?.code ?? ""}`
                           : ""}
                       </span>
-                      {tx.created_at && <span>{new Date(tx.created_at).toLocaleString()}</span>}
+                      {tx.created_at && (
+                        <span>{new Date(tx.created_at).toLocaleString()}</span>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -880,28 +1065,34 @@ function TxDetail({
 }) {
   const rail = tx.deposit_rails?.[0];
   const srcLabel =
-    tx.source_currencies?.map((c) => c.token || c.code || "").filter(Boolean).join(", ") ||
+    tx.source_currencies
+      ?.map((c) => c.token || c.code || "")
+      .filter(Boolean)
+      .join(", ") ||
     tx.quote?.amount_in?.currency?.code ||
     "—";
   const dstLabel =
     (tx.destination_currency?.token || tx.destination_currency?.code || "") +
-      (tx.destination_currency?.blockchain ? ` (${tx.destination_currency.blockchain})` : "") ||
+    (tx.destination_currency?.blockchain ? ` (${tx.destination_currency.blockchain})` : "") ||
     tx.quote?.amount_out?.currency?.code ||
     "—";
 
   function Row({ label, value, copyKey }: { label: string; value?: string | null; copyKey?: string }) {
     if (!value) return null;
     return (
-      <div className="flex items-center justify-between py-1 border-b border-[#DADADA] last:border-0 text-sm">
-        <span className="text-[#606060] text-xs shrink-0 mr-3">{label}</span>
+      <div className="flex items-center justify-between py-1 border-b last:border-0 text-sm">
+        <span className="text-muted-foreground text-xs shrink-0 mr-3">{label}</span>
         <div className="flex items-center gap-1 min-w-0">
           <span className="font-mono text-xs truncate">{value}</span>
           {copyKey && (
-            <button className="shrink-0 p-0.5 rounded hover:bg-[#F9F9F9] cursor-pointer" onClick={() => onCopy(value, copyKey)}>
+            <button
+              className="shrink-0 p-0.5 rounded hover:bg-muted cursor-pointer"
+              onClick={() => onCopy(value, copyKey)}
+            >
               {copiedField === copyKey ? (
                 <Check className="h-3 w-3 text-green-500" />
               ) : (
-                <Copy className="h-3 w-3 text-[#606060]" />
+                <Copy className="h-3 w-3 text-muted-foreground" />
               )}
             </button>
           )}
@@ -913,8 +1104,8 @@ function TxDetail({
   function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#606060] mb-1.5">{title}</p>
-        <div className="rounded-xl border border-[#DADADA] px-3">{children}</div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{title}</p>
+        <div className="rounded-md border px-3">{children}</div>
       </div>
     );
   }
@@ -927,30 +1118,41 @@ function TxDetail({
         <Row label="Source" value={srcLabel} />
         <Row label="Destination" value={dstLabel} />
         {tx.quote?.amount_in?.amount && (
-          <Row label="Amount In" value={`${tx.quote.amount_in.amount} ${tx.quote.amount_in.currency?.code ?? ""}`} />
+          <Row
+            label="Amount In"
+            value={`${tx.quote.amount_in.amount} ${tx.quote.amount_in.currency?.code ?? ""}`}
+          />
         )}
         {tx.quote?.amount_out?.amount && (
-          <Row label="Amount Out" value={`${tx.quote.amount_out.amount} ${tx.quote.amount_out.currency?.code ?? ""}`} />
+          <Row
+            label="Amount Out"
+            value={`${tx.quote.amount_out.amount} ${tx.quote.amount_out.currency?.code ?? ""}`}
+          />
         )}
         {tx.quote?.rate && <Row label="Rate" value={tx.quote.rate} />}
         {tx.quote?.fee?.total_fee?.amount && (
-          <Row label="Total Fee" value={`${tx.quote.fee.total_fee.amount} ${tx.quote.fee.total_fee.currency?.code ?? ""}`} />
+          <Row
+            label="Total Fee"
+            value={`${tx.quote.fee.total_fee.amount} ${tx.quote.fee.total_fee.currency?.code ?? ""}`}
+          />
         )}
-        <div className="flex items-center justify-between py-1 border-b border-[#DADADA] last:border-0 text-sm">
-          <span className="text-[#606060] text-xs">Status</span>
+        <div className="flex items-center justify-between py-1 border-b last:border-0 text-sm">
+          <span className="text-muted-foreground text-xs">Status</span>
           <span
             className={`text-xs font-medium ${
               tx.status === "Approved" || tx.status === "completed"
                 ? "text-green-600"
                 : tx.status === "Rejected" || tx.status === "failed"
-                ? "text-red-600"
-                : "text-[#606060]"
+                ? "text-destructive"
+                : "text-muted-foreground"
             }`}
           >
             {tx.status}
           </span>
         </div>
-        {tx.created_at && <Row label="Created" value={new Date(tx.created_at).toLocaleString()} />}
+        {tx.created_at && (
+          <Row label="Created" value={new Date(tx.created_at).toLocaleString()} />
+        )}
       </Section>
 
       {(rail || tx.recipient) && (
@@ -992,7 +1194,9 @@ function TxDetail({
                     typeof tx.recipient.address.country === "string"
                       ? tx.recipient.address.country
                       : tx.recipient.address.country?.code,
-                  ].filter(Boolean).join(", ")}
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
                 />
               )}
             </Section>

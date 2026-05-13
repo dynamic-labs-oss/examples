@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
   /* Earn Dashboard color tokens */
   --color-earn-primary: #4779FF;

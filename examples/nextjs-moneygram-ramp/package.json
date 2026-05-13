@@ -11,9 +11,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dynamic-labs-sdk/client": "^0.24.1",
-    "@dynamic-labs-sdk/evm": "^0.24.1",
-    "@dynamic-labs-sdk/solana": "^0.24.1",
+    "@dynamic-labs-sdk/client": "0.12.1",
+    "@dynamic-labs-sdk/evm": "0.12.1",
+    "@dynamic-labs-sdk/solana": "0.12.1",
     "@solana/spl-token": "0.4.13",
     "@solana/web3.js": "1.98.4",
     "@t3-oss/env-nextjs": "0.13.8",
