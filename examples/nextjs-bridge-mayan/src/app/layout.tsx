@@ -1,17 +1,14 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { Inter } from "next/font/google";
 import Providers from "@/lib/providers";
 
-const roboto = Roboto({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Dynamic - Cross-Chain Swaps with Mayan",
+  title: "Dynamic - Cross-Chain Swaps",
   description:
-    "Fast and secure cross-chain bridging and swapping powered by Dynamic and Mayan Finance",
+    "Fast and secure cross-chain bridging and swapping powered by Dynamic",
 };
 
 export default function RootLayout({
@@ -21,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={roboto.className} style={{ background: "rgb(249,249,249)" }}>
+      <body className={inter.className}>
         <Providers>{children}</Providers>
       </body>
     </html>

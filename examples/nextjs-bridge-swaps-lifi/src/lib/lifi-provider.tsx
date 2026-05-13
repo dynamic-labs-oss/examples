@@ -1,13 +1,27 @@
 "use client";
 
 import { config as lifiConfig } from "@lifi/sdk";
+import { useSyncWagmiConfig } from "@lifi/wallet-management";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, type PropsWithChildren, useEffect, useState } from "react";
+import type { Config, CreateConnectorFn } from "wagmi";
 import { initializeLiFiConfig, loadLiFiChains } from "./lifi";
-import { useWallet } from "./providers";
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 
-export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
-  const { evmAccount, loggedIn } = useWallet();
+type LiFiConfigParam = Parameters<typeof initializeLiFiConfig>[0];
+type SyncConfigParam = Parameters<typeof useSyncWagmiConfig>[0];
+
+interface LiFiProviderProps extends PropsWithChildren {
+  wagmiConfig: Config;
+  connectors: CreateConnectorFn[];
+}
+
+export const LiFiProvider: FC<LiFiProviderProps> = ({
+  children,
+  wagmiConfig,
+  connectors,
+}) => {
+  const { sdkHasLoaded } = useDynamicContext();
   const [isInitialized, setIsInitialized] = useState(false);
 
   const {
@@ -18,6 +32,7 @@ export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
     queryKey: ["lifi-chains"] as const,
     queryFn: async () => {
       const chains = await loadLiFiChains();
+
       if (chains.length > 0) {
         lifiConfig.setChains(chains);
       }
@@ -27,35 +42,30 @@ export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
     gcTime: 10 * 60 * 1000,
     retry: 3,
     retryDelay: 1000,
-    enabled: loggedIn,
+    enabled: sdkHasLoaded,
   });
 
   useEffect(() => {
-    if (loggedIn && !isInitialized) {
+    if (sdkHasLoaded && !isInitialized) {
       try {
-        initializeLiFiConfig(() => evmAccount);
+        initializeLiFiConfig(wagmiConfig as unknown as LiFiConfigParam);
         setIsInitialized(true);
       } catch {
         setIsInitialized(false);
       }
     }
-  }, [loggedIn, evmAccount, isInitialized]);
+  }, [sdkHasLoaded, wagmiConfig, isInitialized]);
 
-  // Re-initialize when the account changes so the wallet client getter is fresh
-  useEffect(() => {
-    if (isInitialized && evmAccount) {
-      try {
-        initializeLiFiConfig(() => evmAccount);
-      } catch {
-        // ignore
-      }
-    }
-  }, [evmAccount, isInitialized]);
+  useSyncWagmiConfig(
+    wagmiConfig as unknown as SyncConfigParam,
+    connectors,
+    chains
+  );
 
-  if (chainsLoading || !loggedIn || !isInitialized) {
+  if (chainsLoading || !sdkHasLoaded || !isInitialized) {
     return (
       <div className="flex justify-center items-center h-[100px] text-sm opacity-70">
-        {!loggedIn
+        {!sdkHasLoaded
           ? "Loading Dynamic SDK..."
           : chainsLoading
           ? "Loading LiFi chains..."
@@ -72,6 +82,5 @@ export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
     );
   }
 
-  void chains;
   return <>{children}</>;
 };

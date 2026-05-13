@@ -1,18 +1,19 @@
 "use client";
 
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { getSigner } from "@dynamic-labs/ethers-v6";
 import { useEffect, useState } from "react";
 import { parseUnits } from "viem";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 
 import { ALL_CHAINS, type ChainKey, isEVMChain } from "@/constants/chains";
 import { fetchTokensForChain, type TokenData } from "@/lib/mayan-api";
-import { useWallet } from "@/lib/providers";
 import ActionButtons from "./ActionButtons";
 import RouteDisplay from "./RouteDisplay";
 import StatusMessages from "./StatusMessages";
 import SwapForm from "./SwapForm";
 import { fetchQuote, swapFromEvm } from "@mayanfinance/swap-sdk";
 import type { Quote, Token } from "@mayanfinance/swap-sdk";
+import { isEthereumWallet } from "@dynamic-labs/ethereum";
 
 interface SimpleChain {
   id: number | string;
@@ -34,10 +35,10 @@ interface SwapState {
 }
 
 export default function MultiChainSwap() {
-  const { evmAccount, loggedIn } = useWallet();
+  const { primaryWallet, sdkHasLoaded } = useDynamicContext();
 
-  const isConnected = loggedIn && !!evmAccount;
-  const address = evmAccount?.address;
+  const isConnected = !!primaryWallet;
+  const address = primaryWallet?.address;
 
   const [swapState, setSwapState] = useState<SwapState>({
     fromChain: ALL_CHAINS[0],
@@ -55,6 +56,7 @@ export default function MultiChainSwap() {
   const [toTokens, setToTokens] = useState<Token[]>([]);
   const [isLoadingTokens, setIsLoadingTokens] = useState(false);
 
+  // Convert TokenData to Token (Mayan SDK format)
   const convertTokenDataToToken = (tokenData: TokenData): Token => {
     return {
       contract: tokenData.contract,
@@ -63,26 +65,29 @@ export default function MultiChainSwap() {
       decimals: tokenData.decimals,
       logoURI: tokenData.logoURI || "",
       chainId: tokenData.chainId,
-      mint: tokenData.contract,
-      coingeckoId: "",
-      supportsPermit: false,
-      verified: true,
-      standard: "erc20",
+      mint: tokenData.contract, // Use contract address as mint for EVM
+      coingeckoId: "", // Not available in TokenData
+      supportsPermit: false, // Default to false
+      verified: true, // Assume verified if we're fetching from API
+      standard: "erc20", // Use lowercase for TokenStandard
     } as Token;
   };
 
+  // Load tokens when chains change
   useEffect(() => {
     const loadTokens = async () => {
       if (!swapState.fromChain?.id || !swapState.toChain?.id) return;
 
       setIsLoadingTokens(true);
       try {
+        // Only load tokens for EVM chains (those with numeric IDs)
         if (isEVMChain(swapState.fromChain) && isEVMChain(swapState.toChain)) {
           const [fromTokensResponse, toTokensResponse] = await Promise.all([
             fetchTokensForChain(swapState.fromChain.id as number),
             fetchTokensForChain(swapState.toChain.id as number),
           ]);
 
+          // Convert TokenData to Token and sort by popularity
           const sortedFromTokens = sortTokensByPopularity(
             fromTokensResponse.map(convertTokenDataToToken)
           );
@@ -93,17 +98,21 @@ export default function MultiChainSwap() {
           setFromTokens(sortedFromTokens);
           setToTokens(sortedToTokens);
         } else {
+          // For non-EVM chains, set empty token arrays for now
           setFromTokens([]);
           setToTokens([]);
         }
 
+        // Clear token selections when chains change
         setSwapState((prev) => ({
           ...prev,
           fromToken: null,
           toToken: null,
           quote: null,
         }));
-      } catch {
+      } catch (error) {
+        console.error("Error loading tokens:", error);
+        // Set empty arrays on error to prevent stale data
         setFromTokens([]);
         setToTokens([]);
       } finally {
@@ -114,10 +123,12 @@ export default function MultiChainSwap() {
     loadTokens();
   }, [swapState.fromChain?.id, swapState.toChain?.id]);
 
+  // Enhanced token loading function that can be called manually
   const loadTokensForChain = async (
     chainId: number | string,
     isFromChain: boolean
   ) => {
+    // Only load tokens for EVM chains (those with numeric IDs)
     if (typeof chainId !== "number") {
       if (isFromChain) {
         setFromTokens([]);
@@ -130,18 +141,29 @@ export default function MultiChainSwap() {
     setIsLoadingTokens(true);
     try {
       const tokens = await fetchTokensForChain(chainId);
+
+      // Convert TokenData to Token and sort by popularity
       const sortedTokens = sortTokensByPopularity(
         tokens.map(convertTokenDataToToken)
       );
 
       if (isFromChain) {
         setFromTokens(sortedTokens);
-        setSwapState((prev) => ({ ...prev, fromToken: null, quote: null }));
+        setSwapState((prev) => ({
+          ...prev,
+          fromToken: null,
+          quote: null,
+        }));
       } else {
         setToTokens(sortedTokens);
-        setSwapState((prev) => ({ ...prev, toToken: null, quote: null }));
+        setSwapState((prev) => ({
+          ...prev,
+          toToken: null,
+          quote: null,
+        }));
       }
-    } catch {
+    } catch (error) {
+      console.error(`Error loading tokens for chain ${chainId}:`, error);
       if (isFromChain) {
         setFromTokens([]);
       } else {
@@ -152,9 +174,19 @@ export default function MultiChainSwap() {
     }
   };
 
+  // Sort tokens by popularity (common tokens first)
   const sortTokensByPopularity = (tokens: Token[]): Token[] => {
     const popularSymbols = [
-      "USDC", "USDT", "ETH", "WETH", "WBTC", "DAI", "MATIC", "BNB", "AVAX", "ARB",
+      "USDC",
+      "USDT",
+      "ETH",
+      "WETH",
+      "WBTC",
+      "DAI",
+      "MATIC",
+      "BNB",
+      "AVAX",
+      "ARB",
     ];
 
     return tokens.sort((a, b) => {
@@ -165,36 +197,48 @@ export default function MultiChainSwap() {
         b.symbol.toUpperCase().includes(symbol.toUpperCase())
       );
 
-      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      // If both are popular, sort by popularity index
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex;
+      }
+
+      // If only one is popular, popular one goes first
       if (aIndex !== -1) return -1;
       if (bIndex !== -1) return 1;
+
+      // If neither is popular, sort alphabetically by symbol
       return a.symbol.localeCompare(b.symbol);
     });
   };
 
   const executeSwapQuote = async (quote: Quote) => {
-    if (!isConnected || !address || !evmAccount || !quote) {
+    if (!sdkHasLoaded || !isConnected || !address || !quote) {
       throw new Error("Not ready");
     }
 
-    // Use the JS SDK viem wallet client for signing
-    const walletClient = createWalletClientForWalletAccount({
-      walletAccount: evmAccount,
-    });
+    if (primaryWallet && isEthereumWallet(primaryWallet)) {
+      try {
+        // Get the ethers signer from Dynamic
+        const signer = await getSigner(primaryWallet);
 
-    const result = await swapFromEvm(
-      quote,
-      address,
-      address,
-      null,
-      walletClient as Parameters<typeof swapFromEvm>[3],
-      null,
-      null,
-      null,
-      {}
-    );
+        // Execute the swap using the Mayan SDK with ethers signer
+        const result = await swapFromEvm(
+          quote,
+          address, // swapperAddress
+          address, // destinationAddress
+          null, // referrerAddresses
+          signer, // signer (ethers)
+          null, // permit
+          null, // overrides
+          null, // payload
+          {} // options
+        );
 
-    return result;
+        return result;
+      } catch (error) {
+        throw error;
+      }
+    }
   };
 
   const handleGetQuote = async () => {
@@ -226,6 +270,16 @@ export default function MultiChainSwap() {
         swapState.fromToken.decimals
       );
 
+      if (
+        !swapState.fromChain ||
+        !swapState.toChain ||
+        !swapState.fromToken ||
+        !swapState.toToken
+      ) {
+        throw new Error("Invalid chain or token selection");
+      }
+
+      // The chain objects are already SimpleChain objects with id property
       const fromChain = swapState.fromChain;
       const toChain = swapState.toChain;
       const fromToken = swapState.fromToken;
@@ -252,14 +306,14 @@ export default function MultiChainSwap() {
 
       setSwapState((prev) => ({
         ...prev,
-        quote,
+        quote: quote,
         isLoading: false,
         error: null,
       }));
     } catch (error) {
       setSwapState((prev) => ({
         ...prev,
-        error: (error as Error).message || "Failed to get quote",
+        error: (error as unknown as Error).message || "Failed to get quote",
         isLoading: false,
       }));
     }
@@ -293,7 +347,8 @@ export default function MultiChainSwap() {
     } catch (error) {
       setSwapState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : "Failed to execute swap",
+        error:
+          error instanceof Error ? error.message : "Failed to execute swap",
         isLoading: false,
         isExecuting: false,
       }));
@@ -309,7 +364,7 @@ export default function MultiChainSwap() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 mt-6">
+    <div className="max-w-4xl mx-auto p-6 mt-20">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Mayan Cross-Chain Swap
@@ -330,13 +385,23 @@ export default function MultiChainSwap() {
         toTokens={toTokens}
         isLoadingTokens={isLoadingTokens}
         onFromChainChange={(chain) => {
-          setSwapState((prev) => ({ ...prev, fromChain: chain, fromToken: null }));
+          setSwapState((prev) => ({
+            ...prev,
+            fromChain: chain,
+            fromToken: null,
+          }));
+          // Auto-load tokens for the selected chain
           if (chain) {
             loadTokensForChain(chain.id, true);
           }
         }}
         onToChainChange={(chain) => {
-          setSwapState((prev) => ({ ...prev, toChain: chain, toToken: null }));
+          setSwapState((prev) => ({
+            ...prev,
+            toChain: chain,
+            toToken: null,
+          }));
+          // Auto-load tokens for the selected chain
           if (chain) {
             loadTokensForChain(chain.id, false);
           }

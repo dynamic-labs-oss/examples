@@ -1,25 +1,100 @@
-"use client";
-
-import Link from "next/link";
-import DynamicLogo from "./dynamic/logo";
-import DynamicButton from "./dynamic/dynamic-button";
+import { DynamicWidget } from "@/lib/dynamic";
+import Image from "next/image";
+import { openExternalLink } from "@/lib/utils";
+import { useState } from "react";
 
 export default function Nav() {
-  return (
-    <header
-      className="sticky top-0 z-50 flex items-center justify-between h-16 px-6 bg-white"
-      style={{
-        borderBottom: "1px solid #DADADA",
-        boxShadow: "0 1px 2px 0 rgba(0,0,0,0.08)",
-      }}
-    >
-      <Link href="/" className="flex items-center">
-        <DynamicLogo width={120} height={24} className="text-[#030303]" />
-      </Link>
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-      <div className="flex items-center gap-3">
-        <DynamicButton />
+  return (
+    <div className="absolute top-0 flex items-center justify-between w-full p-4 border-b border-gray-200 dark:border-gray-700">
+      <Image
+        className="h-8 pl-4 object-contain"
+        src="/logo-dark.png"
+        alt="dynamic"
+        width="300"
+        height="60"
+      />
+
+      {/* Desktop Navigation */}
+      <div className="hidden md:flex items-center gap-3 pr-4">
+        <DynamicWidget />
+        <button
+          className="px-6 py-2 bg-white text-black font-medium rounded-xl border border-gray-300 hover:bg-gray-50 transition-colors duration-200"
+          onClick={() => openExternalLink("https://docs.dynamic.xyz")}
+        >
+          Docs
+        </button>
+        <button
+          className="px-6 py-2 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors duration-200"
+          onClick={() => openExternalLink("https://app.dynamic.xyz")}
+        >
+          Get started
+        </button>
       </div>
-    </header>
+
+      {/* Mobile Navigation */}
+      <div className="md:hidden flex items-center gap-3 pr-4">
+        <button
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
+          aria-label="Toggle menu"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            {isMenuOpen ? (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            ) : (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            )}
+          </svg>
+        </button>
+      </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMenuOpen && (
+        <div className="absolute top-full left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-lg md:hidden">
+          <div className="flex flex-col p-4 space-y-3">
+            <div className="flex justify-center">
+              <DynamicWidget />
+            </div>
+            <div className="flex gap-3">
+              <button
+                className="flex-1 px-6 py-2 bg-white text-black font-medium rounded-xl border border-gray-300 hover:bg-gray-50 transition-colors duration-200 text-center"
+                onClick={() => {
+                  openExternalLink("https://docs.dynamic.xyz");
+                  setIsMenuOpen(false);
+                }}
+              >
+                Docs
+              </button>
+              <button
+                className="flex-1 px-6 py-2 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors duration-200 text-center"
+                onClick={() => {
+                  openExternalLink("https://app.dynamic.xyz");
+                  setIsMenuOpen(false);
+                }}
+              >
+                Get started
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
