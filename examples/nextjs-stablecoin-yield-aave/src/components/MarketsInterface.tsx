@@ -14,6 +14,7 @@ import type { WalletClient } from "viem";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionOperations } from "../lib/useTransactionOperations";
 import { getChainName } from "../lib/utils";
 import { BorrowCard } from "./BorrowCard";
@@ -38,8 +39,28 @@ export function MarketsInterface() {
 
   if (activeKey !== mountKey) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <p className="text-earn-text-secondary text-sm">Loading markets...</p>
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-40" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[0, 1].map((i) => (
+            <div key={i} className="bg-white border border-earn-border rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-5 w-14 rounded-full" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28" /></div>
+                <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-28" /></div>
+                <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-20" /></div>
+                <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-12" /></div>
+              </div>
+              <div className="space-y-2"><Skeleton className="h-9 w-full rounded-lg" /><Skeleton className="h-9 w-full rounded-lg" /></div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -301,8 +322,31 @@ function MarketsInterfaceInner({
           Available Markets
         </h2>
         {marketsLoading ? (
-          <div className="bg-white border border-earn-border rounded-xl p-6">
-            <p className="text-earn-text-secondary text-sm">Loading markets...</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[0, 1].map((i) => (
+              <div key={i} className="bg-white border border-earn-border rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28" /></div>
+                  <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-28" /></div>
+                  <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-20" /></div>
+                  <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-12" /></div>
+                </div>
+                <div className="space-y-2 pt-1">
+                  <Skeleton className="h-3 w-12" />
+                  <Skeleton className="h-9 w-full rounded-lg" />
+                  <div className="flex gap-2"><Skeleton className="h-9 flex-1 rounded-lg" /><Skeleton className="h-9 w-20 rounded-lg" /></div>
+                </div>
+                <div className="space-y-2 pt-1">
+                  <Skeleton className="h-3 w-14" />
+                  <Skeleton className="h-9 w-full rounded-lg" />
+                  <div className="flex gap-2"><Skeleton className="h-9 flex-1 rounded-lg" /><Skeleton className="h-9 w-20 rounded-lg" /></div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : marketsError ? (
           <div className="bg-white border border-earn-border rounded-xl p-6">
@@ -373,8 +417,24 @@ function MarketsInterfaceInner({
               Your Supplies
             </h2>
             {userSuppliesLoading ? (
-              <div className="bg-white border border-earn-border rounded-xl p-6">
-                <p className="text-earn-text-secondary text-sm">Loading supplies...</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[0, 1].map((i) => (
+                  <div key={i} className="bg-white border border-earn-border rounded-xl p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-16" />
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-36" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5"><Skeleton className="h-3 w-14" /><Skeleton className="h-5 w-20" /></div>
+                      <div className="space-y-1.5"><Skeleton className="h-3 w-10" /><Skeleton className="h-5 w-16" /></div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Skeleton className="h-9 flex-1 rounded-lg" />
+                      <Skeleton className="h-9 w-24 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : userSuppliesError ? (
               <div className="bg-white border border-earn-border rounded-xl p-6">
@@ -408,8 +468,24 @@ function MarketsInterfaceInner({
               Your Borrows
             </h2>
             {userBorrowsLoading ? (
-              <div className="bg-white border border-earn-border rounded-xl p-6">
-                <p className="text-earn-text-secondary text-sm">Loading borrows...</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[0, 1].map((i) => (
+                  <div key={i} className="bg-white border border-earn-border rounded-xl p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-16" />
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-36" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5"><Skeleton className="h-3 w-14" /><Skeleton className="h-5 w-20" /></div>
+                      <div className="space-y-1.5"><Skeleton className="h-3 w-10" /><Skeleton className="h-5 w-16" /></div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Skeleton className="h-9 flex-1 rounded-lg" />
+                      <Skeleton className="h-9 w-20 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : userBorrowsError ? (
               <div className="bg-white border border-earn-border rounded-xl p-6">
