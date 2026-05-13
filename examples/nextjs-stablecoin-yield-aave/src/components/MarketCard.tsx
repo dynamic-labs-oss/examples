@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { createPublicClient, http, formatUnits } from "viem";
-import { base } from "viem/chains";
+import { getBalances } from "@dynamic-labs-sdk/client";
 import { safeParseUSD, safeParseHealthFactor } from "../lib/utils";
 import type { Market } from "@aave/react";
+import { useWallet } from "@/lib/providers";
+import { dynamicClient } from "@/lib/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -41,31 +42,6 @@ function preferredReserve<T extends { underlyingToken: { symbol: string; address
   return reserves[0]?.underlyingToken.address ?? "";
 }
 
-const publicClient = createPublicClient({ chain: base, transport: http() });
-
-async function fetchErc20Balance(tokenAddress: string, ownerAddress: string): Promise<string | null> {
-  try {
-    const [rawBalance, decimals] = await Promise.all([
-      publicClient.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: [{ name: "balanceOf", type: "function", inputs: [{ name: "owner", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view" }],
-        functionName: "balanceOf",
-        args: [ownerAddress as `0x${string}`],
-      }) as Promise<bigint>,
-      publicClient.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: [{ name: "decimals", type: "function", inputs: [], outputs: [{ type: "uint8" }], stateMutability: "view" }],
-        functionName: "decimals",
-      }) as Promise<number>,
-    ]);
-    const formatted = formatUnits(rawBalance, decimals);
-    const num = parseFloat(formatted);
-    return num.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  } catch {
-    return null;
-  }
-}
-
 export function MarketCard({
   market,
   isOperating,
@@ -73,6 +49,7 @@ export function MarketCard({
   onSupply,
   onBorrow,
 }: MarketCardProps) {
+  const { evmAccount, chainId } = useWallet();
   const [selectedSupplyToken, setSelectedSupplyToken] = useState<string>(
     () => preferredReserve(market.supplyReserves)
   );
@@ -89,16 +66,21 @@ export function MarketCard({
   );
 
   useEffect(() => {
-    if (!primaryWallet?.address || !selectedSupplyToken) {
+    if (!evmAccount || !selectedSupplyToken) {
       setSupplyBalance(null);
       return;
     }
     let cancelled = false;
-    fetchErc20Balance(selectedSupplyToken, primaryWallet.address).then((bal) => {
-      if (!cancelled) setSupplyBalance(bal);
-    });
+    getBalances(
+      { walletAccount: evmAccount, networkId: chainId, whitelistedContracts: [selectedSupplyToken], filterSpamTokens: false },
+      dynamicClient
+    ).then((balances) => {
+      if (cancelled) return;
+      const token = balances.find((b) => b.address?.toLowerCase() === selectedSupplyToken.toLowerCase());
+      setSupplyBalance(token ? Number(token.balance).toLocaleString(undefined, { maximumFractionDigits: 6 }) : null);
+    }).catch(() => { if (!cancelled) setSupplyBalance(null); });
     return () => { cancelled = true; };
-  }, [selectedSupplyToken, primaryWallet?.address]);
+  }, [evmAccount, selectedSupplyToken, chainId]);
 
   return (
     <Card className="w-full bg-white border border-earn-border rounded-xl shadow-sm">

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { createPublicClient, http, formatUnits } from "viem";
-import { base } from "viem/chains";
+import { getBalances } from "@dynamic-labs-sdk/client";
 import { safeParseFloat, safeParseUSD } from "../lib/utils";
 import type { MarketUserReserveSupplyPosition } from "@aave/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useWallet } from "@/lib/providers";
+import { dynamicClient } from "@/lib/dynamic";
 
 interface PrimaryWallet {
   address: string;
@@ -33,8 +34,6 @@ interface SupplyCardProps {
   ) => void;
 }
 
-const publicClient = createPublicClient({ chain: base, transport: http() });
-
 export function SupplyCard({
   supply,
   isOperating,
@@ -43,40 +42,31 @@ export function SupplyCard({
   onBorrow,
   onWithdraw,
 }: SupplyCardProps) {
+  const { evmAccount, chainId } = useWallet();
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("1.0");
 
   useEffect(() => {
-    if (!primaryWallet?.address || !supply.currency.address) {
+    if (!evmAccount || !supply.currency.address) {
       setWalletBalance(null);
       return;
     }
     let cancelled = false;
-    (async () => {
-      try {
-        const [rawBalance, decimals] = await Promise.all([
-          publicClient.readContract({
-            address: supply.currency.address as `0x${string}`,
-            abi: [{ name: "balanceOf", type: "function", inputs: [{ name: "owner", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view" }],
-            functionName: "balanceOf",
-            args: [primaryWallet.address as `0x${string}`],
-          }) as Promise<bigint>,
-          publicClient.readContract({
-            address: supply.currency.address as `0x${string}`,
-            abi: [{ name: "decimals", type: "function", inputs: [], outputs: [{ type: "uint8" }], stateMutability: "view" }],
-            functionName: "decimals",
-          }) as Promise<number>,
-        ]);
-        if (!cancelled) {
-          const formatted = parseFloat(formatUnits(rawBalance, decimals));
-          setWalletBalance(formatted.toLocaleString(undefined, { maximumFractionDigits: 6 }));
-        }
-      } catch {
-        if (!cancelled) setWalletBalance(null);
-      }
-    })();
+    getBalances(
+      {
+        walletAccount: evmAccount,
+        networkId: chainId,
+        whitelistedContracts: [supply.currency.address],
+        filterSpamTokens: false,
+      },
+      dynamicClient
+    ).then((balances) => {
+      if (cancelled) return;
+      const token = balances.find((b) => b.address?.toLowerCase() === supply.currency.address.toLowerCase());
+      setWalletBalance(token ? Number(token.balance).toLocaleString(undefined, { maximumFractionDigits: 6 }) : null);
+    }).catch(() => { if (!cancelled) setWalletBalance(null); });
     return () => { cancelled = true; };
-  }, [supply.currency.address, primaryWallet?.address]);
+  }, [evmAccount, supply.currency.address, chainId]);
 
   return (
     <Card className="w-full bg-white border border-earn-border rounded-xl shadow-sm">
