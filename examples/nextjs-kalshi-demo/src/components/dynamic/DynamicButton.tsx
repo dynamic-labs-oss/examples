@@ -107,7 +107,7 @@ export default function DynamicButton() {
     } finally {
       setLoading(false);
     }
-  }, [exportPassword, evmAccount]);
+  }, [exportPassword, solanaAccount]);
 
   const handleSendOTP = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +145,7 @@ export default function DynamicButton() {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otpVerification, otp, ensureEvmWallet]);
+  }, [otpVerification, otp, ensureSolanaWallet]);
 
   const handleGoogle = useCallback(async () => {
     setLoading(true);
@@ -161,8 +161,10 @@ export default function DynamicButton() {
     }
   }, []);
 
-  const getEvmProviders = (): WalletProviderData[] =>
-    getAvailableWalletProvidersData(dynamicClient).filter((p) => p.chain === "SOL");
+  const getSolanaProviders = (): WalletProviderData[] =>
+    getAvailableWalletProvidersData(dynamicClient).filter(
+      (p) => p.chain === "SOL" && !p.key.toLowerCase().includes("metamask")
+    );
 
   const handleConnectWallet = useCallback(async (providerKey: string) => {
     setLoading(true);
@@ -178,7 +180,7 @@ export default function DynamicButton() {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ensureEvmWallet]);
+  }, [ensureSolanaWallet]);
 
   if (loggedIn && solanaAccount) {
     return (
@@ -252,7 +254,7 @@ export default function DynamicButton() {
               <p className="text-sm font-medium text-[#030303] mb-3">Sign in to Kalshi</p>
               <button onClick={handleGoogle} disabled={loading} className={outlineBtn}><GoogleIcon />Continue with Google</button>
               <button onClick={() => { setView("email"); setError(null); }} className={outlineBtn}><EmailIcon />Continue with Email</button>
-              {getEvmProviders().length > 0 && (
+              {getSolanaProviders().length > 0 && (
                 <>
                   <div className="flex items-center gap-2 my-1">
                     <div className="flex-1 h-px bg-[#DADADA]" />
@@ -293,11 +295,11 @@ export default function DynamicButton() {
               <button type="button" onClick={() => { setView("menu"); setError(null); }} className="flex items-center gap-1 text-xs text-[#606060] hover:text-[#030303] mb-1">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>Back
               </button>
-              <p className="text-sm font-medium text-[#030303] mb-3">Choose an EVM wallet</p>
-              {getEvmProviders().length === 0 ? (
+              <p className="text-sm font-medium text-[#030303] mb-3">Choose a Solana wallet</p>
+              {getSolanaProviders().length === 0 ? (
                 <p className="text-xs text-[#606060]">No Solana wallets detected. Install Phantom or another Solana wallet.</p>
               ) : (
-                getEvmProviders().map((provider) => (
+                getSolanaProviders().map((provider) => (
                   <button key={provider.key} onClick={() => handleConnectWallet(provider.key)} disabled={loading} className={outlineBtn}>
                     {provider.metadata.icon && (
                       // eslint-disable-next-line @next/next/no-img-element

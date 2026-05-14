@@ -49,35 +49,35 @@ export function MarketStats({ markets }: MarketStatsProps) {
 
   return (
     <div className="pt-[16px] pb-[8px] grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div className="bg-[#0e1219] border border-[#262a34] rounded-[12px] p-4">
-        <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[13px] text-[rgba(221,226,246,0.5)] mb-1">
+      <div className="bg-white border border-[#DADADA] rounded-[12px] p-4 shadow-sm">
+        <p className="font-medium text-[13px] text-[#606060] mb-1">
           Total Markets
         </p>
-        <p className="font-['SF_Pro_Rounded:Bold',sans-serif] text-[20px] text-[#dde2f6]">
+        <p className="font-bold text-[20px] text-[#030303]">
           {stats.totalMarkets}
         </p>
       </div>
-      <div className="bg-[#0e1219] border border-[#262a34] rounded-[12px] p-4">
-        <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[13px] text-[rgba(221,226,246,0.5)] mb-1">
+      <div className="bg-white border border-[#DADADA] rounded-[12px] p-4 shadow-sm">
+        <p className="font-medium text-[13px] text-[#606060] mb-1">
           Total Volume
         </p>
-        <p className="font-['SF_Pro_Rounded:Bold',sans-serif] text-[20px] text-[#dde2f6]">
+        <p className="font-bold text-[20px] text-[#030303]">
           {formatNumber(stats.totalVolume)}
         </p>
       </div>
-      <div className="bg-[#0e1219] border border-[#262a34] rounded-[12px] p-4">
-        <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[13px] text-[rgba(221,226,246,0.5)] mb-1">
+      <div className="bg-white border border-[#DADADA] rounded-[12px] p-4 shadow-sm">
+        <p className="font-medium text-[13px] text-[#606060] mb-1">
           Total Traders
         </p>
-        <p className="font-['SF_Pro_Rounded:Bold',sans-serif] text-[20px] text-[#dde2f6]">
+        <p className="font-bold text-[20px] text-[#030303]">
           {stats.totalTraders.toLocaleString()}
         </p>
       </div>
-      <div className="bg-[#0e1219] border border-[#262a34] rounded-[12px] p-4">
-        <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[13px] text-[rgba(221,226,246,0.5)] mb-1">
+      <div className="bg-white border border-[#DADADA] rounded-[12px] p-4 shadow-sm">
+        <p className="font-medium text-[13px] text-[#606060] mb-1">
           Avg Price Diff
         </p>
-        <p className="font-['SF_Pro_Rounded:Bold',sans-serif] text-[20px] text-[#dde2f6]">
+        <p className="font-bold text-[20px] text-[#030303]">
           {stats.avgPriceDiff}%
         </p>
       </div>

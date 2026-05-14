@@ -8,4 +8,6 @@ export const dynamicClient = createDynamicClient({
   },
 });
 
-addSolanaExtension();
+if (typeof window !== "undefined") {
+  addSolanaExtension();
+}

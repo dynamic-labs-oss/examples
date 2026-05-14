@@ -84,8 +84,8 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
   const userTokensWithBalance = useMemo(() => {
     if (!tokenBalances || !fromChain) return [];
     return tokenBalances.filter(
-      (b) => b.networkId === fromChain.id && b.balance > 0
-    );
+      (b) => b.networkId === fromChain.id && b.balance > 0 && b.address !== undefined
+    ) as { address: string; balance: number; networkId: number }[];
   }, [tokenBalances, fromChain]);
 
   // Load tokens user has balance for
@@ -132,7 +132,7 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
       clearError();
       setView("executing");
 
-      const routes = await getRoutesForSwap({
+      const swapParams = {
         fromChainId: fromChain.id,
         toChainId: toChain.id,
         fromTokenAddress: selectedFromToken.address,
@@ -140,7 +140,9 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
         fromAmount: tokenAmount,
         fromAddress: evmAccount.address,
         toAddress: embeddedWalletAddress,
-      });
+      };
+
+      const routes = await getRoutesForSwap(swapParams);
 
       if (routes.length === 0) throw new Error("No routes found");
 

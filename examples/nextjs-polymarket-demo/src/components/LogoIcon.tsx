@@ -36,7 +36,7 @@ export default function Logo() {
           </defs>
         </svg>
       </div>
-      <div className="flex flex-col font-['SF_Pro_Rounded:Semibold',sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[#dde2f6] text-[22.007px] text-nowrap text-right">
+      <div className="flex flex-col font-semibold justify-center leading-[0] relative shrink-0 text-[#030303] text-[22px] text-nowrap">
         <p className="leading-[normal] whitespace-pre">BetPulse</p>
       </div>
     </div>

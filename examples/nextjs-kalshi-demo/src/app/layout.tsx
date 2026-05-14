@@ -21,17 +21,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={roboto.variable} style={{ background: "rgb(249,249,249)" }}>
-      <body style={{ background: "rgb(249,249,249)", fontFamily: "var(--font-roboto), Roboto, sans-serif" }}>
+    <html lang="en" className={roboto.variable}>
+      <body>
         <Providers>
           <div className="flex flex-col min-h-screen">
-            <div className="flex-1 flex justify-center">
-              <div
-                className="box-border w-full px-[20px] sm:px-[32px] md:px-[48px] lg:px-[64px] xl:px-[80px]"
-                style={{ maxWidth: "1440px" }}
-              >
-                {children}
-              </div>
+            <div className="flex-1">
+              {children}
             </div>
             <footer className="border-t border-[#DADADA] py-4 text-center text-sm text-[#606060]">
               Powered by{" "}

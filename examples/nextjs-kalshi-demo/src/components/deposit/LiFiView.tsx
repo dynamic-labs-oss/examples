@@ -62,7 +62,9 @@ export function LiFiView({ embeddedWalletAddress, onBack }: LiFiViewProps) {
   // Tokens the user actually has balance for
   const userTokensWithBalance = useMemo(() => {
     if (!tokenBalances) return [];
-    return tokenBalances.filter((b) => b.balance > 0);
+    return tokenBalances.filter(
+      (b): b is { address: string; balance: number } => b.balance > 0 && b.address !== undefined
+    );
   }, [tokenBalances]);
 
   // Filter LiFi token list to only tokens the user holds

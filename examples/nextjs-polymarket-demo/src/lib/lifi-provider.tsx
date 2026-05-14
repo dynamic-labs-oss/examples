@@ -31,7 +31,7 @@ export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
   const getDynamicWalletClient = useCallback(async () => {
     const account = evmAccountRef.current;
     if (!account) return null;
-    return createWalletClientForWalletAccount({ walletAccount: account, chain: polygon });
+    return await createWalletClientForWalletAccount({ walletAccount: account });
   }, []);
 
   useEffect(() => {

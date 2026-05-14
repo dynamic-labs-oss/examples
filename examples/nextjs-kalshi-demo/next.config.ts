@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  transpilePackages: ["@lifi/sdk"],
   webpack: (config, { isServer }) => {
     // Add externals for server-side only modules
     config.externals.push("pino-pretty", "lokijs", "encoding");

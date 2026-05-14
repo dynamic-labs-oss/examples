@@ -8,4 +8,6 @@ export const dynamicClient = createDynamicClient({
   },
 });
 
-addEvmExtension();
+if (typeof window !== "undefined") {
+  addEvmExtension();
+}

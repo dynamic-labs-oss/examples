@@ -110,32 +110,32 @@ interface ToastItemProps {
 
 function ToastItem({ toast, onDismiss }: ToastItemProps) {
   const icons = {
-    success: <CheckCircle className="w-5 h-5 text-[#10b981]" />,
-    error: <XCircle className="w-5 h-5 text-[#ef4444]" />,
-    info: <AlertCircle className="w-5 h-5 text-[#72D0ED]" />,
-    loading: <Loader2 className="w-5 h-5 text-[#72D0ED] animate-spin" />,
+    success: <CheckCircle className="w-5 h-5 text-[#3ea34b]" />,
+    error: <XCircle className="w-5 h-5 text-[#e64341]" />,
+    info: <AlertCircle className="w-5 h-5 text-[#4779FF]" />,
+    loading: <Loader2 className="w-5 h-5 text-[#4779FF] animate-spin" />,
   };
 
   const bgColors = {
-    success: "bg-[rgba(16,185,129,0.1)] border-[rgba(16,185,129,0.2)]",
-    error: "bg-[rgba(239,68,68,0.1)] border-[rgba(239,68,68,0.2)]",
-    info: "bg-[rgba(114,208,237,0.1)] border-[rgba(114,208,237,0.2)]",
-    loading: "bg-[rgba(114,208,237,0.1)] border-[rgba(114,208,237,0.2)]",
+    success: "bg-white border-[#DADADA]",
+    error: "bg-white border-[#DADADA]",
+    info: "bg-white border-[#DADADA]",
+    loading: "bg-white border-[#DADADA]",
   };
 
   return (
     <div
-      className={`flex items-start gap-3 p-4 rounded-[12px] border backdrop-blur-sm shadow-lg animate-in slide-in-from-right-5 fade-in duration-200 ${
+      className={`flex items-start gap-3 p-4 rounded-[12px] border shadow-lg animate-in slide-in-from-right-5 fade-in duration-200 ${
         bgColors[toast.type]
       }`}
     >
       <div className="shrink-0 mt-0.5">{icons[toast.type]}</div>
       <div className="flex-1 min-w-0">
-        <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] text-[#dde2f6]">
+        <p className="text-[14px] text-[#030303]">
           {toast.title}
         </p>
         {toast.message && (
-          <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[12px] text-[rgba(221,226,246,0.6)] mt-1">
+          <p className="text-[12px] text-[#606060] mt-1">
             {toast.message}
           </p>
         )}
@@ -144,7 +144,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         <button
           type="button"
           onClick={() => onDismiss(toast.id)}
-          className="shrink-0 w-6 h-6 flex items-center justify-center text-[rgba(221,226,246,0.5)] hover:text-[#dde2f6] transition-colors cursor-pointer"
+          className="shrink-0 w-6 h-6 flex items-center justify-center text-[#606060] hover:text-[#030303] transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>

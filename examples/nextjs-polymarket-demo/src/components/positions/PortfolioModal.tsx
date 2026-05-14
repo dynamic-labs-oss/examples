@@ -303,7 +303,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
       {/* Blur Overlay */}
       <button
         type="button"
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 border-0 p-0 cursor-pointer"
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 border-0 p-0 cursor-pointer"
         onClick={onClose}
         onKeyDown={(e) => {
           if (e.key === "Escape") onClose();
@@ -314,7 +314,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none overflow-y-auto">
         <div
-          className="bg-[#242735] rounded-[16px] w-full max-w-[520px] shadow-lg overflow-hidden pointer-events-auto my-auto max-h-[calc(100vh-2rem)] flex flex-col"
+          className="bg-white border border-[#DADADA] rounded-[16px] w-full max-w-[520px] shadow-lg overflow-hidden pointer-events-auto my-auto max-h-[calc(100vh-2rem)] flex flex-col"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose();
@@ -324,10 +324,10 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
           aria-labelledby={modalTitleId}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-[20px] py-[16px] border-b border-[rgba(22,22,22,0.06)] shrink-0">
+          <div className="flex items-center justify-between px-[20px] py-[16px] border-b border-[#DADADA] shrink-0">
             <h2
               id={modalTitleId}
-              className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[18px] text-[#dde2f6]"
+              className="text-[18px] text-[#030303]"
             >
               Portfolio
             </h2>
@@ -336,7 +336,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
                 type="button"
                 onClick={handleRefresh}
                 disabled={isFetching}
-                className={`w-[32px] h-[32px] flex items-center justify-center text-[#72D0ED] hover:bg-[rgba(114,208,237,0.1)] rounded-[8px] transition-colors cursor-pointer ${
+                className={`w-[32px] h-[32px] flex items-center justify-center text-[#4779FF] hover:bg-[rgba(71,121,255,0.1)] rounded-[8px] transition-colors cursor-pointer ${
                   isFetching ? "animate-spin" : ""
                 }`}
                 aria-label="Refresh"
@@ -346,7 +346,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="w-[32px] h-[32px] flex items-center justify-center text-[#dde2f6] hover:text-[#72D0ED] hover:bg-[rgba(114,208,237,0.1)] rounded-[8px] transition-colors cursor-pointer"
+                className="w-[32px] h-[32px] flex items-center justify-center text-[#606060] hover:text-[#4779FF] hover:bg-[rgba(71,121,255,0.1)] rounded-[8px] transition-colors cursor-pointer"
                 aria-label="Close"
               >
                 <X className="w-[20px] h-[20px]" strokeWidth={2} />
@@ -355,21 +355,21 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-[rgba(22,22,22,0.06)] px-[20px]">
+          <div className="flex border-b border-[#DADADA] px-[20px]">
             {(["positions", "orders"] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
-                className={`px-[16px] py-[12px] font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] border-b-2 transition-colors cursor-pointer ${
+                className={`px-[16px] py-[12px] text-[14px] border-b-2 transition-colors cursor-pointer ${
                   activeTab === tab
-                    ? "text-[#72D0ED] border-[#72D0ED]"
-                    : "text-[rgba(221,226,246,0.5)] border-transparent hover:text-[#dde2f6]"
+                    ? "text-[#4779FF] border-[#4779FF]"
+                    : "text-[#606060] border-transparent hover:text-[#030303]"
                 }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 {tab === "orders" && orders && orders.length > 0 && (
-                  <span className="ml-[6px] px-[6px] py-[1px] bg-[rgba(114,208,237,0.2)] text-[#72D0ED] text-[11px] rounded-full">
+                  <span className="ml-[6px] px-[6px] py-[1px] bg-[rgba(71,121,255,0.15)] text-[#4779FF] text-[11px] rounded-full">
                     {orders.length}
                   </span>
                 )}
@@ -379,38 +379,38 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
 
           {/* Portfolio Summary - Only show for positions tab */}
           {activeTab === "positions" && positions && positions.length > 0 && (
-            <div className="px-[20px] py-[16px] border-b border-[rgba(22,22,22,0.06)] bg-[#1a1d26]">
+            <div className="px-[20px] py-[16px] border-b border-[#DADADA] bg-[#F9F9F9]">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[11px] text-[rgba(221,226,246,0.5)] uppercase tracking-[0.5px] mb-[4px]">
+                  <p className="text-[11px] text-[#606060] uppercase tracking-[0.5px] mb-[4px]">
                     Total Value
                   </p>
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[24px] text-[#dde2f6]">
+                  <p className="text-[24px] text-[#030303]">
                     ${portfolioSummary.totalValue.toFixed(2)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[11px] text-[rgba(221,226,246,0.5)] uppercase tracking-[0.5px] mb-[4px]">
+                  <p className="text-[11px] text-[#606060] uppercase tracking-[0.5px] mb-[4px]">
                     Total P&L
                   </p>
                   <div className="flex items-center gap-[6px] justify-end">
                     {isProfitable ? (
-                      <TrendingUp className="w-[18px] h-[18px] text-[#10b981]" />
+                      <TrendingUp className="w-[18px] h-[18px] text-[#3ea34b]" />
                     ) : (
-                      <TrendingDown className="w-[18px] h-[18px] text-[#ef4444]" />
+                      <TrendingDown className="w-[18px] h-[18px] text-[#e64341]" />
                     )}
                     <span
-                      className={`font-['SF_Pro_Rounded:Semibold',sans-serif] text-[20px] ${
-                        isProfitable ? "text-[#10b981]" : "text-[#ef4444]"
+                      className={`text-[20px] ${
+                        isProfitable ? "text-[#3ea34b]" : "text-[#e64341]"
                       }`}
                     >
                       ${Math.abs(portfolioSummary.totalPnl).toFixed(2)}
                     </span>
                     <span
-                      className={`font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] ${
+                      className={`text-[14px] ${
                         isProfitable
-                          ? "text-[rgba(16,185,129,0.7)]"
-                          : "text-[rgba(239,68,68,0.7)]"
+                          ? "text-[#3ea34b]"
+                          : "text-[#e64341]"
                       }`}
                     >
                       ({isProfitable ? "+" : ""}
@@ -424,7 +424,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
 
           {/* Filters - Only show for positions tab */}
           {activeTab === "positions" && (
-            <div className="px-[20px] py-[12px] border-b border-[rgba(22,22,22,0.06)] flex items-center justify-between gap-[12px]">
+            <div className="px-[20px] py-[12px] border-b border-[#DADADA] flex items-center justify-between gap-[12px]">
               {/* Filter Tabs */}
               <div className="flex gap-[8px]">
                 {(["all", "active", "redeemable"] as FilterType[]).map((f) => (
@@ -432,10 +432,10 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
                     key={f}
                     type="button"
                     onClick={() => setFilter(f)}
-                    className={`px-[12px] py-[6px] rounded-[8px] font-['SF_Pro_Rounded:Semibold',sans-serif] text-[12px] transition-colors cursor-pointer ${
+                    className={`px-[12px] py-[6px] rounded-[8px] text-[12px] transition-colors cursor-pointer ${
                       filter === f
-                        ? "bg-[#72D0ED] text-[#0e1219]"
-                        : "bg-[#191b25] text-[rgba(221,226,246,0.6)] hover:text-[#dde2f6]"
+                        ? "bg-[#4779FF] text-white"
+                        : "bg-[#F0F0F0] text-[#606060] hover:bg-[#EBEBEB]"
                     }`}
                   >
                     {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -447,7 +447,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortType)}
-                className="bg-[#191b25] text-[rgba(221,226,246,0.6)] font-['SF_Pro_Rounded:Semibold',sans-serif] text-[12px] px-[10px] py-[6px] rounded-[8px] border-none outline-none cursor-pointer"
+                className="bg-white border border-[#DADADA] text-[#030303] text-[12px] px-[10px] py-[6px] rounded-[8px] outline-none cursor-pointer"
               >
                 <option value="value">Sort by Value</option>
                 <option value="pnl">Sort by P&L</option>
@@ -462,33 +462,33 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
               // Positions Tab Content
               isLoadingPositions ? (
                 <div className="flex flex-col items-center justify-center py-[40px]">
-                  <div className="w-[32px] h-[32px] border-2 border-[#72D0ED] border-t-transparent rounded-full animate-spin mb-[12px]" />
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] text-[rgba(221,226,246,0.5)]">
+                  <div className="w-[32px] h-[32px] border-2 border-[#4779FF] border-t-transparent rounded-full animate-spin mb-[12px]" />
+                  <p className="text-[14px] text-[#606060]">
                     Loading positions...
                   </p>
                 </div>
               ) : positionsError ? (
                 <div className="flex flex-col items-center justify-center py-[40px]">
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] text-[#ef4444] mb-[8px]">
+                  <p className="text-[14px] text-[#e64341] mb-[8px]">
                     Failed to load positions
                   </p>
                   <button
                     type="button"
                     onClick={() => refetchPositions()}
-                    className="text-[#72D0ED] font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] hover:underline cursor-pointer"
+                    className="text-[#4779FF] text-[14px] hover:underline cursor-pointer"
                   >
                     Try again
                   </button>
                 </div>
               ) : !positions || filteredAndSortedPositions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-[40px]">
-                  <div className="w-[64px] h-[64px] rounded-full bg-[rgba(114,208,237,0.1)] flex items-center justify-center mb-[16px]">
+                  <div className="w-[64px] h-[64px] rounded-full bg-[rgba(71,121,255,0.1)] flex items-center justify-center mb-[16px]">
                     <span className="text-[32px]">📊</span>
                   </div>
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[16px] text-[#dde2f6] mb-[4px]">
+                  <p className="text-[16px] text-[#030303] mb-[4px]">
                     No Positions
                   </p>
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[13px] text-[rgba(221,226,246,0.5)] text-center">
+                  <p className="text-[13px] text-[#606060] text-center">
                     {filter === "all"
                       ? "You don't have any positions yet. Start trading to see your positions here."
                       : filter === "active"
@@ -515,33 +515,33 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
               // Orders Tab Content
               isLoadingOrders ? (
                 <div className="flex flex-col items-center justify-center py-[40px]">
-                  <div className="w-[32px] h-[32px] border-2 border-[#72D0ED] border-t-transparent rounded-full animate-spin mb-[12px]" />
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] text-[rgba(221,226,246,0.5)]">
+                  <div className="w-[32px] h-[32px] border-2 border-[#4779FF] border-t-transparent rounded-full animate-spin mb-[12px]" />
+                  <p className="text-[14px] text-[#606060]">
                     Loading orders...
                   </p>
                 </div>
               ) : ordersError ? (
                 <div className="flex flex-col items-center justify-center py-[40px]">
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] text-[#ef4444] mb-[8px]">
+                  <p className="text-[14px] text-[#e64341] mb-[8px]">
                     Failed to load orders
                   </p>
                   <button
                     type="button"
                     onClick={() => refetchOrders()}
-                    className="text-[#72D0ED] font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] hover:underline cursor-pointer"
+                    className="text-[#4779FF] text-[14px] hover:underline cursor-pointer"
                   >
                     Try again
                   </button>
                 </div>
               ) : !orders || orders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-[40px]">
-                  <div className="w-[64px] h-[64px] rounded-full bg-[rgba(114,208,237,0.1)] flex items-center justify-center mb-[16px]">
+                  <div className="w-[64px] h-[64px] rounded-full bg-[rgba(71,121,255,0.1)] flex items-center justify-center mb-[16px]">
                     <span className="text-[32px]">📋</span>
                   </div>
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[16px] text-[#dde2f6] mb-[4px]">
+                  <p className="text-[16px] text-[#030303] mb-[4px]">
                     No Open Orders
                   </p>
-                  <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[13px] text-[rgba(221,226,246,0.5)] text-center">
+                  <p className="text-[13px] text-[#606060] text-center">
                     You don&apos;t have any pending orders.
                   </p>
                 </div>

@@ -35,14 +35,53 @@ interface TransformedMarket {
   volume: number; // For sorting/filtering
 }
 
-// Pre-compiled category map
 const CATEGORY_MAP: Record<string, string> = {
+  // Game Lines
   sports: "Game Lines",
+  nfl: "Game Lines",
+  nba: "Game Lines",
+  mlb: "Game Lines",
+  nhl: "Game Lines",
+  soccer: "Game Lines",
+  football: "Game Lines",
+  basketball: "Game Lines",
+  baseball: "Game Lines",
+  hockey: "Game Lines",
+  tennis: "Game Lines",
+  golf: "Game Lines",
+  mma: "Game Lines",
+  boxing: "Game Lines",
+  // Player Props
+  player: "Player Props",
+  prop: "Player Props",
+  // Head to Head
+  "head-to-head": "Head to Head",
+  // Futures / Politics
   politics: "Futures",
+  election: "Futures",
+  political: "Futures",
   crypto: "Futures",
-  entertainment: "Specials",
+  bitcoin: "Futures",
+  ethereum: "Futures",
+  economy: "Futures",
+  financial: "Futures",
   "current-affairs": "Futures",
-  "US-current-affairs": "Futures",
+  "us-current-affairs": "Futures",
+  // Awards
+  award: "Awards",
+  oscar: "Awards",
+  grammy: "Awards",
+  emmy: "Awards",
+  // Season Totals
+  season: "Season Totals",
+  // Live
+  live: "Live",
+  // Specials
+  entertainment: "Specials",
+  celebrity: "Specials",
+  science: "Specials",
+  tech: "Specials",
+  weather: "Specials",
 };
 
 function transformMarket(
