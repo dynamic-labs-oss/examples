@@ -43,7 +43,9 @@
   "browser": {
     "crypto": false
   },
-  "overrides": {
-    "@solana/web3.js": "1.98.4"
+  "pnpm": {
+    "overrides": {
+      "@solana/web3.js": "1.98.4"
+    }
   }
 }
