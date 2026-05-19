@@ -1,0 +1,10 @@
+{
+  "chain": "EVM",
+  "address": "0x...",
+  "walletId": "wallet-uuid-here",
+  "walletApiKey": "api-key-here",
+  "delegatedShare": {
+    "keyShareId": "optional-keygen-id",
+    "secretShare": "hex-encoded-secret-share"
+  }
+}
