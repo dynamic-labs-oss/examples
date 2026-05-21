@@ -39,7 +39,7 @@ export default function Logo() {
           </svg>
         </div>
       </div>
-      <span className="font-['Clash_Display',sans-serif] text-[20px] font-bold bg-linear-to-r from-[#8b5cf6] to-[#06b6d4] bg-clip-text text-transparent hidden sm:block">
+      <span className="text-[20px] font-bold text-[#030303] hidden sm:block">
         BetPulse
       </span>
     </div>

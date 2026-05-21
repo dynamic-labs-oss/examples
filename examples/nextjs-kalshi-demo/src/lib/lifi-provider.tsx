@@ -10,18 +10,19 @@ import {
   type PropsWithChildren,
 } from "react";
 import { initializeLiFiConfig, loadLiFiChains } from "./lifi";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { isSolanaWallet } from "@dynamic-labs/solana";
+import { useWallet } from "./providers";
+import { signTransaction, getSolanaConnection } from "@dynamic-labs-sdk/solana";
+import { getActiveNetworkData } from "@dynamic-labs-sdk/client";
+import { dynamicClient } from "./dynamic";
 import { PublicKey } from "@solana/web3.js";
 
 export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
-  const { sdkHasLoaded, primaryWallet } = useDynamicContext();
+  const { solanaAccount, loggedIn } = useWallet();
   const initRef = useRef(false);
-  // Keep a ref so the stable getWalletAdapter always reads the latest wallet
-  const primaryWalletRef = useRef(primaryWallet);
+  const solanaAccountRef = useRef(solanaAccount);
   useEffect(() => {
-    primaryWalletRef.current = primaryWallet;
-  }, [primaryWallet]);
+    solanaAccountRef.current = solanaAccount;
+  }, [solanaAccount]);
 
   const { data: chains } = useQuery({
     queryKey: ["lifi-chains"],
@@ -32,27 +33,45 @@ export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
     },
     staleTime: 5 * 60 * 1000,
     retry: 3,
-    enabled: sdkHasLoaded,
+    enabled: loggedIn,
   });
 
-  // Stable function (no deps) — always reads from ref so LiFi always gets the current wallet.
-  // We build a minimal SignerWalletAdapter shape that LiFi's SolanaStepExecutor requires:
-  //   publicKey: @solana/web3.js PublicKey (has toString())
-  //   signTransaction / signAllTransactions: delegated to Dynamic signer
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getWalletAdapter = useCallback(async (): Promise<any> => {
-    const wallet = primaryWalletRef.current;
-    if (!wallet || !isSolanaWallet(wallet)) return null;
-    const signer = await wallet.getSigner();
+    const account = solanaAccountRef.current;
+    if (!account) return null;
+
+    const { networkData } = await getActiveNetworkData({ walletAccount: account }, dynamicClient);
+    const connection = networkData
+      ? getSolanaConnection({ networkData })
+      : null;
+
     return {
-      publicKey: new PublicKey(wallet.address),
-      signTransaction: signer.signTransaction.bind(signer),
-      signAllTransactions: signer.signAllTransactions.bind(signer),
+      publicKey: new PublicKey(account.address),
+      signTransaction: async (tx: Parameters<typeof signTransaction>[0]["transaction"]) => {
+        const { signedTransaction } = await signTransaction(
+          { walletAccount: account, transaction: tx },
+          dynamicClient
+        );
+        return signedTransaction;
+      },
+      signAllTransactions: async (txs: Parameters<typeof signTransaction>[0]["transaction"][]) => {
+        const signed = [];
+        for (const tx of txs) {
+          const { signedTransaction } = await signTransaction(
+            { walletAccount: account, transaction: tx },
+            dynamicClient
+          );
+          signed.push(signedTransaction);
+        }
+        return signed;
+      },
+      connection,
     };
   }, []);
 
   useEffect(() => {
-    if (sdkHasLoaded && !initRef.current && chains?.length) {
+    if (loggedIn && !initRef.current && chains?.length) {
       try {
         initializeLiFiConfig(getWalletAdapter);
         initRef.current = true;
@@ -60,7 +79,7 @@ export const LiFiProvider: FC<PropsWithChildren> = ({ children }) => {
         console.error("Failed to initialize LI.FI:", error);
       }
     }
-  }, [sdkHasLoaded, getWalletAdapter, chains]);
+  }, [loggedIn, getWalletAdapter, chains]);
 
   return <>{children}</>;
 };

@@ -4,22 +4,22 @@
 
 :root {
   --font-size: 16px;
-  --background: #0a0b0f;
-  --foreground: #dde2f6;
-  --card: #12131a;
-  --card-foreground: #dde2f6;
-  --primary: #8b5cf6;
+  --background: rgb(249,249,249);
+  --foreground: #030303;
+  --card: #ffffff;
+  --card-foreground: #030303;
+  --primary: #4779FF;
   --primary-foreground: #ffffff;
-  --secondary: #06b6d4;
-  --secondary-foreground: #ffffff;
-  --accent: #14b8a6;
+  --secondary: #606060;
+  --secondary-foreground: #030303;
+  --accent: #4779FF;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #262a34;
+  --border: #DADADA;
   --input: transparent;
-  --input-background: #1a1b23;
-  --ring: #8b5cf6;
+  --input-background: #F9F9F9;
+  --ring: #4779FF;
   --radius: 0.625rem;
 }
 
@@ -60,7 +60,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Clash Display", "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
   #root {
@@ -112,87 +112,70 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #12131a;
+  background: #F9F9F9;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #262a34;
+  background: #DADADA;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #363a48;
+  background: #ADADAD;
 }
 
 /* Dynamic.xyz Modal Theme Customization */
 .dynamic-shadow-dom {
-  /* Fonts */
-  --dynamic-font-family-primary: "Clash Display", "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --dynamic-font-family-numbers: "Clash Display", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --dynamic-font-family-primary: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --dynamic-font-family-numbers: "Roboto", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Base Colors - Dark theme with purple accents */
-  --dynamic-base-1: #1a1b23;
-  --dynamic-base-2: #252630;
-  --dynamic-base-3: #2d2e3a;
-  --dynamic-base-4: #12131a;
-  --dynamic-base-5: rgba(22, 22, 22, 0.06);
+  --dynamic-base-1: #ffffff;
+  --dynamic-base-2: #f9f9f9;
+  --dynamic-base-3: #f0f0f0;
+  --dynamic-base-4: #ffffff;
+  --dynamic-base-5: rgba(0, 0, 0, 0.04);
 
-  /* Brand Colors - Purple to cyan gradient */
-  --dynamic-brand-primary-color: #8b5cf6;
-  --dynamic-brand-hover-color: rgba(139, 92, 246, 0.8);
-  --dynamic-brand-secondary-color: rgba(139, 92, 246, 0.15);
+  --dynamic-brand-primary-color: #4779FF;
+  --dynamic-brand-hover-color: rgba(71, 121, 255, 0.85);
+  --dynamic-brand-secondary-color: rgba(71, 121, 255, 0.1);
 
-  /* Connection Status */
-  --dynamic-connection-green: #14b8a6;
+  --dynamic-connection-green: #3ea34b;
+  --dynamic-border-radius: 9.135px;
+  --dynamic-hover: rgba(71, 121, 255, 0.06);
 
-  /* Border Radius */
-  --dynamic-border-radius: 12px;
+  --dynamic-error-1: #e64341;
+  --dynamic-error-2: rgba(230, 67, 65, 0.1);
+  --dynamic-success-1: #3ea34b;
+  --dynamic-success-2: rgba(62, 163, 75, 0.1);
 
-  /* Hover States */
-  --dynamic-hover: rgba(139, 92, 246, 0.1);
-
-  /* Error Colors */
-  --dynamic-error-1: #ef4444;
-  --dynamic-error-2: rgba(239, 68, 68, 0.1);
-
-  /* Success Colors */
-  --dynamic-success-1: #14b8a6;
-  --dynamic-success-2: rgba(20, 184, 166, 0.1);
-
-  /* Footer */
-  --dynamic-footer-background-color: #252630;
-  --dynamic-footer-text-color: rgba(221, 226, 246, 0.6);
-  --dynamic-footer-icon-color: #8b5cf6;
-  --dynamic-footer-arrow-color: rgba(221, 226, 246, 0.6);
-  --dynamic-footer-border: 1px solid #262a34;
+  --dynamic-footer-background-color: #f9f9f9;
+  --dynamic-footer-text-color: #606060;
+  --dynamic-footer-icon-color: #4779FF;
+  --dynamic-footer-arrow-color: #606060;
+  --dynamic-footer-border: 1px solid #DADADA;
   --dynamic-footer-padding: 1rem 1.25rem;
 
-  /* Loading Animation */
   --dynamic-loading-animation-gradient: linear-gradient(
     90deg,
-    rgba(139, 92, 246, 0) 0,
-    rgba(139, 92, 246, 0.1) 20%,
-    rgba(139, 92, 246, 0.2) 60%,
-    rgba(139, 92, 246, 0)
+    rgba(71, 121, 255, 0) 0,
+    rgba(71, 121, 255, 0.08) 20%,
+    rgba(71, 121, 255, 0.15) 60%,
+    rgba(71, 121, 255, 0)
   );
 
-  /* Overlay */
-  --dynamic-overlay: rgba(10, 11, 15, 0.8);
+  --dynamic-overlay: rgba(0, 0, 0, 0.4);
 
-  /* Shadows */
-  --dynamic-shadow-down-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.02);
+  --dynamic-shadow-down-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.06);
   --dynamic-shadow-down-2: 0px 2px 4px 0px rgba(0, 0, 0, 0.08);
-  --dynamic-shadow-down-3: 0px 4px 8px 0px rgba(0, 0, 0, 0.12);
-  --dynamic-shadow-up-1: 0px -2px 8px 0px rgba(0, 0, 0, 0.08);
+  --dynamic-shadow-down-3: 0px 4px 8px 0px rgba(0, 0, 0, 0.1);
+  --dynamic-shadow-up-1: 0px -2px 8px 0px rgba(0, 0, 0, 0.06);
 
-  /* Text Colors */
-  --dynamic-text-primary: #dde2f6;
-  --dynamic-text-secondary: rgba(221, 226, 246, 0.6);
-  --dynamic-text-tertiary: rgba(221, 226, 246, 0.4);
-  --dynamic-text-link: #8b5cf6;
+  --dynamic-text-primary: #030303;
+  --dynamic-text-secondary: #606060;
+  --dynamic-text-tertiary: #999999;
+  --dynamic-text-link: #4779FF;
 
-  /* Text Sizes */
   --dynamic-text-size-body-mini: 10px;
   --dynamic-text-size-body-small: 12px;
   --dynamic-text-size-body-normal: 14px;
@@ -203,79 +186,55 @@ html {
   --dynamic-text-size-numbers-big: 14px;
   --dynamic-text-size-title: 18px;
 
-  /* Badge Colors */
-  --dynamic-badge-background: rgba(139, 92, 246, 0.1);
-  --dynamic-badge-color: #dde2f6;
-  --dynamic-badge-dot-background: #14b8a6;
-  --dynamic-badge-primary-background: #8b5cf6;
+  --dynamic-badge-background: rgba(71, 121, 255, 0.1);
+  --dynamic-badge-color: #030303;
+  --dynamic-badge-dot-background: #3ea34b;
+  --dynamic-badge-primary-background: #4779FF;
   --dynamic-badge-primary-color: #ffffff;
-  --dynamic-recommended-badge-background: rgba(20, 184, 166, 0.15);
-  --dynamic-recommended-badge-color: #14b8a6;
+  --dynamic-recommended-badge-background: rgba(62, 163, 75, 0.1);
+  --dynamic-recommended-badge-color: #3ea34b;
 
-  /* Search Bar / Input Fields */
-  --dynamic-search-bar-background: #252630;
-  --dynamic-search-bar-background-hover: #2d2e3a;
-  --dynamic-search-bar-background-focus: #252630;
-  --dynamic-search-bar-border: 1px solid #262a34;
-  --dynamic-search-bar-border-hover: 1px solid rgba(139, 92, 246, 0.3);
-  --dynamic-search-bar-border-focus: 1px solid #8b5cf6;
+  --dynamic-search-bar-background: #f9f9f9;
+  --dynamic-search-bar-background-hover: #f0f0f0;
+  --dynamic-search-bar-background-focus: #ffffff;
+  --dynamic-search-bar-border: 1px solid #DADADA;
+  --dynamic-search-bar-border-hover: 1px solid #ADADAD;
+  --dynamic-search-bar-border-focus: 1px solid #4779FF;
 
-  /* Modal */
-  --dynamic-modal-border: 1px solid #262a34;
+  --dynamic-modal-border: 1px solid #DADADA;
   --dynamic-modal-width: 22.5rem;
   --dynamic-modal-padding: 1.5rem;
-  --dynamic-modal-backdrop-background: rgba(10, 11, 15, 0.8);
+  --dynamic-modal-backdrop-background: rgba(0, 0, 0, 0.4);
   --dynamic-modal-backdrop-filter: blur(8px);
 
-  /* Wallet List */
   --dynamic-wallet-list-max-height: 16.25rem;
   --dynamic-wallet-list-tile-gap: 0.5rem;
   --dynamic-wallet-list-tile-padding: 0.75rem;
-  --dynamic-wallet-list-tile-background: #252630;
-  --dynamic-wallet-list-tile-border: 1px solid #262a34;
-  --dynamic-wallet-list-tile-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.02);
-  --dynamic-wallet-list-tile-background-hover: #2d2e3a;
-  --dynamic-wallet-list-tile-border-hover: 1px solid rgba(139, 92, 246, 0.3);
+  --dynamic-wallet-list-tile-background: #f9f9f9;
+  --dynamic-wallet-list-tile-border: 1px solid #DADADA;
+  --dynamic-wallet-list-tile-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.04);
+  --dynamic-wallet-list-tile-background-hover: #f0f0f0;
+  --dynamic-wallet-list-tile-border-hover: 1px solid #4779FF;
   --dynamic-wallet-list-tile-shadow-hover: 0px 2px 4px 0px rgba(0, 0, 0, 0.08);
   --dynamic-wallet-list-tile-animation-duration: 0.15s;
 
-  /* Connect Button */
-  --dynamic-connect-button-background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+  --dynamic-connect-button-background: #4779FF;
   --dynamic-connect-button-color: #ffffff;
-  --dynamic-connect-button-border: none;
+  --dynamic-connect-button-border: 1px solid transparent;
   --dynamic-connect-button-shadow: none;
-  --dynamic-connect-button-background-hover: linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(6, 182, 212, 0.9) 100%);
+  --dynamic-connect-button-background-hover: rgba(71, 121, 255, 0.85);
   --dynamic-connect-button-color-hover: #ffffff;
-  --dynamic-connect-button-border-hover: none;
+  --dynamic-connect-button-border-hover: 1px solid transparent;
   --dynamic-connect-button-shadow-hover: none;
-  --dynamic-connect-button-radius: 12px;
+  --dynamic-connect-button-radius: 8px;
   --dynamic-connect-button-height: 41px;
-  --dynamic-connect-button-padding: 11px 22px;
+  --dynamic-connect-button-padding: 0 20px;
+  --dynamic-connect-button-font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --dynamic-connect-button-font-weight: 500;
 
-  /* Tooltip */
-  --dynamic-tooltip-color: #252630;
-  --dynamic-tooltip-text-color: #dde2f6;
-}
+  --dynamic-text-button-primary: #ffffff;
 
-/* Button overrides for Dynamic modals */
-.dynamic-shadow-dom button[type="submit"],
-.dynamic-shadow-dom button[type="button"]:not([aria-label*="close" i]):not([aria-label*="back" i]) {
-  background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%) !important;
-  color: #ffffff !important;
-  border: none !important;
-  border-radius: 12px !important;
-  font-weight: 600 !important;
-  transition: opacity 0.15s ease !important;
-}
-
-.dynamic-shadow-dom button[type="submit"]:hover,
-.dynamic-shadow-dom button[type="button"]:hover:not([aria-label*="close" i]):not([aria-label*="back" i]) {
-  opacity: 0.9 !important;
-}
-
-.dynamic-shadow-dom button[aria-label*="close" i],
-.dynamic-shadow-dom button[aria-label*="back" i] {
-  background-color: transparent !important;
-  border: none !important;
+  --dynamic-tooltip-color: #030303;
+  --dynamic-tooltip-text-color: #ffffff;
 }
 

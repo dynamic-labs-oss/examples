@@ -13,8 +13,9 @@ import {
 } from "lucide-react";
 import { useUserPositions } from "@/lib/hooks/useUserPositions";
 import { useKalshiTrading } from "@/lib/hooks/useKalshiTrading";
-import { useIsLoggedIn, useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { isSolanaWallet } from "@dynamic-labs/solana";
+import { useWallet } from "@/lib/providers";
+import { signTransaction } from "@dynamic-labs-sdk/solana";
+import { dynamicClient } from "@/lib/dynamic";
 import { VersionedTransaction } from "@solana/web3.js";
 import type { Position } from "@/lib/types/market";
 import { USDC_MINT } from "@/lib/constants";
@@ -25,8 +26,7 @@ interface PortfolioModalProps {
 }
 
 export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
-  const isLoggedIn = useIsLoggedIn();
-  const { primaryWallet } = useDynamicContext();
+  const { solanaAccount, loggedIn: isLoggedIn } = useWallet();
   const { positions, orders, isLoading, refetch } = useUserPositions();
   const { sellPosition } = useKalshiTrading();
   const [redeemingMint, setRedeemingMint] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSell = async (position: Position) => {
-    if (!primaryWallet) {
+    if (!solanaAccount) {
       setSellError("Please connect a wallet");
       return;
     }
@@ -84,7 +84,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
   };
 
   const handleRedeem = async (position: Position) => {
-    if (!primaryWallet || !isSolanaWallet(primaryWallet)) {
+    if (!solanaAccount) {
       setRedeemError("Please connect a Solana wallet");
       return;
     }
@@ -93,7 +93,7 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
     setRedeemError(null);
 
     try {
-      const walletAddress = primaryWallet.address;
+      const walletAddress = solanaAccount.address;
       const settlementMint = position.settlementMint || USDC_MINT;
 
       // Outcome tokens have 6 decimals, so multiply by 1,000,000
@@ -120,16 +120,18 @@ export function PortfolioModal({ isOpen, onClose }: PortfolioModalProps) {
       const transactionBuffer = Buffer.from(orderData.transaction, "base64");
       const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-      const signer = await primaryWallet.getSigner();
-      const signedTx = await signer.signTransaction(
-        transaction as unknown as Parameters<typeof signer.signTransaction>[0]
+      const { signedTransaction } = await signTransaction(
+        { walletAccount: solanaAccount, transaction },
+        dynamicClient
       );
 
-      // Send the transaction using Dynamic's RPC connection
-      const connection = await primaryWallet.getConnection();
+      // Get connection via RPC URL from env or fallback
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+      const { Connection } = await import("@solana/web3.js");
+      const connection = new Connection(rpcUrl, "confirmed");
 
       const signature = await connection.sendRawTransaction(
-        signedTx.serialize(),
+        (signedTransaction as VersionedTransaction).serialize(),
         {
           skipPreflight: false,
           preflightCommitment: "confirmed",

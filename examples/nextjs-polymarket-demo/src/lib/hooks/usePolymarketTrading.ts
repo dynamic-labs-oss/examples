@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { isEthereumWallet } from "@dynamic-labs/ethereum";
+import { useWallet } from "@/lib/providers";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { polygon } from "viem/chains";
+import type { WalletClient } from "viem";
 import { ClobClient, Side, OrderType } from "@polymarket/clob-client";
 import type { UserOrder, UserMarketOrder } from "@polymarket/clob-client";
-import { Contract, providers, BigNumber } from "ethers";
+import { Signer, Contract, providers, BigNumber, utils } from "ethers";
+import type { TypedDataDomain, TypedDataField } from "ethers";
+import type { TransactionRequest } from "@ethersproject/abstract-provider";
 import {
   POLYMARKET_CONTRACTS,
   POLYMARKET_USDC_SPENDERS,
@@ -17,62 +21,75 @@ import {
 // Signature type for Polymarket (EOA only)
 const SIGNATURE_TYPE_EOA = 0;
 
-// Helper to recursively fix chainId in typed data objects
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function fixChainIdInTypedData(data: any): any {
-  if (typeof data === "string") {
-    try {
-      const parsed = JSON.parse(data);
-      return JSON.stringify(fixChainIdInTypedData(parsed));
-    } catch {
-      return data;
-    }
+// Custom ethers Signer that delegates signing to a viem WalletClient directly,
+// bypassing the eth_signTypedData_v4 provider round-trip which is unreliable
+// across different wallet providers.
+class ViemEthersSigner extends Signer {
+  private readonly walletClient: WalletClient;
+  private readonly _addr: string;
+
+  constructor(walletClient: WalletClient, address: string, provider: providers.Provider) {
+    super();
+    this.walletClient = walletClient;
+    this._addr = utils.getAddress(address);
+    utils.defineReadOnly(this, "provider", provider);
   }
 
-  if (data && typeof data === "object") {
-    if (data.domain && data.domain.chainId !== undefined) {
-      return {
-        ...data,
-        domain: {
-          ...data.domain,
-          chainId: Number(data.domain.chainId),
-        },
-      };
-    }
-    return data;
+  async getAddress(): Promise<string> {
+    return this._addr;
   }
 
-  return data;
-}
+  async signMessage(message: string | Uint8Array): Promise<string> {
+    const raw = typeof message === "string" ? utils.toUtf8Bytes(message) : message;
+    return this.walletClient.signMessage({
+      account: this._addr as `0x${string}`,
+      message: { raw },
+    });
+  }
 
-// Wraps a wallet client to fix chainId type in eth_signTypedData_v4 requests
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function wrapWalletClientWithChainIdFix(walletClient: any): any {
-  const originalRequest = walletClient.request.bind(walletClient);
+  async _signTypedData(
+    domain: TypedDataDomain,
+    types: Record<string, TypedDataField[]>,
+    value: Record<string, unknown>
+  ): Promise<string> {
+    const { EIP712Domain: _omit, ...filteredTypes } = types;
+    const primaryType = Object.keys(filteredTypes)[0];
+    return this.walletClient.signTypedData({
+      account: this._addr as `0x${string}`,
+      domain: {
+        name: domain.name,
+        version: domain.version,
+        chainId: domain.chainId !== undefined ? Number(domain.chainId) : undefined,
+        verifyingContract: domain.verifyingContract as `0x${string}` | undefined,
+        salt: domain.salt as `0x${string}` | undefined,
+      },
+      types: filteredTypes as Record<string, { name: string; type: string }[]>,
+      primaryType,
+      message: value as Record<string, unknown>,
+    });
+  }
 
-  return new Proxy(walletClient, {
-    get(target, prop) {
-      if (prop === "request") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return async (args: any) => {
-          if (args.method === "eth_signTypedData_v4" && args.params) {
-            const [address, typedData] = args.params;
-            const fixedTypedData = fixChainIdInTypedData(typedData);
-            return originalRequest({
-              ...args,
-              params: [address, fixedTypedData],
-            });
-          }
-          return originalRequest(args);
-        };
-      }
-      const value = target[prop];
-      if (typeof value === "function") {
-        return value.bind(target);
-      }
-      return value;
-    },
-  });
+  async signTransaction(_transaction: TransactionRequest): Promise<string> {
+    throw new Error("signTransaction not supported — use sendTransaction");
+  }
+
+  async sendTransaction(transaction: TransactionRequest): Promise<providers.TransactionResponse> {
+    const resolved = await utils.resolveProperties(transaction);
+    const hash = await this.walletClient.sendTransaction({
+      account: this._addr as `0x${string}`,
+      chain: polygon,
+      to: resolved.to as `0x${string}`,
+      value: resolved.value ? BigInt(resolved.value.toString()) : undefined,
+      data: resolved.data as `0x${string}` | undefined,
+      gas: resolved.gasLimit ? BigInt(resolved.gasLimit.toString()) : undefined,
+    });
+    // Return a minimal TransactionResponse that ethers can work with
+    return this.provider!.getTransaction(hash) as Promise<providers.TransactionResponse>;
+  }
+
+  connect(provider: providers.Provider): ViemEthersSigner {
+    return new ViemEthersSigner(this.walletClient, this._addr, provider);
+  }
 }
 
 // Max uint256 for unlimited approval
@@ -84,7 +101,7 @@ const MAX_ALLOWANCE = BigNumber.from(
 const MIN_ALLOWANCE_THRESHOLD = BigNumber.from("1000000000000");
 
 async function ensureAllUsdcApprovals(
-  signer: providers.JsonRpcSigner
+  signer: Signer
 ): Promise<{ approved: boolean; error?: string }> {
   try {
     const signerAddress = await signer.getAddress();
@@ -116,7 +133,7 @@ async function ensureAllUsdcApprovals(
 }
 
 async function ensureAllOutcomeTokenApprovals(
-  signer: providers.JsonRpcSigner
+  signer: Signer
 ): Promise<{ approved: boolean; error?: string }> {
   try {
     const signerAddress = await signer.getAddress();
@@ -148,7 +165,7 @@ async function ensureAllOutcomeTokenApprovals(
 }
 
 async function checkUsdcBalance(
-  signer: providers.JsonRpcSigner,
+  signer: Signer,
   requiredAmount: number
 ): Promise<{ sufficient: boolean; balance: string; error?: string }> {
   try {
@@ -185,7 +202,7 @@ async function checkUsdcBalance(
 }
 
 async function ensureAllApprovals(
-  signer: providers.JsonRpcSigner,
+  signer: Signer,
   requiredAmount: number
 ): Promise<{ approved: boolean; error?: string }> {
   const balanceCheck = await checkUsdcBalance(signer, requiredAmount);
@@ -281,7 +298,7 @@ const CTF_REDEEM_ABI = [
 ] as const;
 
 export function usePolymarketTrading(): UsePolymarketTradingReturn {
-  const { primaryWallet } = useDynamicContext();
+  const { evmAccount } = useWallet();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSelling, setIsSelling] = useState(false);
@@ -290,41 +307,45 @@ export function usePolymarketTrading(): UsePolymarketTradingReturn {
   const [error, setError] = useState<string | null>(null);
 
   const clobClientRef = useRef<ClobClient | null>(null);
-  const signerRef = useRef<providers.JsonRpcSigner | null>(null);
+  const signerRef = useRef<ViemEthersSigner | null>(null);
   const credentialsRef = useRef<UserApiCredentials | null>(null);
   const lastWalletAddressRef = useRef<string | null>(null);
 
-  const address = primaryWallet?.address;
+  const address = evmAccount?.address;
 
   const getEthersSigner =
-    useCallback(async (): Promise<providers.JsonRpcSigner | null> => {
-      if (!primaryWallet || !isEthereumWallet(primaryWallet)) {
+    useCallback(async (): Promise<ViemEthersSigner | null> => {
+      if (!evmAccount) {
         signerRef.current = null;
         return null;
       }
 
-      if (lastWalletAddressRef.current !== primaryWallet.address) {
+      if (lastWalletAddressRef.current !== evmAccount.address) {
         signerRef.current = null;
         credentialsRef.current = null;
-        lastWalletAddressRef.current = primaryWallet.address;
+        lastWalletAddressRef.current = evmAccount.address;
       }
 
       if (signerRef.current) {
-        return signerRef.current;
+        return signerRef.current as ViemEthersSigner;
       }
 
       try {
-        const walletClient = await primaryWallet.getWalletClient();
-        const wrappedClient = wrapWalletClientWithChainIdFix(walletClient);
-        const provider = new providers.Web3Provider(wrappedClient);
-        signerRef.current = provider.getSigner();
-        return signerRef.current;
+        const walletClient = await createWalletClientForWalletAccount({
+          walletAccount: evmAccount,
+        });
+        const rpcProvider = new providers.JsonRpcProvider(
+          "https://polygon-rpc.com",
+          { chainId: polygon.id, name: polygon.name }
+        );
+        signerRef.current = new ViemEthersSigner(walletClient, evmAccount.address, rpcProvider);
+        return signerRef.current as ViemEthersSigner;
       } catch (err) {
-        console.error("Failed to create ethers signer:", err);
+        console.error("Failed to create signer:", err);
         signerRef.current = null;
         return null;
       }
-    }, [primaryWallet]);
+    }, [evmAccount]);
 
   const initializeCredentials =
     useCallback(async (): Promise<UserApiCredentials | null> => {
@@ -351,18 +372,16 @@ export function usePolymarketTrading(): UsePolymarketTradingReturn {
         );
 
         let credentials: UserApiCredentials | null = null;
+        let deriveError: unknown;
 
         try {
           const derivedCreds = await tempClient.deriveApiKey();
-          if (
-            derivedCreds?.key &&
-            derivedCreds?.secret &&
-            derivedCreds?.passphrase
-          ) {
+          if (derivedCreds?.key && derivedCreds?.secret && derivedCreds?.passphrase) {
             credentials = derivedCreds;
           }
-        } catch {
-          // Will create new credentials below
+        } catch (err) {
+          deriveError = err;
+          console.warn("deriveApiKey failed, attempting createApiKey:", err);
         }
 
         if (!credentials) {
@@ -370,7 +389,8 @@ export function usePolymarketTrading(): UsePolymarketTradingReturn {
           if (newCreds?.key && newCreds?.secret && newCreds?.passphrase) {
             credentials = newCreds;
           } else {
-            throw new Error("Failed to create API credentials");
+            const errMsg = deriveError instanceof Error ? deriveError.message : String(deriveError);
+            throw new Error(`Failed to create API credentials. Cause: ${errMsg}`);
           }
         }
 

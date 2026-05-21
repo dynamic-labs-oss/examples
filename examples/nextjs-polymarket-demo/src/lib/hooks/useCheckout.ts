@@ -1,6 +1,5 @@
 "use client";
 
-import { getAuthToken } from "@dynamic-labs/sdk-react-core";
 import type {
   CreatePaymentSessionParams,
   PaymentSessionResponse,
@@ -11,16 +10,10 @@ export function useCheckout() {
     params: CreatePaymentSessionParams
   ): Promise<PaymentSessionResponse> => {
     try {
-      const authToken = getAuthToken();
-      if (!authToken) {
-        throw new Error("User is not authenticated. Please log in first.");
-      }
-
       const response = await fetch("/api/checkout/payment-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify(params),
       });

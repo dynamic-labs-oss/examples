@@ -9,15 +9,13 @@ import {
   type ExtendedChain,
 } from "@lifi/sdk";
 import type { Token } from "@lifi/sdk";
-import type { Config } from "wagmi";
 import type { Client } from "viem";
 
 export const initializeLiFiConfig = (
-  wagmiConfig: Config,
   getDynamicWalletClient: () => Promise<Client | null> | Client | null
 ) => {
   return createConfig({
-    integrator: "dynamic-demo",
+    integrator: "dynamic-polymarket-demo",
     providers: [
       EVM({
         getWalletClient: async () => {

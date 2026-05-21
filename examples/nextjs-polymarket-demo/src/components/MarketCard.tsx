@@ -4,8 +4,8 @@ import ClockIcon from "./ClockIcon";
 import { ImageWithFallback } from "./ImageWithFallback";
 import PriceChart from "./PriceChart";
 import { usePolymarketTrading } from "@/lib/hooks/usePolymarketTrading";
-import { polygon } from "wagmi/chains";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { polygon } from "viem/chains";
+import { useWallet } from "@/lib/providers";
 
 interface MarketCardProps {
   question: string;
@@ -65,13 +65,12 @@ export function MarketCard({
   // Ref to prevent double-submission of orders
   const isSubmittingRef = useRef(false);
 
-  const { primaryWallet, setShowAuthFlow } = useDynamicContext();
+  const { evmAccount } = useWallet();
   const { placeOrder } = usePolymarketTrading();
 
   const handleOptionClick = (option: "yes" | "no") => {
     // If wallet not connected, show connect modal
-    if (!primaryWallet) {
-      setShowAuthFlow(true);
+    if (!evmAccount) {
       return;
     }
 
@@ -145,8 +144,7 @@ export function MarketCard({
     if (betAmount === 0 || !selectedOption) return;
 
     // Check if wallet is connected first
-    if (!primaryWallet) {
-      setShowAuthFlow(true);
+    if (!evmAccount) {
       return;
     }
 
@@ -162,23 +160,7 @@ export function MarketCard({
     setTradingSuccess(false);
 
     try {
-      // Switch to Polygon if not already on it
-      const currentNetwork = await primaryWallet.getNetwork();
-      if (currentNetwork !== polygon.id) {
-        try {
-          if (primaryWallet.connector.supportsNetworkSwitching()) {
-            await primaryWallet.switchNetwork(polygon.id);
-            // Wait a bit for network switch
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-          } else {
-            setTradingError("Please switch to Polygon network to trade");
-            return;
-          }
-        } catch {
-          setTradingError("Please switch to Polygon network to trade");
-          return;
-        }
-      }
+      // Network switching is handled by the wallet client configured with polygon chain
 
       // Get the appropriate token ID
       const tokenId = selectedOption === "yes" ? yesTokenId : noTokenId;
@@ -222,13 +204,12 @@ export function MarketCard({
   }, [
     betAmount,
     selectedOption,
-    primaryWallet,
+    evmAccount,
     conditionId,
     yesTokenId,
     noTokenId,
     marketId,
     placeOrder,
-    setShowAuthFlow,
     handleClose,
   ]);
 
@@ -242,7 +223,7 @@ export function MarketCard({
   const cardContent = (
     <motion.div
       layout
-      className={`bg-[#141620] rounded-[22.837px] w-full relative ${
+      className={`bg-white border border-[#DADADA] rounded-[22.837px] w-full relative shadow-sm ${
         isExpanded ? "z-50" : "z-0"
       }`}
       style={
@@ -258,17 +239,13 @@ export function MarketCard({
     >
       <div className="content-stretch flex flex-col items-start overflow-clip relative rounded-[inherit] w-full">
         {/* Card Header */}
-        <div className="bg-[#191b25] relative rounded-[22.837px] shrink-0 w-full">
-          <div
-            aria-hidden="true"
-            className="absolute border-[#262a34] border-[0.571px] border-solid inset-0 pointer-events-none rounded-[22.837px] shadow-[0px_1.142px_2.284px_0px_rgba(0,0,0,0.02),0px_1.142px_2.284px_0px_rgba(0,0,0,0.02)]"
-          />
+        <div className="bg-white relative rounded-[22.837px] shrink-0 w-full">
           <div className="size-full">
             <div className="box-border content-stretch flex flex-col gap-[13.702px] items-start p-[15.986px] relative w-full">
               <div className="content-stretch flex gap-[9.135px] items-start relative shrink-0 w-full">
                 {/* Image and Question */}
                 <div className="basis-0 content-stretch flex flex-col gap-[9.135px] grow items-start min-h-px min-w-px relative shrink-0">
-                  <div className="bg-[rgba(241,241,241,0.1)] overflow-clip relative rounded-[7px] shrink-0 size-[45.675px]">
+                  <div className="bg-[#EBEBEB] overflow-clip relative rounded-[7px] shrink-0 size-[45.675px]">
                     {imageUrl ? (
                       <ImageWithFallback
                         src={imageUrl}
@@ -277,11 +254,11 @@ export function MarketCard({
                         sizes="50px"
                       />
                     ) : (
-                      <div className="absolute bg-[rgba(241,241,241,0.1)] left-0 size-[45.675px] top-0" />
+                      <div className="absolute bg-[#EBEBEB] left-0 size-[45.675px] top-0" />
                     )}
                   </div>
                   <p
-                    className={`font-['SF_Pro_Rounded:Bold',sans-serif] leading-[22.837px] not-italic relative shrink-0 text-white text-[18.27px] tracking-[0.1827px] ${
+                    className={`font-semibold leading-[22.837px] relative shrink-0 text-[#030303] text-[18.27px] tracking-[0.1827px] ${
                       isExpanded ? "" : "line-clamp-2 h-[45.674px]"
                     }`}
                   >
@@ -293,11 +270,11 @@ export function MarketCard({
                       {tags.slice(0, 3).map((tag) => {
                         const tagColor =
                           TAG_COLORS[tag] ||
-                          "bg-[rgba(221,226,246,0.1)] text-[rgba(221,226,246,0.6)] border-[rgba(221,226,246,0.2)]";
+                          "bg-[#F0F0F0] text-[#606060] border-[#DADADA]";
                         return (
                           <span
                             key={tag}
-                            className={`px-[6px] py-[2px] rounded-[12px] text-[11px] font-['SF_Pro_Rounded:Semibold',sans-serif] border ${tagColor}`}
+                            className={`px-[6px] py-[2px] rounded-[12px] text-[11px] font-medium border ${tagColor}`}
                           >
                             {tag.charAt(0).toUpperCase() + tag.slice(1)}
                           </span>
@@ -311,7 +288,7 @@ export function MarketCard({
                 <div className="content-stretch flex gap-[9.135px] h-[27.405px] items-center justify-end relative shrink-0 w-[80px]">
                   <div className="content-stretch flex gap-[4.567px] items-center overflow-clip relative shrink-0">
                     <ClockIcon />
-                    <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] leading-[18.27px] not-italic relative shrink-0 text-[13.702px] text-[rgba(221,226,246,0.5)] text-nowrap tracking-[0.137px] whitespace-pre">
+                    <p className="font-medium leading-[18.27px] relative shrink-0 text-[13.702px] text-[#606060] text-nowrap tracking-[0.137px] whitespace-pre">
                       {timeRemaining}
                     </p>
                   </div>
@@ -320,13 +297,13 @@ export function MarketCard({
 
               {/* Trader Bar - Only show if trader data is available */}
               {yesTraders !== undefined && noTraders !== undefined && (
-                <div className="bg-[#191b25] h-[80px] relative rounded-[12px] shrink-0 w-full">
+                <div className="bg-[#F9F9F9] border border-[#DADADA] h-[80px] relative rounded-[12px] shrink-0 w-full">
                   <div className="h-[80px] overflow-clip relative rounded-[inherit] w-full">
                     {/* Left Panel */}
-                    <div className="absolute bg-[#191b25] bottom-0 box-border content-stretch flex flex-col items-start justify-between left-0 p-[8px] top-0 w-[100px]">
+                    <div className="absolute bg-[#F9F9F9] bottom-0 box-border content-stretch flex flex-col items-start justify-between left-0 p-[8px] top-0 w-[100px]">
                       <div
                         aria-hidden="true"
-                        className="absolute border-[#262a34] border-[0px_0.5px_0px_0px] border-solid inset-0 pointer-events-none"
+                        className="absolute border-[#DADADA] border-[0px_0.5px_0px_0px] border-solid inset-0 pointer-events-none"
                       />
                       <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full">
                         {/* Yes Percentage */}
@@ -355,7 +332,7 @@ export function MarketCard({
                         </div>
                       </div>
                       {/* Volume Display */}
-                      <div className="flex flex-col font-['SF_Pro_Rounded:Semibold',sans-serif] justify-center leading-0 not-italic relative shrink-0 text-[#7b7f8d] text-[10px] text-nowrap">
+                      <div className="flex flex-col font-medium justify-center leading-0 relative shrink-0 text-[#606060] text-[10px] text-nowrap">
                         <p className="leading-[13px] whitespace-pre">
                           ${((yesTraders + noTraders) * 234).toLocaleString()}{" "}
                           Vol.
@@ -393,17 +370,11 @@ export function MarketCard({
                   whileTap={{ scale: 0.9 }}
                   transition={{ duration: 0.15 }}
                 >
-                  <div
-                    aria-hidden="true"
-                    className="absolute border-[0.571px] border-[rgba(255,255,255,0.05)] border-solid inset-0 pointer-events-none rounded-[9.135px]"
-                  />
                   <div className="flex flex-row items-center justify-center size-full">
                     <div className="box-border content-stretch flex gap-[22.837px] items-center justify-center px-[22.837px] py-[11.419px] relative size-full">
                       <div
-                        className={`flex flex-col font-['SF_Pro_Rounded:Semibold',sans-serif] justify-center leading-0 not-italic relative shrink-0 text-[15.986px] text-nowrap text-right ${
-                          selectedOption === "yes"
-                            ? "text-[#141620]"
-                            : "text-[#3ea34b]"
+                        className={`flex flex-col font-semibold justify-center relative shrink-0 text-[15.986px] text-nowrap text-right ${
+                          selectedOption === "yes" ? "text-white" : "text-[#3ea34b]"
                         }`}
                       >
                         <p className="leading-[28.547px] whitespace-pre">
@@ -425,17 +396,11 @@ export function MarketCard({
                   whileTap={{ scale: 0.9 }}
                   transition={{ duration: 0.15 }}
                 >
-                  <div
-                    aria-hidden="true"
-                    className="absolute border-[0.571px] border-[rgba(255,255,255,0.05)] border-solid inset-0 pointer-events-none rounded-[9.135px]"
-                  />
                   <div className="flex flex-row items-center justify-center size-full">
                     <div className="box-border content-stretch flex gap-[22.837px] items-center justify-center px-[22.837px] py-[11.419px] relative size-full">
                       <div
-                        className={`flex flex-col font-['SF_Pro_Rounded:Semibold',sans-serif] justify-center leading-0 not-italic relative shrink-0 text-[15.986px] text-nowrap text-right ${
-                          selectedOption === "no"
-                            ? "text-white"
-                            : "text-[#e64341]"
+                        className={`flex flex-col font-semibold justify-center relative shrink-0 text-[15.986px] text-nowrap text-right ${
+                          selectedOption === "no" ? "text-white" : "text-[#e64341]"
                         }`}
                       >
                         <p className="leading-[28.547px] whitespace-pre">
@@ -462,29 +427,19 @@ export function MarketCard({
                   >
                     <div className="content-stretch flex flex-col gap-[11px] items-start w-full">
                       {/* Input Field */}
-                      <div className="bg-[#191b25] h-[48px] relative rounded-[10px] shrink-0 w-full">
-                        <div
-                          aria-hidden="true"
-                          className="absolute border-[#262a34] border-[0.5px] border-solid inset-0 pointer-events-none rounded-[10px]"
-                        />
+                      <div className="bg-[#F9F9F9] border border-[#DADADA] h-[48px] relative rounded-[10px] shrink-0 w-full">
                         <div className="flex flex-row items-center size-full">
                           <div className="box-border content-stretch flex h-[48px] items-center justify-between pl-[12px] pr-[11px] py-[12px] relative w-full">
                             {/* Amount Input */}
                             <div className="content-stretch flex flex-col items-start justify-center relative flex-1">
-                              <div className="content-stretch flex gap-[6px] items-center relative shrink-0">
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={
-                                    betAmountInput === ""
-                                      ? ""
-                                      : `$${betAmountInput}`
-                                  }
-                                  onChange={handleAmountChange}
-                                  placeholder="$0"
-                                  className="font-['SF_Pro_Rounded:Medium',sans-serif] leading-[normal] text-[#72d0ed] text-[20px] tracking-[-0.2px] bg-transparent border-none outline-none w-full placeholder:text-[#72d0ed] placeholder:opacity-30"
-                                />
-                              </div>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={betAmountInput === "" ? "" : `$${betAmountInput}`}
+                                onChange={handleAmountChange}
+                                placeholder="$0"
+                                className="font-medium leading-[normal] text-[#4779FF] text-[20px] tracking-[-0.2px] bg-transparent border-none outline-none w-full placeholder:text-[#4779FF] placeholder:opacity-30"
+                              />
                             </div>
 
                             {/* Quick Add Buttons */}
@@ -493,9 +448,9 @@ export function MarketCard({
                                 onClick={() => handleQuickAdd(5)}
                                 whileTap={{ scale: 0.9 }}
                                 transition={{ duration: 0.15 }}
-                                className="bg-[rgba(199,196,245,0.1)] content-stretch flex gap-[10px] h-[25px] items-center justify-center relative rounded-[16px] shrink-0 w-[36px] cursor-pointer hover:bg-[rgba(199,196,245,0.15)]"
+                                className="bg-[#EBEBEB] content-stretch flex gap-[10px] h-[25px] items-center justify-center relative rounded-[16px] shrink-0 w-[36px] cursor-pointer hover:bg-[#DADADA]"
                               >
-                                <p className="font-['SF_Pro_Rounded:Medium',sans-serif] leading-[16px] relative shrink-0 text-[#7b7f8d] text-[14px] text-center text-nowrap whitespace-pre">
+                                <p className="font-medium leading-[16px] relative shrink-0 text-[#606060] text-[14px] text-center text-nowrap whitespace-pre">
                                   +5
                                 </p>
                               </motion.button>
@@ -503,9 +458,9 @@ export function MarketCard({
                                 onClick={() => handleQuickAdd(10)}
                                 whileTap={{ scale: 0.9 }}
                                 transition={{ duration: 0.15 }}
-                                className="bg-[rgba(199,196,245,0.1)] content-stretch flex gap-[10px] h-[25px] items-center justify-center relative rounded-[16px] shrink-0 w-[36px] cursor-pointer hover:bg-[rgba(199,196,245,0.15)]"
+                                className="bg-[#EBEBEB] content-stretch flex gap-[10px] h-[25px] items-center justify-center relative rounded-[16px] shrink-0 w-[36px] cursor-pointer hover:bg-[#DADADA]"
                               >
-                                <p className="font-['SF_Pro_Rounded:Medium',sans-serif] h-[16px] leading-[16px] relative shrink-0 text-[#7b7f8d] text-[14px] text-center text-nowrap whitespace-pre">
+                                <p className="font-medium h-[16px] leading-[16px] relative shrink-0 text-[#606060] text-[14px] text-center text-nowrap whitespace-pre">
                                   +10
                                 </p>
                               </motion.button>
@@ -517,14 +472,14 @@ export function MarketCard({
                       {/* Error/Success Messages */}
                       {tradingError && (
                         <div className="bg-[rgba(230,67,65,0.1)] border border-[rgba(230,67,65,0.3)] rounded-[10px] p-[12px]">
-                          <p className="font-['SF_Pro_Rounded:Medium',sans-serif] text-[#e64341] text-[14px]">
+                          <p className="font-medium text-[#e64341] text-[14px]">
                             {tradingError}
                           </p>
                         </div>
                       )}
                       {tradingSuccess && (
                         <div className="bg-[rgba(62,163,75,0.1)] border border-[rgba(62,163,75,0.3)] rounded-[10px] p-[12px]">
-                          <p className="font-['SF_Pro_Rounded:Medium',sans-serif] text-[#3ea34b] text-[14px]">
+                          <p className="font-medium text-[#3ea34b] text-[14px]">
                             Order placed successfully!
                           </p>
                         </div>
@@ -536,35 +491,23 @@ export function MarketCard({
                         whileTap={{ scale: 0.9 }}
                         transition={{ duration: 0.15 }}
                         disabled={betAmount === 0 || isProcessing}
-                        className={`h-[48px] relative rounded-[12px] shadow-[0px_1px_2px_0px_rgba(24,39,75,0.04)] shrink-0 w-full ${
+                        className={`h-[48px] relative rounded-[12px] shrink-0 w-full transition-all duration-150 ${
                           betAmount > 0 && !isProcessing
-                            ? "cursor-pointer"
-                            : "cursor-not-allowed"
-                        } ${
-                          betAmount > 0 && !isProcessing
-                            ? "bg-[#4779ff]"
-                            : "bg-[#1a2239]"
+                            ? "cursor-pointer bg-[#4779FF]"
+                            : "cursor-not-allowed bg-[#F0F0F0]"
                         }`}
                       >
                         <div className="flex flex-col items-center justify-center overflow-clip rounded-[inherit] size-full">
-                          <div
-                            className={`box-border content-stretch flex flex-col h-[48px] items-center justify-center leading-[normal] px-[20px] py-[14px] relative text-[14px] text-nowrap w-full whitespace-pre ${
-                              betAmount === 0 || isProcessing
-                                ? "opacity-40"
-                                : ""
-                            }`}
-                          >
-                            <p className="font-['SF_Pro_Rounded:Bold',sans-serif] relative shrink-0 text-[rgba(248,250,255,0.95)]">
+                          <div className="box-border content-stretch flex flex-col h-[48px] items-center justify-center leading-[normal] px-[20px] py-[14px] relative text-[14px] text-nowrap w-full whitespace-pre">
+                            <p className={`font-semibold relative shrink-0 ${betAmount > 0 && !isProcessing ? "text-white" : "text-[#606060]"}`}>
                               {isProcessing
                                 ? "Processing..."
-                                : !primaryWallet
+                                : !evmAccount
                                 ? "Connect Wallet"
-                                : `Buy ${
-                                    selectedOption === "yes" ? "Yes" : "No"
-                                  }`}
+                                : `Buy ${selectedOption === "yes" ? "Yes" : "No"}`}
                             </p>
                             {betAmount > 0 && !isProcessing && (
-                              <p className="font-['SF_Pro_Rounded:Medium',sans-serif] relative shrink-0 text-[rgba(248,250,255,0.65)]">
+                              <p className="font-medium relative shrink-0 text-white/70">
                                 To win ${potentialWin.toFixed(2)}
                               </p>
                             )}
@@ -579,10 +522,6 @@ export function MarketCard({
           </div>
         </motion.div>
       </div>
-      <div
-        aria-hidden="true"
-        className="absolute border-[#262a34] border-[0.571px] border-solid inset-0 pointer-events-none rounded-[22.837px] shadow-[0px_1.142px_2.284px_0px_rgba(0,0,0,0.02),0px_1.142px_2.284px_0px_rgba(0,0,0,0.02)]"
-      />
     </motion.div>
   );
 
@@ -609,7 +548,7 @@ export function MarketCard({
       <div ref={cardRef} className="w-full">
         {isExpanded ? (
           // Invisible placeholder to keep grid space
-          <div className="bg-neutral-50 rounded-[22.837px] w-full opacity-0 pointer-events-none">
+          <div className="bg-white border border-[#DADADA] rounded-[22.837px] w-full opacity-0 pointer-events-none">
             <div className="content-stretch flex flex-col items-start overflow-clip relative rounded-[inherit] w-full">
               <div className="bg-white relative rounded-[22.837px] shrink-0 w-full">
                 <div className="size-full">

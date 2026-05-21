@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { useWallet } from "@/lib/providers";
 import type { Position, Order } from "@/lib/types/market";
 
 interface PositionsResponse {
@@ -25,8 +25,8 @@ async function fetchPositions(
 }
 
 export function useUserPositions() {
-  const { primaryWallet } = useDynamicContext();
-  const address = primaryWallet?.address;
+  const { solanaAccount } = useWallet();
+  const address = solanaAccount?.address;
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["user-positions", address],

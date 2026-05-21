@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  useDynamicContext,
-  useFundWithWallet,
-} from "@dynamic-labs/sdk-react-core";
+import { useWallet } from "@/lib/providers";
 import { ArrowLeft, X } from "lucide-react";
 import { useId, useState } from "react";
 import { CheckoutView } from "./deposit/CheckoutView";
@@ -19,8 +16,7 @@ interface DepositModalProps {
 type View = "options" | "qr" | "addFunds" | "lifi";
 
 export function DepositModal({ isOpen, onClose }: DepositModalProps) {
-  const { connectWalletForFunding, promptAmountAndFund } = useFundWithWallet();
-  const { primaryWallet } = useDynamicContext();
+  const { evmAccount } = useWallet();
 
   const modalTitleId = useId();
   const [view, setView] = useState<View>("options");
@@ -28,22 +24,15 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
     "amount"
   );
 
-  const walletAddress = primaryWallet?.address || "";
+  const walletAddress = evmAccount?.address || "";
 
   const handleReceiveByQR = () => setView("qr");
   const handleAddFunds = () => setView("addFunds");
   const handleLiFi = () => setView("lifi");
 
   const handleFundWallet = async () => {
-    try {
-      const externalWallet = await connectWalletForFunding();
-      if (externalWallet) {
-        promptAmountAndFund({ wallet: externalWallet });
-      }
-      onClose();
-    } catch (err) {
-      console.error("Failed to connect wallet for funding:", err);
-    }
+    // Fund wallet functionality not available in JS SDK — show QR instead
+    setView("qr");
   };
 
   const handleBack = () => {

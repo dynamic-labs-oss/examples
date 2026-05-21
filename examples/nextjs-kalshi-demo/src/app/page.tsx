@@ -14,18 +14,20 @@ export default function Home() {
   return (
     <>
       <Header />
+      <div className="px-[20px] sm:px-[32px] md:px-[48px] lg:px-[64px] xl:px-[80px]">
+      <div style={{ maxWidth: "1440px", margin: "0 auto" }}>
 
       {/* Market Cards Grid */}
       <div className="pt-[27px] pb-[93px]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <p className="font-['Clash_Display',sans-serif] text-[18px] text-[rgba(221,226,246,0.3)]">
+            <p className="text-[18px] text-[#606060]">
               Loading markets...
             </p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <p className="font-['Clash_Display',sans-serif] text-[18px] text-[rgba(221,226,246,0.3)]">
+            <p className="text-[18px] text-[#606060]">
               Error loading markets. Please try again later.
             </p>
           </div>
@@ -52,11 +54,13 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20">
-            <p className="font-['Clash_Display',sans-serif] text-[18px] text-[rgba(221,226,246,0.3)]">
+            <p className="text-[18px] text-[#606060]">
               No markets found
             </p>
           </div>
         )}
+      </div>
+      </div>
       </div>
     </>
   );

@@ -32,9 +32,9 @@ export function ConfirmModal({
 
   const variantStyles = {
     danger: {
-      iconBg: "bg-[rgba(239,68,68,0.1)]",
-      iconColor: "text-[#ef4444]",
-      buttonBg: "bg-[#ef4444] hover:bg-[#dc2626]",
+      iconBg: "bg-[rgba(230,67,65,0.1)]",
+      iconColor: "text-[#e64341]",
+      buttonBg: "bg-[#e64341] hover:bg-[#c73533]",
     },
     warning: {
       iconBg: "bg-[rgba(245,158,11,0.1)]",
@@ -42,9 +42,9 @@ export function ConfirmModal({
       buttonBg: "bg-[#f59e0b] hover:bg-[#d97706]",
     },
     info: {
-      iconBg: "bg-[rgba(114,208,237,0.1)]",
-      iconColor: "text-[#72D0ED]",
-      buttonBg: "bg-[#72D0ED] hover:bg-[#5bc0de]",
+      iconBg: "bg-[rgba(71,121,255,0.1)]",
+      iconColor: "text-[#4779FF]",
+      buttonBg: "bg-[#4779FF] hover:bg-[#3560d4]",
     },
   };
 
@@ -67,7 +67,7 @@ export function ConfirmModal({
       {/* Modal */}
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="bg-[#242735] rounded-[16px] w-full max-w-[360px] shadow-lg overflow-hidden pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
+          className="bg-white border border-[#DADADA] rounded-[16px] w-full max-w-[360px] shadow-lg overflow-hidden pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -78,7 +78,7 @@ export function ConfirmModal({
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-[rgba(221,226,246,0.5)] hover:text-[#dde2f6] transition-colors cursor-pointer disabled:opacity-50"
+            className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-[#606060] hover:text-[#030303] transition-colors cursor-pointer disabled:opacity-50"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -96,13 +96,13 @@ export function ConfirmModal({
             {/* Title */}
             <h3
               id={modalTitleId}
-              className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[18px] text-[#dde2f6] mb-2"
+              className="text-[18px] text-[#030303] mb-2"
             >
               {title}
             </h3>
 
             {/* Message */}
-            <p className="font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] text-[rgba(221,226,246,0.6)] mb-6">
+            <p className="text-[14px] text-[#606060] mb-6">
               {message}
             </p>
 
@@ -112,7 +112,7 @@ export function ConfirmModal({
                 type="button"
                 onClick={onClose}
                 disabled={isLoading}
-                className="flex-1 py-3 px-4 rounded-[10px] bg-[#191b25] text-[#dde2f6] font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] hover:bg-[#242735] transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-3 px-4 rounded-[10px] bg-[#F0F0F0] text-[#030303] text-[14px] hover:bg-[#EBEBEB] transition-colors cursor-pointer disabled:opacity-50"
               >
                 {cancelText}
               </button>
@@ -120,11 +120,11 @@ export function ConfirmModal({
                 type="button"
                 onClick={onConfirm}
                 disabled={isLoading}
-                className={`flex-1 py-3 px-4 rounded-[10px] ${styles.buttonBg} text-[#0e1219] font-['SF_Pro_Rounded:Semibold',sans-serif] text-[14px] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2`}
+                className={`flex-1 py-3 px-4 rounded-[10px] ${styles.buttonBg} text-white text-[14px] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2`}
               >
                 {isLoading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-[#0e1219]/30 border-t-[#0e1219] rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Processing...
                   </>
                 ) : (

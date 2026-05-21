@@ -26,31 +26,23 @@ const FilterButton = ({
   onClick,
   children,
   padding = "pl-[6px] pr-[10px] py-[4px]",
-}: FilterButtonProps) => {
-  const baseButtonClasses =
-    "bg-[#0e1219] relative rounded-[27px] transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] hover:border-[rgba(221,226,246,0.4)]";
-  const baseBorderClasses =
-    "absolute border-[0.5px] border-solid inset-0 pointer-events-none rounded-[27px] transition-colors duration-150";
-  const borderColor = isSelected
-    ? "border-[rgba(221,226,246,0.5)]"
-    : "border-[#262a34]";
-
-  return (
-    <button type="button" onClick={onClick} className={baseButtonClasses}>
-      <div
-        aria-hidden="true"
-        className={`${baseBorderClasses} ${borderColor}`}
-      />
-      <div className="flex flex-row items-center justify-center">
-        <div
-          className={`box-border content-stretch flex gap-[4px] items-center justify-center ${padding} relative`}
-        >
-          {children}
-        </div>
+}: FilterButtonProps) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`bg-white relative rounded-[27px] border transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] ${
+      isSelected
+        ? "border-[#4779FF]"
+        : "border-[#DADADA] hover:border-[#4779FF]"
+    }`}
+  >
+    <div className="flex flex-row items-center justify-center">
+      <div className={`box-border content-stretch flex gap-[4px] items-center justify-center ${padding} relative`}>
+        {children}
       </div>
-    </button>
-  );
-};
+    </div>
+  </button>
+);
 
 const FilterButtonText = ({
   isSelected,
@@ -58,19 +50,15 @@ const FilterButtonText = ({
 }: {
   isSelected: boolean;
   children: React.ReactNode;
-}) => {
-  const textColor = isSelected
-    ? "text-[#dde2f6]"
-    : "text-[rgba(221,226,246,0.3)]";
-  const baseTextClasses =
-    "flex flex-col font-['SF_Pro_Rounded:Semibold',sans-serif] justify-center leading-0 not-italic relative shrink-0 text-[15.986px] text-nowrap transition-colors duration-150";
-
-  return (
-    <div className={`${baseTextClasses} ${textColor}`}>
-      <p className="leading-[normal] whitespace-pre">{children}</p>
-    </div>
-  );
-};
+}) => (
+  <div
+    className={`flex flex-col font-medium justify-center leading-0 not-italic relative shrink-0 text-[15px] text-nowrap transition-colors duration-150 ${
+      isSelected ? "text-[#030303]" : "text-[#606060]"
+    }`}
+  >
+    <p className="leading-[normal] whitespace-pre">{children}</p>
+  </div>
+);
 
 const TAG_COLORS: Record<string, string> = {
   trending: "text-[#ff6b6b]",
@@ -104,55 +92,35 @@ export function TagsFilter({
 
   const calculateScrollDistance = useCallback(() => {
     if (!emblaApi) return 0;
-    const scrollBy = 3;
     const slides = emblaApi.slideNodes();
     if (slides.length === 0) return 0;
-
     const firstSlide = slides[0];
     if (!firstSlide) return 0;
-
-    const slideWidth = firstSlide.offsetWidth;
-    const gap = 8;
-    return (slideWidth + gap) * scrollBy;
+    return (firstSlide.offsetWidth + 8) * 3;
   }, [emblaApi]);
 
   const scrollPrev = useCallback(() => {
     if (!viewportElementRef.current) return;
     const scrollDistance = calculateScrollDistance();
     if (scrollDistance === 0) return;
-
     const viewport = viewportElementRef.current;
-    const newScrollLeft = Math.max(0, viewport.scrollLeft - scrollDistance);
-    viewport.scrollTo({
-      left: newScrollLeft,
-      behavior: "smooth",
-    });
+    viewport.scrollTo({ left: Math.max(0, viewport.scrollLeft - scrollDistance), behavior: "smooth" });
   }, [calculateScrollDistance]);
 
   const scrollNext = useCallback(() => {
     if (!viewportElementRef.current) return;
     const scrollDistance = calculateScrollDistance();
     if (scrollDistance === 0) return;
-
     const viewport = viewportElementRef.current;
     const maxScroll = viewport.scrollWidth - viewport.clientWidth;
-    const newScrollLeft = Math.min(
-      maxScroll,
-      viewport.scrollLeft + scrollDistance
-    );
-    viewport.scrollTo({
-      left: newScrollLeft,
-      behavior: "smooth",
-    });
+    viewport.scrollTo({ left: Math.min(maxScroll, viewport.scrollLeft + scrollDistance), behavior: "smooth" });
   }, [calculateScrollDistance]);
 
   useEffect(() => {
     if (!emblaApi) return;
-
     onSelect(emblaApi);
     emblaApi.on("reInit", onSelect);
     emblaApi.on("select", onSelect);
-
     return () => {
       emblaApi.off("select", onSelect);
       emblaApi.off("reInit", onSelect);
@@ -167,7 +135,6 @@ export function TagsFilter({
     const handleScroll = () => {
       const scrollLeft = viewport.scrollLeft;
       const maxScroll = viewport.scrollWidth - viewport.clientWidth;
-
       setCanScrollPrev(scrollLeft > 1);
       setCanScrollNext(scrollLeft < maxScroll - 1);
     };
@@ -184,15 +151,11 @@ export function TagsFilter({
   }, [viewportReady]);
 
   const arrowButtonClasses =
-    "hidden md:flex absolute top-1/2 -translate-y-1/2 z-10 w-8 h-8 items-center justify-center rounded-full bg-[#0e1219] border border-[#262a34] hover:border-[rgba(221,226,246,0.4)] transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90]";
-  const arrowButtonStateClasses = (canScroll: boolean) =>
-    canScroll
-      ? "opacity-100 cursor-pointer"
-      : "opacity-0 cursor-not-allowed pointer-events-none";
+    "hidden md:flex absolute top-1/2 -translate-y-1/2 z-10 w-8 h-8 items-center justify-center rounded-full bg-white border border-[#DADADA] hover:border-[#4779FF] transition-all duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] active:scale-[0.90] shadow-sm";
+  const arrowStateClasses = (canScroll: boolean) =>
+    canScroll ? "opacity-100 cursor-pointer" : "opacity-0 cursor-not-allowed pointer-events-none";
   const arrowIconClasses = (canScroll: boolean) =>
-    `w-4 h-4 transition-colors ${
-      canScroll ? "text-[#dde2f6]" : "text-[rgba(221,226,246,0.3)]"
-    }`;
+    `w-4 h-4 transition-colors ${canScroll ? "text-[#030303]" : "text-[#DADADA]"}`;
 
   if (availableTags.length === 0) return null;
 
@@ -203,39 +166,29 @@ export function TagsFilter({
           type="button"
           onClick={scrollPrev}
           disabled={!canScrollPrev}
-          className={`${arrowButtonClasses} left-0 ${arrowButtonStateClasses(
-            canScrollPrev
-          )}`}
+          className={`${arrowButtonClasses} left-0 ${arrowStateClasses(canScrollPrev)}`}
           aria-label="Scroll left"
         >
-          <ChevronLeft
-            className={arrowIconClasses(canScrollPrev)}
-            strokeWidth={1.5}
-          />
+          <ChevronLeft className={arrowIconClasses(canScrollPrev)} strokeWidth={1.5} />
         </button>
 
         <button
           type="button"
           onClick={scrollNext}
           disabled={!canScrollNext}
-          className={`${arrowButtonClasses} right-0 ${arrowButtonStateClasses(
-            canScrollNext
-          )}`}
+          className={`${arrowButtonClasses} right-0 ${arrowStateClasses(canScrollNext)}`}
           aria-label="Scroll right"
         >
-          <ChevronRight
-            className={arrowIconClasses(canScrollNext)}
-            strokeWidth={1.5}
-          />
+          <ChevronRight className={arrowIconClasses(canScrollNext)} strokeWidth={1.5} />
         </button>
 
         <div
-          className={`hidden md:block absolute left-0 top-0 bottom-0 w-16 z-5 pointer-events-none bg-linear-to-r from-[#0f1117] via-[#0f1117]/80 to-transparent transition-opacity ${
+          className={`hidden md:block absolute left-0 top-0 bottom-0 w-16 z-5 pointer-events-none bg-linear-to-r from-[#F9F9F9] via-[#F9F9F9]/80 to-transparent transition-opacity ${
             canScrollPrev ? "opacity-100" : "opacity-0"
           }`}
         />
         <div
-          className={`hidden md:block absolute right-0 top-0 bottom-0 w-16 z-5 pointer-events-none bg-linear-to-l from-[#0f1117] via-[#0f1117]/80 to-transparent transition-opacity ${
+          className={`hidden md:block absolute right-0 top-0 bottom-0 w-16 z-5 pointer-events-none bg-linear-to-l from-[#F9F9F9] via-[#F9F9F9]/80 to-transparent transition-opacity ${
             canScrollNext ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -245,20 +198,14 @@ export function TagsFilter({
           ref={(node) => {
             emblaRef(node);
             viewportElementRef.current = node;
-            if (node) {
-              setViewportReady(true);
-            }
+            if (node) setViewportReady(true);
           }}
         >
           <div className="flex gap-[8px] items-center">
             <div className="shrink-0">
               <FilterButton
                 isSelected={selectedTags.length === 0}
-                onClick={() => {
-                  selectedTags.forEach((tag) => {
-                    onTagToggle(tag);
-                  });
-                }}
+                onClick={() => selectedTags.forEach((tag) => onTagToggle(tag))}
                 padding="px-[10px] py-[4px]"
               >
                 <FilterButtonText isSelected={selectedTags.length === 0}>
@@ -269,14 +216,10 @@ export function TagsFilter({
 
             {availableTags.map((tag) => {
               const isSelected = selectedTags.includes(tag);
-              const tagColor = TAG_COLORS[tag] || "text-[#dde2f6]";
+              const tagColor = TAG_COLORS[tag] || "text-[#030303]";
               return (
                 <div key={tag} className="shrink-0">
-                  <FilterButton
-                    isSelected={isSelected}
-                    onClick={() => onTagToggle(tag)}
-                    padding="pl-[6px] pr-[10px] py-[4px]"
-                  >
+                  <FilterButton isSelected={isSelected} onClick={() => onTagToggle(tag)}>
                     <FilterButtonText isSelected={isSelected}>
                       <span className={isSelected ? tagColor : ""}>
                         {tag.charAt(0).toUpperCase() + tag.slice(1)}

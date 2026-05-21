@@ -87,7 +87,7 @@ const nextConfig: NextConfig = {
     ],
   },
   // Transpile LI.FI packages to ensure compatibility
-  transpilePackages: ["@lifi/sdk", "@lifi/wallet-management"],
+  transpilePackages: ["@lifi/sdk"],
 };
 
 export default nextConfig;

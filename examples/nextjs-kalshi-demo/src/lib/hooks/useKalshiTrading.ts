@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { isSolanaWallet } from "@dynamic-labs/solana";
+import { useWallet } from "@/lib/providers";
+import { getActiveNetworkData } from "@dynamic-labs-sdk/client";
+import { getSolanaConnection, signTransaction } from "@dynamic-labs-sdk/solana";
+import { dynamicClient } from "@/lib/dynamic";
 import {
   Connection,
   PublicKey,
@@ -81,21 +83,26 @@ export interface UseKalshiTradingReturn {
 }
 
 export function useKalshiTrading(): UseKalshiTradingReturn {
-  const { primaryWallet } = useDynamicContext();
+  const { solanaAccount } = useWallet();
   const [isLoading, setIsLoading] = useState(false);
   const [isSelling, setIsSelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const getConnection = useCallback(async (): Promise<Connection> => {
-    if (!primaryWallet || !isSolanaWallet(primaryWallet)) {
+    if (!solanaAccount) {
       throw new Error("Solana wallet not connected");
     }
-    return primaryWallet.getConnection();
-  }, [primaryWallet]);
+    const { networkData } = await getActiveNetworkData({ walletAccount: solanaAccount }, dynamicClient);
+    if (!networkData) {
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+      return new Connection(rpcUrl, "confirmed");
+    }
+    return getSolanaConnection({ networkData });
+  }, [solanaAccount]);
 
   const getSolBalance = useCallback(async (): Promise<number> => {
-    const walletAddress = primaryWallet?.address;
-    if (!primaryWallet || !walletAddress) return 0;
+    const walletAddress = solanaAccount?.address;
+    if (!solanaAccount || !walletAddress) return 0;
 
     try {
       const connection = await getConnection();
@@ -105,11 +112,11 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
     } catch {
       return 0;
     }
-  }, [primaryWallet, getConnection]);
+  }, [solanaAccount, getConnection]);
 
   const getUsdcBalance = useCallback(async (): Promise<number> => {
-    const walletAddress = primaryWallet?.address;
-    if (!primaryWallet || !walletAddress) return 0;
+    const walletAddress = solanaAccount?.address;
+    if (!solanaAccount || !walletAddress) return 0;
 
     try {
       const connection = await getConnection();
@@ -130,11 +137,11 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
     } catch {
       return 0;
     }
-  }, [primaryWallet, getConnection]);
+  }, [solanaAccount, getConnection]);
 
   const getWsolBalance = useCallback(async (): Promise<number> => {
-    const walletAddress = primaryWallet?.address;
-    if (!primaryWallet || !walletAddress) return 0;
+    const walletAddress = solanaAccount?.address;
+    if (!solanaAccount || !walletAddress) return 0;
 
     try {
       const connection = await getConnection();
@@ -155,19 +162,15 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
     } catch {
       return 0;
     }
-  }, [primaryWallet, getConnection]);
+  }, [solanaAccount, getConnection]);
 
   const wrapSol = useCallback(
     async (
       solAmount: number
     ): Promise<{ success: boolean; txHash?: string; error?: string }> => {
-      const walletAddress = primaryWallet?.address;
-      if (!walletAddress || !primaryWallet) {
+      const walletAddress = solanaAccount?.address;
+      if (!walletAddress || !solanaAccount) {
         return { success: false, error: "Wallet not connected" };
-      }
-
-      if (!isSolanaWallet(primaryWallet)) {
-        return { success: false, error: "Please connect a Solana wallet" };
       }
 
       try {
@@ -221,15 +224,13 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
 
         const versionedTransaction = new VersionedTransaction(messageV0);
 
-        const signer = await primaryWallet.getSigner();
-        const signedTx = await signer.signTransaction(
-          versionedTransaction as unknown as Parameters<
-            typeof signer.signTransaction
-          >[0]
+        const { signedTransaction } = await signTransaction(
+          { walletAccount: solanaAccount, transaction: versionedTransaction },
+          dynamicClient
         );
 
         const signature = await connection.sendRawTransaction(
-          signedTx.serialize()
+          (signedTransaction as VersionedTransaction).serialize()
         );
 
         await connection.confirmTransaction(
@@ -245,7 +246,7 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
         };
       }
     },
-    [primaryWallet, getConnection]
+    [solanaAccount, getConnection]
   );
 
   const executeDFlowSwap = useCallback(
@@ -254,13 +255,9 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
       outputMint: string,
       amount: number
     ): Promise<{ success: boolean; txHash?: string; error?: string }> => {
-      const walletAddress = primaryWallet?.address;
-      if (!walletAddress || !primaryWallet) {
+      const walletAddress = solanaAccount?.address;
+      if (!walletAddress || !solanaAccount) {
         return { success: false, error: "Wallet not connected" };
-      }
-
-      if (!isSolanaWallet(primaryWallet)) {
-        return { success: false, error: "Please connect a Solana wallet" };
       }
 
       try {
@@ -288,13 +285,13 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
         const transactionBuffer = Buffer.from(orderData.transaction, "base64");
         const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-        const signer = await primaryWallet.getSigner();
-        const signedTx = await signer.signTransaction(
-          transaction as unknown as Parameters<typeof signer.signTransaction>[0]
+        const { signedTransaction } = await signTransaction(
+          { walletAccount: solanaAccount, transaction },
+          dynamicClient
         );
 
         const signature = await connection.sendRawTransaction(
-          signedTx.serialize(),
+          (signedTransaction as VersionedTransaction).serialize(),
           { skipPreflight: false, preflightCommitment: "confirmed" }
         );
 
@@ -380,7 +377,7 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
         };
       }
     },
-    [primaryWallet, getConnection]
+    [solanaAccount, getConnection]
   );
 
   const swapSolToUsdc = useCallback(
@@ -421,13 +418,9 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
     async (
       params: TradeParams
     ): Promise<{ success: boolean; txHash?: string; error?: string }> => {
-      const walletAddress = primaryWallet?.address;
-      if (!walletAddress || !primaryWallet) {
+      const walletAddress = solanaAccount?.address;
+      if (!walletAddress || !solanaAccount) {
         return { success: false, error: "Wallet not connected" };
-      }
-
-      if (!isSolanaWallet(primaryWallet)) {
-        return { success: false, error: "Please connect a Solana wallet" };
       }
 
       if (!params.tokenMint) {
@@ -514,20 +507,16 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
         return { success: false, error: errorMessage };
       }
     },
-    [primaryWallet, getSolBalance, getWsolBalance, wrapSol, executeDFlowSwap]
+    [solanaAccount, getSolBalance, getWsolBalance, wrapSol, executeDFlowSwap]
   );
 
   const sellPosition = useCallback(
     async (
       params: SellParams
     ): Promise<{ success: boolean; txHash?: string; error?: string }> => {
-      const walletAddress = primaryWallet?.address;
-      if (!walletAddress || !primaryWallet) {
+      const walletAddress = solanaAccount?.address;
+      if (!walletAddress || !solanaAccount) {
         return { success: false, error: "Wallet not connected" };
-      }
-
-      if (!isSolanaWallet(primaryWallet)) {
-        return { success: false, error: "Please connect a Solana wallet" };
       }
 
       if (!params.tokenMint) {
@@ -561,7 +550,7 @@ export function useKalshiTrading(): UseKalshiTradingReturn {
         return { success: false, error: errorMessage };
       }
     },
-    [primaryWallet, executeDFlowSwap]
+    [solanaAccount, executeDFlowSwap]
   );
 
   return {

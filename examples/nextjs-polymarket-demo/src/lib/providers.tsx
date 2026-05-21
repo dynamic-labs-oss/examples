@@ -1,97 +1,132 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { LiFiProvider } from "@/lib/lifi-provider";
-import { config } from "@/lib/wagmi";
-import { env } from "@/env";
 import {
-  DynamicContextProvider,
-  DynamicUserProfile,
-  useDynamicContext,
-  useSwitchNetwork,
-} from "@dynamic-labs/sdk-react-core";
-import { EthereumWalletConnectors, isEthereumWallet } from "@dynamic-labs/ethereum";
-import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import {
+  getWalletAccounts,
+  onEvent,
+  isSignedIn,
+  logout,
+  detectOAuthRedirect,
+  completeSocialAuthentication,
+} from "@dynamic-labs-sdk/client";
+import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
+import {
+  isEvmWalletAccount,
+  type EvmWalletAccount,
+} from "@dynamic-labs-sdk/evm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiProvider } from "wagmi";
-import type { CreateConnectorFn } from "wagmi";
+import { dynamicClient } from "./dynamic";
 import { ToastProvider } from "@/components/ui/Toast";
 
-const POLYGON_CHAIN_ID = 137;
-
-function NetworkSwitcher() {
-  const { primaryWallet } = useDynamicContext();
-  const switchNetwork = useSwitchNetwork();
-  const hasSwitchedRef = useRef(false);
-
-  useEffect(() => {
-    if (!primaryWallet) {
-      hasSwitchedRef.current = false;
-      return;
-    }
-
-    if (!isEthereumWallet(primaryWallet)) {
-      return;
-    }
-
-    const switchToPolygon = async () => {
-      if (hasSwitchedRef.current) return;
-
-      try {
-        const walletClient = await primaryWallet.getWalletClient();
-        const currentChainId = await walletClient.getChainId();
-
-        if (currentChainId !== POLYGON_CHAIN_ID) {
-          await switchNetwork({
-            wallet: primaryWallet,
-            network: POLYGON_CHAIN_ID,
-          });
-        }
-        hasSwitchedRef.current = true;
-      } catch {
-        // Network switch failed
-      }
-    };
-
-    const timeoutId = setTimeout(switchToPolygon, 500);
-    return () => clearTimeout(timeoutId);
-  }, [primaryWallet, switchNetwork]);
-
-  return null;
+interface WalletContextValue {
+  evmAccount: EvmWalletAccount | null;
+  loggedIn: boolean;
+  ensureEvmWallet: () => Promise<void>;
+  disconnect: () => Promise<void>;
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
-  const connectors: CreateConnectorFn[] = [];
+const WalletContext = createContext<WalletContextValue>({
+  evmAccount: null,
+  loggedIn: false,
+  ensureEvmWallet: async () => {},
+  disconnect: async () => {},
+});
+
+export function useWallet() {
+  return useContext(WalletContext);
+}
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+export default function Providers({ children }: { children: ReactNode }) {
+  const [evmAccount, setEvmAccount] = useState<EvmWalletAccount | null>(null);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  const refresh = useCallback(() => {
+    const accounts = getWalletAccounts(dynamicClient);
+    setEvmAccount(accounts.find(isEvmWalletAccount) ?? null);
+    setLoggedIn(isSignedIn(dynamicClient));
+  }, []);
+
+  const disconnect = useCallback(async () => {
+    await logout(dynamicClient);
+    setEvmAccount(null);
+    setLoggedIn(false);
+  }, []);
+
+  const ensureEvmWallet = useCallback(async () => {
+    try {
+      const accounts = getWalletAccounts(dynamicClient);
+      if (!accounts.some(isEvmWalletAccount) && isSignedIn(dynamicClient)) {
+        await createWaasWalletAccounts({ chains: ["EVM"] }, dynamicClient);
+      }
+    } catch {
+      // wallet may already exist — ignore
+    }
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const handleOAuthRedirect = async () => {
+      if (typeof window === "undefined") return;
+      try {
+        const url = new URL(window.location.href);
+        if (await detectOAuthRedirect({ url }, dynamicClient)) {
+          await completeSocialAuthentication({ url }, dynamicClient);
+          await ensureEvmWallet();
+          window.history.replaceState({}, "", window.location.pathname);
+          return;
+        }
+      } catch {
+        // not an OAuth redirect — continue normally
+      }
+      refresh();
+    };
+
+    handleOAuthRedirect();
+
+    const unsub1 = onEvent(
+      { event: "walletAccountsChanged", listener: () => ensureEvmWallet() },
+      dynamicClient
+    );
+    const unsub2 = onEvent(
+      {
+        event: "logout",
+        listener: () => {
+          setEvmAccount(null);
+          setLoggedIn(false);
+        },
+      },
+      dynamicClient
+    );
+
+    return () => {
+      unsub1();
+      unsub2();
+    };
+  }, [refresh, ensureEvmWallet]);
 
   return (
-    <DynamicContextProvider
-      theme="dark"
-      settings={{
-        environmentId: env.NEXT_PUBLIC_DYNAMIC_ENV_ID,
-        walletConnectors: [EthereumWalletConnectors],
-        // eslint-disable-next-line @next/next/no-css-tags
-        cssOverrides: <link rel="stylesheet" href="/dynamicOverrides.css" />,
-        termsOfServiceUrl: "https://www.example.com",
-        privacyPolicyUrl: "https://www.example.com",
-        policiesConsentInnerComponent:
-          "I agree to the terms of service and privacy policy",
-        logLevel: "ERROR",
-      }}
-    >
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          <DynamicWagmiConnector>
-            <LiFiProvider wagmiConfig={config} connectors={connectors}>
-              <ToastProvider>
-                <NetworkSwitcher />
-                {children}
-                <DynamicUserProfile />
-              </ToastProvider>
-            </LiFiProvider>
-          </DynamicWagmiConnector>
-        </QueryClientProvider>
-      </WagmiProvider>
-    </DynamicContextProvider>
+    <WalletContext.Provider value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
+      </QueryClientProvider>
+    </WalletContext.Provider>
   );
 }
