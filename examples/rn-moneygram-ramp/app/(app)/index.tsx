@@ -1,4 +1,3 @@
-"use client";
 import { useReactiveClient } from "@dynamic-labs/react-hooks";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -22,6 +21,10 @@ function truncate(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
+function isEvmAddress(addr?: string) {
+  return !!addr?.startsWith("0x");
+}
+
 export default function HomeScreen() {
   const client = useReactiveClient(dynamicClient);
   const [selectedChain, setSelectedChain] = useState<Chain>("base");
@@ -30,23 +33,17 @@ export default function HomeScreen() {
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Resolve wallet addresses from Dynamic client
   const userWallets = client.wallets.userWallets ?? [];
-  const primaryWallet = client.wallets.primary;
 
-  // EVM wallet: any wallet on an EVM chain
+  // Dynamic 4.x embedded wallets: EVM chain is "ETH", Solana is "SOL"
   const evmWallet =
     userWallets.find(
-      (w) => w.chain === "EVM" || (w.address?.startsWith("0x") ?? false)
-    ) ?? (primaryWallet?.address?.startsWith("0x") ? primaryWallet : null);
+      (w) => w.chain === "ETH" || w.chain === "EVM" || isEvmAddress(w.address)
+    ) ?? null;
 
-  // Solana wallet: address is base58 (no 0x prefix, ~44 chars)
   const solanaWallet =
     userWallets.find(
-      (w) =>
-        w.chain === "SOL" ||
-        w.chain === "Solana" ||
-        (!w.address?.startsWith("0x") && (w.address?.length ?? 0) > 32)
+      (w) => w.chain === "SOL" || (!isEvmAddress(w.address) && (w.address?.length ?? 0) > 30)
     ) ?? null;
 
   const getAddress = useCallback((): string => {
@@ -93,19 +90,22 @@ export default function HomeScreen() {
     ]);
   };
 
+  // MoneyGram Ramps is Solana-only — always use the Solana wallet + balance
+  const solanaBalance = selectedChain === "solana" ? (balance ?? 0) : 0;
+
   const handleSuccess = useCallback(
-    (amount: number) => {
-      setWidgetOpen(false);
+    (amount: string) => {
+      const parsed = parseFloat(amount);
       Alert.alert(
-        "Success! 🎉",
-        `${amount > 0 ? `$${amount.toFixed(2)} USDC` : "Funds"} sent for cash pickup on ${CHAINS[selectedChain].name}.`
+        "Success!",
+        `${parsed > 0 ? `$${parsed.toFixed(2)} USDC` : "Funds"} sent for cash pickup.`
       );
       refreshBalance();
     },
-    [selectedChain, refreshBalance]
+    [refreshBalance]
   );
 
-  const canRamp = !!address && balance !== null && balance > 0;
+  const canRamp = !!solanaWallet?.address && balance !== null && balance > 0 && selectedChain === "solana";
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -131,7 +131,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={loadingBalance}
             onRefresh={refreshBalance}
-            tintColor="#72d0ed"
+            tintColor="#14b8a6"
           />
         }
       >
@@ -162,19 +162,20 @@ export default function HomeScreen() {
         {/* Wallet + Balance card */}
         <View style={styles.card}>
           <Text style={styles.label}>Wallet address</Text>
-          <TouchableOpacity
-            onPress={handleCopy}
-            activeOpacity={0.7}
-            style={styles.addressRow}
-            disabled={!address}
-          >
+          <View style={styles.addressRow}>
             <Text style={[styles.addressText, !address && styles.dimText]}>
               {address ? truncate(address) : "No wallet connected"}
             </Text>
             {address && (
-              <Text style={styles.copyIcon}>{copied ? "✓" : "⧉"}</Text>
+              <TouchableOpacity
+                onPress={handleCopy}
+                activeOpacity={0.7}
+                style={styles.copyBtn}
+              >
+                <Text style={styles.copyBtnText}>{copied ? "✓ Copied" : "Copy"}</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
 
           <View style={styles.divider} />
 
@@ -269,10 +270,8 @@ export default function HomeScreen() {
 
       <MoneygramWidget
         open={widgetOpen}
-        chain={selectedChain}
-        address={address}
-        evmWallet={evmWallet as { address: string } | null}
-        solanaWallet={solanaWallet as { address: string } | null}
+        walletAddress={solanaWallet?.address ?? ""}
+        usdcBalance={solanaBalance}
         onClose={() => setWidgetOpen(false)}
         onSuccess={handleSuccess}
       />
@@ -281,7 +280,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0f1117" },
+  safe: { flex: 1, backgroundColor: "#030712" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -291,8 +290,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.08)",
   },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: "#dde2f6" },
-  headerSub: { fontSize: 13, color: "#717182", marginTop: 2 },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: "#f9fafb" },
+  headerSub: { fontSize: 13, color: "#9ca3af", marginTop: 2 },
   logoutBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -301,7 +300,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
-  logoutText: { color: "#717182", fontSize: 13, fontWeight: "500" },
+  logoutText: { color: "#9ca3af", fontSize: 13, fontWeight: "500" },
   content: { padding: 20, gap: 16, paddingBottom: 40 },
   chainRow: { flexDirection: "row", gap: 8 },
   chainBtn: {
@@ -314,13 +313,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   chainBtnActive: {
-    backgroundColor: "rgba(114,208,237,0.12)",
-    borderColor: "rgba(114,208,237,0.4)",
+    backgroundColor: "rgba(20,184,166,0.12)",
+    borderColor: "rgba(20,184,166,0.4)",
   },
-  chainBtnText: { color: "#717182", fontSize: 14, fontWeight: "600" },
-  chainBtnTextActive: { color: "#72d0ed" },
+  chainBtnText: { color: "#9ca3af", fontSize: 14, fontWeight: "600" },
+  chainBtnTextActive: { color: "#14b8a6" },
   card: {
-    backgroundColor: "#191b25",
+    backgroundColor: "#111827",
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
@@ -329,7 +328,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 11,
-    color: "#717182",
+    color: "#9ca3af",
     textTransform: "uppercase",
     letterSpacing: 0.6,
     fontWeight: "600",
@@ -342,11 +341,19 @@ const styles = StyleSheet.create({
   addressText: {
     fontSize: 15,
     fontFamily: "monospace",
-    color: "#dde2f6",
+    color: "#f9fafb",
     fontWeight: "500",
   },
-  dimText: { color: "#717182" },
-  copyIcon: { fontSize: 16, color: "#72d0ed" },
+  dimText: { color: "#9ca3af" },
+  copyBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(20,184,166,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(20,184,166,0.3)",
+  },
+  copyBtnText: { fontSize: 12, color: "#14b8a6", fontWeight: "600" },
   divider: {
     height: 1,
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -355,21 +362,21 @@ const styles = StyleSheet.create({
   balanceText: {
     fontSize: 38,
     fontWeight: "700",
-    color: "#dde2f6",
+    color: "#f9fafb",
     letterSpacing: -1,
   },
   rampBtn: {
-    backgroundColor: "#72d0ed",
+    backgroundColor: "#14b8a6",
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 4,
   },
   rampBtnDisabled: { opacity: 0.4 },
-  rampBtnText: { color: "#0e1219", fontSize: 17, fontWeight: "700" },
-  hint: { color: "#717182", fontSize: 12, textAlign: "center", marginTop: 2 },
+  rampBtnText: { color: "#030712", fontSize: 17, fontWeight: "700" },
+  hint: { color: "#9ca3af", fontSize: 12, textAlign: "center", marginTop: 2 },
   walletsCard: {
-    backgroundColor: "#191b25",
+    backgroundColor: "#111827",
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
@@ -379,43 +386,43 @@ const styles = StyleSheet.create({
   walletsSectionTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#dde2f6",
+    color: "#f9fafb",
     marginBottom: 4,
   },
   walletRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   chainDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   walletInfo: { flex: 1 },
-  walletChainLabel: { fontSize: 11, color: "#717182", fontWeight: "600" },
+  walletChainLabel: { fontSize: 11, color: "#9ca3af", fontWeight: "600" },
   walletAddress: {
     fontSize: 14,
     fontFamily: "monospace",
-    color: "#dde2f6",
+    color: "#f9fafb",
     marginTop: 2,
   },
   howCard: {
-    backgroundColor: "#191b25",
+    backgroundColor: "#111827",
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     gap: 16,
   },
-  howTitle: { fontSize: 16, fontWeight: "700", color: "#dde2f6" },
+  howTitle: { fontSize: 16, fontWeight: "700", color: "#f9fafb" },
   howRow: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
   howNum: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "rgba(114,208,237,0.12)",
+    backgroundColor: "rgba(20,184,166,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(114,208,237,0.3)",
+    borderColor: "rgba(20,184,166,0.3)",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
     marginTop: 2,
   },
-  howNumText: { color: "#72d0ed", fontSize: 12, fontWeight: "700" },
+  howNumText: { color: "#14b8a6", fontSize: 12, fontWeight: "700" },
   howContent: { flex: 1, gap: 2 },
-  howStep: { color: "#dde2f6", fontSize: 15, fontWeight: "600" },
-  howDesc: { color: "#717182", fontSize: 13, lineHeight: 20 },
+  howStep: { color: "#f9fafb", fontSize: 15, fontWeight: "600" },
+  howDesc: { color: "#9ca3af", fontSize: 13, lineHeight: 20 },
 });

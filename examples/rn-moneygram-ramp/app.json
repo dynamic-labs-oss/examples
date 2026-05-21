@@ -3,18 +3,23 @@
     "name": "MoneyGram Ramp",
     "slug": "rn-moneygram-ramp",
     "version": "1.0.0",
-    "backgroundColor": "#0f1117",
+    "backgroundColor": "#030712",
     "orientation": "portrait",
     "scheme": "mgr",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.dynamic.moneygram-ramp"
+      "bundleIdentifier": "com.dynamic.moneygram-ramp",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0f1117"
+        "backgroundColor": "#030712"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.dynamic.moneygramramp"
@@ -23,7 +28,7 @@
       "expo-router",
       "expo-web-browser",
       "expo-secure-store",
-      ["expo-splash-screen", { "backgroundColor": "#0f1117", "resizeMode": "contain" }]
+      ["expo-splash-screen", { "backgroundColor": "#030712", "resizeMode": "contain" }]
     ],
     "experiments": {
       "typedRoutes": true

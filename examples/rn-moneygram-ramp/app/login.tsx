@@ -13,14 +13,51 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Redirect } from "expo-router";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
 import { dynamicClient } from "@/lib/dynamic";
 
+function GoogleIcon() {
+  return (
+    <View style={googleIconStyles.container}>
+      <Text style={googleIconStyles.g}>G</Text>
+    </View>
+  );
+}
+
+const googleIconStyles = StyleSheet.create({
+  container: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  g: { fontSize: 13, fontWeight: "700", color: "#4285F4" },
+});
+
 export default function LoginScreen() {
+  const client = useReactiveClient(dynamicClient);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
   const [loading, setLoading] = useState(false);
   const hiddenRef = useRef<TextInput>(null);
+
+  if (client.auth.authenticatedUser) {
+    return <Redirect href="/(app)" />;
+  }
+
+  const handleGoogle = async () => {
+    setLoading(true);
+    try {
+      await dynamicClient.auth.social.connect({ provider: "google" });
+    } catch {
+      Alert.alert("Error", "Google sign-in failed. Please try again.");
+      setLoading(false);
+    }
+  };
 
   const handleSendOTP = async () => {
     if (!email.trim()) return;
@@ -58,7 +95,7 @@ export default function LoginScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#72d0ed" />
+        <ActivityIndicator size="large" color="#14b8a6" />
         <Text style={styles.loadingText}>
           {step === "email" ? "Sending code…" : "Verifying…"}
         </Text>
@@ -93,12 +130,29 @@ export default function LoginScreen() {
                   <Text style={styles.cardSub}>
                     Enter your email to continue
                   </Text>
+
+                  {/* Google */}
+                  <TouchableOpacity
+                    style={styles.googleBtn}
+                    onPress={handleGoogle}
+                    activeOpacity={0.8}
+                  >
+                    <GoogleIcon />
+                    <Text style={styles.googleBtnText}>Continue with Google</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
                   <TextInput
                     style={styles.input}
                     value={email}
                     onChangeText={setEmail}
                     placeholder="you@example.com"
-                    placeholderTextColor="#717182"
+                    placeholderTextColor="#9ca3af"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -174,16 +228,16 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0f1117" },
+  safe: { flex: 1, backgroundColor: "#030712" },
   flex: { flex: 1 },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#0f1117",
+    backgroundColor: "#030712",
     alignItems: "center",
     justifyContent: "center",
     gap: 16,
   },
-  loadingText: { color: "#dde2f6", fontSize: 16 },
+  loadingText: { color: "#f9fafb", fontSize: 16 },
   hero: {
     flex: 1,
     justifyContent: "center",
@@ -195,27 +249,27 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: "#72d0ed",
+    backgroundColor: "#14b8a6",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
-  logoText: { color: "#0e1219", fontSize: 22, fontWeight: "800" },
+  logoText: { color: "#030712", fontSize: 22, fontWeight: "800" },
   heroTitle: {
     fontSize: 40,
     fontWeight: "700",
-    color: "#dde2f6",
+    color: "#f9fafb",
     textAlign: "center",
     letterSpacing: -1,
   },
   heroSub: {
     fontSize: 16,
-    color: "#717182",
+    color: "#9ca3af",
     textAlign: "center",
     lineHeight: 24,
   },
   card: {
-    backgroundColor: "#191b25",
+    backgroundColor: "#111827",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     padding: 28,
@@ -231,34 +285,34 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 26,
     fontWeight: "700",
-    color: "#dde2f6",
+    color: "#f9fafb",
     marginBottom: 6,
   },
   cardSub: {
     fontSize: 15,
-    color: "#717182",
+    color: "#9ca3af",
     marginBottom: 24,
     lineHeight: 22,
   },
   input: {
-    backgroundColor: "#242735",
+    backgroundColor: "#1f2937",
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 18,
     fontSize: 16,
-    color: "#dde2f6",
+    color: "#f9fafb",
     marginBottom: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
   btn: {
-    backgroundColor: "#72d0ed",
+    backgroundColor: "#14b8a6",
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
   },
   btnDisabled: { opacity: 0.4 },
-  btnText: { color: "#0e1219", fontSize: 17, fontWeight: "700" },
+  btnText: { color: "#030712", fontSize: 17, fontWeight: "700" },
   hiddenInput: { position: "absolute", opacity: 0, width: 1, height: 1 },
   otpRow: {
     flexDirection: "row",
@@ -272,15 +326,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#242735",
+    backgroundColor: "#1f2937",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
   otpFilled: { backgroundColor: "#1a2035" },
-  otpActive: { borderColor: "#72d0ed" },
-  otpDigit: { fontSize: 24, fontWeight: "600", color: "#dde2f6" },
+  otpActive: { borderColor: "#14b8a6" },
+  otpDigit: { fontSize: 24, fontWeight: "600", color: "#f9fafb" },
   backBtn: { paddingVertical: 12, alignItems: "center" },
-  backText: { color: "#72d0ed", fontSize: 15, fontWeight: "500" },
+  backText: { color: "#14b8a6", fontSize: 15, fontWeight: "500" },
   poweredBy: {
     marginTop: 24,
     paddingTop: 20,
@@ -288,5 +342,26 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
   },
-  poweredText: { color: "#717182", fontSize: 13 },
+  poweredText: { color: "#9ca3af", fontSize: 13 },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: "#1f2937",
+    borderRadius: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    marginBottom: 12,
+  },
+  googleBtnText: { color: "#f9fafb", fontSize: 16, fontWeight: "600" },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.08)" },
+  dividerText: { color: "#9ca3af", fontSize: 13 },
 });

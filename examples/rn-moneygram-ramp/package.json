@@ -5,8 +5,8 @@
   "description": "MoneyGram off-ramp demo with Dynamic embedded wallets on Base, Ethereum, and Solana",
   "scripts": {
     "start": "expo start -c",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
