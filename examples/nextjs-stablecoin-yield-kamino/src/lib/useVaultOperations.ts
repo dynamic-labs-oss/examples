@@ -3,9 +3,11 @@
 import { useState } from "react";
 import {
   signAndSendSponsoredTransaction,
+  signAndSendTransaction,
   SponsorTransactionError,
   type SolanaWalletAccount,
 } from "@dynamic-labs-sdk/solana";
+import { MethodNotImplementedError } from "@dynamic-labs-sdk/client/core";
 import { Connection, PublicKey, VersionedTransaction, SendTransactionError } from "@solana/web3.js";
 import {
   createSolanaRpc,
@@ -46,6 +48,10 @@ async function fetchTokenBalance(
   const owner = new PublicKey(ownerAddress);
   const mint = new PublicKey(mintAddress);
 
+  interface ParsedTokenAccountData {
+    parsed?: { info?: { mint?: string; tokenAmount?: { uiAmount?: number } } };
+  }
+
   // Legacy SPL Token program
   try {
     const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
@@ -53,11 +59,8 @@ async function fetchTokenBalance(
       programId: TOKEN_PROGRAM_ID,
     });
     if (accounts.value.length > 0) {
-      return (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (accounts.value[0].account.data as any).parsed?.info?.tokenAmount
-          ?.uiAmount ?? 0
-      );
+      const data = accounts.value[0].account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.tokenAmount?.uiAmount ?? 0;
     }
   } catch {
     // no account in this program
@@ -69,13 +72,13 @@ async function fetchTokenBalance(
     const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
       programId: TOKEN_2022_PROGRAM_ID,
     });
-    const match = accounts.value.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (a) => (a.account.data as any).parsed?.info?.mint === mintStr
-    );
+    const match = accounts.value.find((a) => {
+      const data = a.account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.mint === mintStr;
+    });
     if (match) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (match.account.data as any).parsed?.info?.tokenAmount?.uiAmount ?? 0;
+      const data = match.account.data as ParsedTokenAccountData;
+      return data.parsed?.info?.tokenAmount?.uiAmount ?? 0;
     }
   } catch {
     // no Token-2022 account
@@ -129,29 +132,39 @@ async function signSendAndConfirm(
   lastValidBlockHeight: bigint,
   walletAccount: SolanaWalletAccount
 ): Promise<string> {
-  try {
-    const { signature } = await signAndSendSponsoredTransaction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { transaction: tx as any, walletAccount },
-      dynamicClient
-    );
-    const connection = new Connection(getSolanaRpcUrl(), "confirmed");
+  const connection = new Connection(getSolanaRpcUrl(), "confirmed");
+
+  const confirm = async (sig: string) => {
     const result = await connection.confirmTransaction(
-      { signature, blockhash, lastValidBlockHeight: Number(lastValidBlockHeight) },
+      { signature: sig, blockhash, lastValidBlockHeight: Number(lastValidBlockHeight) },
       "confirmed"
     );
     if (result.value.err) {
       throw new Error(`Transaction failed: ${JSON.stringify(result.value.err)}`);
     }
-    return signature;
+    return sig;
+  };
+
+  try {
+    const { signature } = await signAndSendSponsoredTransaction(
+      { transaction: tx, walletAccount },
+      dynamicClient
+    );
+    return confirm(signature);
   } catch (err) {
+    if (err instanceof MethodNotImplementedError) {
+      // Provider doesn't support sponsorship (e.g. external wallet) — send normally
+      const { signature } = await signAndSendTransaction(
+        { transaction: tx, walletAccount }
+      );
+      return confirm(signature);
+    }
     if (err instanceof SponsorTransactionError) {
       throw new Error(
         "Gas sponsorship failed. Enable SVM Gas Sponsorship in your Dynamic dashboard under Settings → Embedded Wallets."
       );
     }
     if (err instanceof SendTransactionError) {
-      const connection = new Connection(getSolanaRpcUrl(), "confirmed");
       const logs = await err.getLogs(connection);
       throw new Error(
         err.message + (logs?.length ? `\n\nLogs:\n${logs.join("\n")}` : "")
