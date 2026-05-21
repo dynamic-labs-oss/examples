@@ -3,7 +3,6 @@
 import {
   createContext,
   useContext,
-  useState,
   useEffect,
   useCallback,
   type ReactNode,
@@ -23,6 +22,8 @@ import {
 } from "@dynamic-labs-sdk/solana";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { dynamicClient } from "./dynamic";
+import { useAuth } from "@/hooks/use-auth";
+import { useSolanaWalletAccount } from "@/hooks/use-wallet-accounts";
 
 interface WalletContextValue {
   solanaAccount: SolanaWalletAccount | null;
@@ -52,21 +53,11 @@ const queryClient = new QueryClient({
 });
 
 export default function Providers({ children }: { children: ReactNode }) {
-  const [solanaAccount, setSolanaAccount] =
-    useState<SolanaWalletAccount | null>(null);
-  const [loggedIn, setLoggedIn] = useState(false);
-
-  const refresh = useCallback(() => {
-    const accounts = getWalletAccounts(dynamicClient);
-    const solana = accounts.find(isSolanaWalletAccount) ?? null;
-    setSolanaAccount(solana);
-    setLoggedIn(isSignedIn(dynamicClient));
-  }, []);
+  const loggedIn = useAuth();
+  const solanaAccount = useSolanaWalletAccount();
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);
-    setSolanaAccount(null);
-    setLoggedIn(false);
   }, []);
 
   // After a successful login (email OTP, Google, or external wallet), ensure
@@ -82,11 +73,24 @@ export default function Providers({ children }: { children: ReactNode }) {
     } catch {
       // wallet may already exist — ignore
     }
-    refresh();
-  }, [refresh]);
+  }, []);
 
+  // Auto-create wallet when accounts change (side effect, not state)
   useEffect(() => {
-    // Handle OAuth redirect (Google sign-in callback)
+    const unsub = onEvent(
+      {
+        event: "walletAccountsChanged",
+        listener: () => {
+          void ensureSolanaWallet();
+        },
+      },
+      dynamicClient,
+    );
+    return () => unsub?.();
+  }, [ensureSolanaWallet]);
+
+  // Handle OAuth redirect (Google sign-in callback)
+  useEffect(() => {
     const handleOAuthRedirect = async () => {
       if (typeof window === "undefined") return;
       try {
@@ -97,48 +101,20 @@ export default function Providers({ children }: { children: ReactNode }) {
           await ensureSolanaWallet();
           // Clean up OAuth query params from URL
           window.history.replaceState({}, "", window.location.pathname);
-          return;
         }
       } catch {
         // not an OAuth redirect — continue normally
       }
-      refresh();
     };
 
     handleOAuthRedirect();
-
-    const unsubWallets = onEvent(
-      {
-        event: "walletAccountsChanged",
-        listener: () => ensureSolanaWallet(),
-      },
-      dynamicClient
-    );
-
-    const unsubLogout = onEvent(
-      {
-        event: "logout",
-        listener: () => {
-          setSolanaAccount(null);
-          setLoggedIn(false);
-        },
-      },
-      dynamicClient
-    );
-
-    return () => {
-      unsubWallets();
-      unsubLogout();
-    };
-  }, [refresh, ensureSolanaWallet]);
+  }, [ensureSolanaWallet]);
 
   return (
     <WalletContext.Provider
       value={{ solanaAccount, loggedIn, ensureSolanaWallet, disconnect }}
     >
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WalletContext.Provider>
   );
 }

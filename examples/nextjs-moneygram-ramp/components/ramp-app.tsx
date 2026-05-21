@@ -2,11 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  isSignedIn,
   sendEmailOTP,
   verifyOTP,
   getWalletAccounts,
-  onEvent,
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
@@ -20,6 +18,8 @@ import { ChainSelector } from "./chain-selector";
 import { CashPickupWidget } from "./cash-pickup-widget";
 import { CHAINS, type MgChain } from "@/lib/chains";
 import { fetchUsdcBalance } from "@/lib/balance";
+import { useAuth } from "@/hooks/use-auth";
+import { useWalletAccounts } from "@/hooks/use-wallet-accounts";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -36,8 +36,8 @@ function truncate(addr: string): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function RampApp() {
-  const [signedIn, setSignedIn] = useState(false);
-  const [walletAccounts, setWalletAccounts] = useState<WalletAccount[]>([]);
+  const signedIn = useAuth();
+  const walletAccounts = useWalletAccounts();
   const [selectedChain, setSelectedChain] = useState<MgChain>("base");
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [widgetOpen, setWidgetOpen] = useState(false);
@@ -48,34 +48,9 @@ export function RampApp() {
   const [otpVerification, setOtpVerification] = useState<OTPVerification | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Trigger init on mount (idempotent — useAuth also calls this, but explicit here for clarity)
   useEffect(() => {
-    let unsubToken: (() => void) | undefined;
-    let unsubWallets: (() => void) | undefined;
-    initDynamic().then(async () => {
-      if (isSignedIn()) {
-        const existing = getWalletAccounts();
-        if (existing.length === 0) {
-          await createWaasWalletAccounts({ chains: ["EVM", "SOL"] }, dynamicClient);
-        }
-        setSignedIn(true);
-        setWalletAccounts(getWalletAccounts());
-      }
-      unsubToken = onEvent(
-        { event: "tokenChanged", listener: ({ token }) => {
-          setSignedIn(!!token);
-          if (!token) setWalletAccounts([]);
-        }},
-        dynamicClient,
-      );
-      unsubWallets = onEvent(
-        { event: "walletAccountsChanged", listener: ({ walletAccounts }) => setWalletAccounts(walletAccounts) },
-        dynamicClient,
-      );
-    });
-    return () => {
-      unsubToken?.();
-      unsubWallets?.();
-    };
+    void initDynamic();
   }, []);
 
   const address = getAddressForChain(selectedChain, walletAccounts);
