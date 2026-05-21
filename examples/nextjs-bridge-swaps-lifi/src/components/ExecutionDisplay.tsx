@@ -36,7 +36,31 @@ export default function ExecutionDisplay({
   onStopRoute,
   onBackToForm,
 }: ExecutionDisplayProps) {
-  if (!activeRoute) return null;
+  if (!activeRoute) {
+    return (
+      <div className="w-full max-w-2xl">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl">Route Execution</CardTitle>
+              <button
+                onClick={onBackToForm}
+                className="flex items-center space-x-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-10 flex flex-col items-center gap-4">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-muted-foreground">Initiating swap execution…</p>
+            <p className="text-xs text-muted-foreground">Check your wallet for a chain-switch or approval prompt.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {

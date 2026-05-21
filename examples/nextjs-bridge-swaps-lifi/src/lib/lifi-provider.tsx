@@ -8,7 +8,6 @@ import type { Config, CreateConnectorFn } from "wagmi";
 import { initializeLiFiConfig, loadLiFiChains } from "./lifi";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 
-type LiFiConfigParam = Parameters<typeof initializeLiFiConfig>[0];
 type SyncConfigParam = Parameters<typeof useSyncWagmiConfig>[0];
 
 interface LiFiProviderProps extends PropsWithChildren {
@@ -32,7 +31,6 @@ export const LiFiProvider: FC<LiFiProviderProps> = ({
     queryKey: ["lifi-chains"] as const,
     queryFn: async () => {
       const chains = await loadLiFiChains();
-
       if (chains.length > 0) {
         lifiConfig.setChains(chains);
       }
@@ -48,7 +46,7 @@ export const LiFiProvider: FC<LiFiProviderProps> = ({
   useEffect(() => {
     if (sdkHasLoaded && !isInitialized) {
       try {
-        initializeLiFiConfig(wagmiConfig as unknown as LiFiConfigParam);
+        initializeLiFiConfig(wagmiConfig);
         setIsInitialized(true);
       } catch {
         setIsInitialized(false);
@@ -56,11 +54,7 @@ export const LiFiProvider: FC<LiFiProviderProps> = ({
     }
   }, [sdkHasLoaded, wagmiConfig, isInitialized]);
 
-  useSyncWagmiConfig(
-    wagmiConfig as unknown as SyncConfigParam,
-    connectors,
-    chains
-  );
+  useSyncWagmiConfig(wagmiConfig as unknown as SyncConfigParam, connectors, chains);
 
   if (chainsLoading || !sdkHasLoaded || !isInitialized) {
     return (
@@ -82,5 +76,6 @@ export const LiFiProvider: FC<LiFiProviderProps> = ({
     );
   }
 
+  void chains;
   return <>{children}</>;
 };

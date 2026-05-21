@@ -17,7 +17,7 @@ import {
 } from "@lifi/sdk";
 import { useEffect, useState, useCallback } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { Chain } from "@lifi/sdk";
+import { type Chain } from "@lifi/sdk";
 import { useChainId } from "wagmi";
 
 import ActionButtons from "./ActionButtons";
@@ -57,7 +57,7 @@ interface ExecutionProgress {
 
 export default function MultiChainSwap() {
   const { primaryWallet, sdkHasLoaded } = useDynamicContext();
-  const chainId = useChainId();
+  useChainId(); // subscribe to chain changes
 
   const isConnected = !!primaryWallet;
   const address = primaryWallet?.address;
@@ -94,13 +94,12 @@ export default function MultiChainSwap() {
         if (step.execution?.process) {
           step.execution.process.forEach((process) => {
             let chainId: number | undefined;
-
             if (stepIndex === 0) {
               chainId = swapState.fromChain?.id;
             } else if (stepIndex === route.steps.length - 1) {
               chainId = swapState.toChain?.id;
             } else {
-              chainId = swapState.toChain?.id;
+              chainId = swapState.fromChain?.id;
             }
 
             progress.push({
@@ -141,10 +140,7 @@ export default function MultiChainSwap() {
           monitorRouteExecution(route);
         }
       } catch {
-        setSwapState((prev) => ({
-          ...prev,
-          error: "Failed to check active routes",
-        }));
+        // ignore
       }
     };
 
@@ -157,25 +153,13 @@ export default function MultiChainSwap() {
     const fetchChains = async () => {
       try {
         const availableChains = await getChains();
-
         setChains(availableChains);
 
         if (availableChains.length >= 2) {
-          // Auto-select from chain based on wallet's current network
-          const walletChain = availableChains.find(
-            (chain) => chain.id === chainId
-          );
-          const fromChain = walletChain || availableChains[0];
-
-          // Select a different chain for "to" chain
-          const toChain =
-            availableChains.find((chain) => chain.id !== fromChain.id) ||
-            availableChains[1];
-
           setSwapState((prev) => ({
             ...prev,
-            fromChain,
-            toChain,
+            fromChain: availableChains[0],
+            toChain: availableChains[1],
           }));
         }
       } catch {
@@ -187,7 +171,7 @@ export default function MultiChainSwap() {
     };
 
     fetchChains();
-  }, [isReady, chainId]);
+  }, [isReady]);
 
   useEffect(() => {
     if (!swapState.fromChain || !swapState.toChain || !isReady) return;
@@ -196,7 +180,6 @@ export default function MultiChainSwap() {
       try {
         const fromChainId = swapState.fromChain?.id;
         const toChainId = swapState.toChain?.id;
-
         if (!fromChainId || !toChainId) return;
 
         const [fromTokensResponse, toTokensResponse] = await Promise.all([
@@ -228,16 +211,9 @@ export default function MultiChainSwap() {
   }, [swapState.fromChain, swapState.toChain, isReady]);
 
   const switchToChain = async (chainId: number) => {
-    if (!primaryWallet) {
-      return;
-    }
-
-    try {
-      if (primaryWallet.connector.supportsNetworkSwitching()) {
-        await primaryWallet.switchNetwork(chainId);
-      }
-    } catch (error) {
-      throw error;
+    if (!primaryWallet) return;
+    if (primaryWallet.connector.supportsNetworkSwitching()) {
+      await primaryWallet.switchNetwork(chainId);
     }
   };
 
@@ -248,91 +224,70 @@ export default function MultiChainSwap() {
     toTokenAddress: string,
     amount: string
   ) => {
-    if (!sdkHasLoaded || !isConnected || !address) {
-      throw new Error("Not ready");
-    }
+    if (!isReady || !address) throw new Error("Not ready");
 
-    try {
-      const routes = await getRoutes({
-        fromChainId,
-        toChainId,
-        fromTokenAddress,
-        toTokenAddress,
-        fromAmount: amount,
-        fromAddress: address,
-        toAddress: address,
-        options: {
-          order: "CHEAPEST",
-          maxPriceImpact: 0.3,
-          slippage: 0.005,
-          fee: 0.01, // 1% fee
-        },
-      });
+    const routes = await getRoutes({
+      fromChainId,
+      toChainId,
+      fromTokenAddress,
+      toTokenAddress,
+      fromAmount: amount,
+      fromAddress: address,
+      toAddress: address,
+      options: {
+        order: "CHEAPEST",
+        maxPriceImpact: 0.3,
+        slippage: 0.005,
+        fee: 0.01,
+      },
+    });
 
-      return routes;
-    } catch (error) {
-      throw error;
-    }
+    return routes;
   };
 
   const executeSwapRoute = async (route: Route) => {
-    if (!sdkHasLoaded || !isConnected || !address || !route) {
-      throw new Error("Not ready");
-    }
+    if (!isReady || !address || !route) throw new Error("Not ready");
 
-    try {
-      const executionOptions: ExecutionOptions = {
-        updateRouteHook: (updatedRoute: RouteExtended) => {
-          monitorRouteExecution(updatedRoute);
+    const executionOptions: ExecutionOptions = {
+      updateRouteHook: (updatedRoute: RouteExtended) => {
+        monitorRouteExecution(updatedRoute);
 
-          const isComplete = updatedRoute.steps.every(
-            (step) =>
-              step.execution?.status === "DONE" ||
-              step.execution?.status === "FAILED"
-          );
+        const isComplete = updatedRoute.steps.every(
+          (step) =>
+            step.execution?.status === "DONE" ||
+            step.execution?.status === "FAILED"
+        );
 
-          if (isComplete) {
-            setSwapState((prev) => ({
-              ...prev,
-              isExecuting: false,
-              txHash: "Execution completed",
-              isRouteCompleted: true,
-              // Keep activeRoute to show completion state
-            }));
-          }
-        },
-        updateTransactionRequestHook: async (txRequest) => {
-          return txRequest;
-        },
-        acceptExchangeRateUpdateHook: async (params) => {
-          const accepted = window.confirm(
-            `Exchange rate has changed!\nOld amount: ${formatUnits(
-              BigInt(params.oldToAmount),
-              params.toToken.decimals
-            )} ${params.toToken.symbol}\nNew amount: ${formatUnits(
-              BigInt(params.newToAmount),
-              params.toToken.decimals
-            )} ${params.toToken.symbol}\n\nDo you want to continue?`
-          );
-          return accepted;
-        },
-        switchChainHook: async (chainId) => {
-          try {
-            await switchToChain(chainId);
-            return undefined;
-          } catch (error) {
-            throw error;
-          }
-        },
-        executeInBackground: false,
-        disableMessageSigning: false,
-      };
+        if (isComplete) {
+          setSwapState((prev) => ({
+            ...prev,
+            isExecuting: false,
+            txHash: "Execution completed",
+            isRouteCompleted: true,
+          }));
+        }
+      },
+      updateTransactionRequestHook: async (txRequest) => txRequest,
+      acceptExchangeRateUpdateHook: async (params) => {
+        return window.confirm(
+          `Exchange rate has changed!\nOld amount: ${formatUnits(
+            BigInt(params.oldToAmount),
+            params.toToken.decimals
+          )} ${params.toToken.symbol}\nNew amount: ${formatUnits(
+            BigInt(params.newToAmount),
+            params.toToken.decimals
+          )} ${params.toToken.symbol}\n\nDo you want to continue?`
+        );
+      },
+      switchChainHook: async (chainId) => {
+        await switchToChain(chainId);
+        return undefined;
+      },
+      executeInBackground: false,
+      disableMessageSigning: false,
+    };
 
-      const result = await executeRoute(route, executionOptions);
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    return executeRoute(route, executionOptions);
   };
 
   const handleGetRoutes = async () => {
@@ -407,20 +362,16 @@ export default function MultiChainSwap() {
       txHash: null,
       isExecuting: true,
       executionProgress: [],
-      showExecutionDisplay: true, // Immediately show execution display
+      showExecutionDisplay: true,
     }));
 
     try {
       await executeSwapRoute(swapState.selectedRoute);
-      setSwapState((prev) => ({
-        ...prev,
-        isLoading: false,
-      }));
+      setSwapState((prev) => ({ ...prev, isLoading: false }));
     } catch (error) {
       setSwapState((prev) => ({
         ...prev,
-        error:
-          error instanceof Error ? error.message : "Failed to execute swap",
+        error: error instanceof Error ? error.message : "Failed to execute swap",
         isLoading: false,
         isExecuting: false,
       }));
@@ -429,7 +380,6 @@ export default function MultiChainSwap() {
 
   const handleResumeRoute = async () => {
     if (!swapState.activeRoute) return;
-
     try {
       setSwapState((prev) => ({ ...prev, isLoading: true }));
       await resumeRoute(swapState.activeRoute);
@@ -437,8 +387,7 @@ export default function MultiChainSwap() {
     } catch (error) {
       setSwapState((prev) => ({
         ...prev,
-        error:
-          error instanceof Error ? error.message : "Failed to resume route",
+        error: error instanceof Error ? error.message : "Failed to resume route",
         isLoading: false,
       }));
     }
@@ -446,7 +395,6 @@ export default function MultiChainSwap() {
 
   const handleStopRoute = () => {
     if (!swapState.activeRoute) return;
-
     try {
       stopRouteExecution(swapState.activeRoute);
       setSwapState((prev) => ({
@@ -456,29 +404,17 @@ export default function MultiChainSwap() {
         executionProgress: [],
       }));
     } catch {
-      setSwapState((prev) => ({
-        ...prev,
-        error: "Failed to stop route execution",
-      }));
+      setSwapState((prev) => ({ ...prev, error: "Failed to stop route execution" }));
     }
   };
 
   const handleMoveToBackground = () => {
     if (!swapState.activeRoute) return;
-
     try {
-      updateRouteExecution(swapState.activeRoute, {
-        executeInBackground: true,
-      });
-      setSwapState((prev) => ({
-        ...prev,
-        isExecuting: false,
-      }));
+      updateRouteExecution(swapState.activeRoute, { executeInBackground: true });
+      setSwapState((prev) => ({ ...prev, isExecuting: false }));
     } catch {
-      setSwapState((prev) => ({
-        ...prev,
-        error: "Failed to move route to background",
-      }));
+      setSwapState((prev) => ({ ...prev, error: "Failed to move route to background" }));
     }
   };
 
@@ -502,7 +438,6 @@ export default function MultiChainSwap() {
       ...prev,
       showRouteDisplay: false,
       showExecutionDisplay: false,
-      // Reset execution-related state when going back to form
       isExecuting: false,
       executionProgress: [],
       activeRoute: null,
@@ -513,24 +448,19 @@ export default function MultiChainSwap() {
   };
 
   const handleShowExecutionDisplay = () => {
-    setSwapState((prev) => ({
-      ...prev,
-      showExecutionDisplay: true,
-    }));
+    setSwapState((prev) => ({ ...prev, showExecutionDisplay: true }));
   };
 
   if (!sdkHasLoaded) {
     return (
-      <div className="w-full max-w-md">
-        <div className="bg-card text-card-foreground rounded-2xl shadow-lg p-6 border border-border text-center">
-          <div className="w-16 h-16 bg-accent text-accent-foreground rounded-full flex items-center justify-center mx-auto mb-4">
-            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <main className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="bg-card text-card-foreground rounded-2xl shadow-lg p-6 border border-border text-center">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading wallet connection...</p>
           </div>
-          <p className="text-xl text-muted-foreground">
-            Loading wallet connection...
-          </p>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -555,14 +485,10 @@ export default function MultiChainSwap() {
               selectedRoute={swapState.selectedRoute}
               toTokenSymbol={swapState.toToken?.symbol}
               onRouteSelect={(route) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  selectedRoute: route,
-                }))
+                setSwapState((prev) => ({ ...prev, selectedRoute: route }))
               }
               onBackToForm={handleBackToForm}
             />
-
             <ActionButtons
               isLoading={swapState.isLoading}
               isExecuting={swapState.isExecuting}
@@ -570,13 +496,13 @@ export default function MultiChainSwap() {
               hasSelectedRoute={!!swapState.selectedRoute}
               showRouteDisplay={swapState.showRouteDisplay}
               hasActiveRoute={!!swapState.activeRoute}
+              isConnected={isConnected}
               onGetRoutes={handleGetRoutes}
               onExecuteSwap={handleExecuteSwap}
               onClear={clearState}
               onBackToForm={handleBackToForm}
               onShowExecutionDisplay={handleShowExecutionDisplay}
             />
-
             <StatusMessages
               error={swapState.error}
               txHash={swapState.txHash}
@@ -595,39 +521,21 @@ export default function MultiChainSwap() {
               fromTokens={fromTokens}
               toTokens={toTokens}
               onFromChainChange={(chain) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  fromChain: chain,
-                  fromToken: null,
-                }))
+                setSwapState((prev) => ({ ...prev, fromChain: chain, fromToken: null }))
               }
               onToChainChange={(chain) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  toChain: chain,
-                  toToken: null,
-                }))
+                setSwapState((prev) => ({ ...prev, toChain: chain, toToken: null }))
               }
               onFromTokenChange={(token) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  fromToken: token,
-                }))
+                setSwapState((prev) => ({ ...prev, fromToken: token }))
               }
               onToTokenChange={(token) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  toToken: token,
-                }))
+                setSwapState((prev) => ({ ...prev, toToken: token }))
               }
               onAmountChange={(amount) =>
-                setSwapState((prev) => ({
-                  ...prev,
-                  amount,
-                }))
+                setSwapState((prev) => ({ ...prev, amount }))
               }
             />
-
             <ActionButtons
               isLoading={swapState.isLoading}
               isExecuting={swapState.isExecuting}
@@ -635,13 +543,13 @@ export default function MultiChainSwap() {
               hasSelectedRoute={!!swapState.selectedRoute}
               showRouteDisplay={swapState.showRouteDisplay}
               hasActiveRoute={!!swapState.activeRoute}
+              isConnected={isConnected}
               onGetRoutes={handleGetRoutes}
               onExecuteSwap={handleExecuteSwap}
               onClear={clearState}
               onBackToForm={handleBackToForm}
               onShowExecutionDisplay={handleShowExecutionDisplay}
             />
-
             <StatusMessages
               error={swapState.error}
               txHash={swapState.txHash}

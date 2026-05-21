@@ -6,14 +6,11 @@ import DynamicButton from "./dynamic/dynamic-button";
 
 export default function Header() {
   return (
-    <div
-      className={"absolute top-0 flex items-center justify-between w-full py-2"}
-    >
-      <div className="pl-4 h-[40px] flex items-center">
-        <Link href="/">
-          <DynamicLogo />
-        </Link>
-      </div>
+    <header className="sticky top-0 z-50 flex items-center justify-between h-16 px-6 bg-background border-b">
+      <Link href="/" className="flex items-center">
+        <DynamicLogo width={120} height={24} />
+      </Link>
+
       <div className="hidden md:flex gap-2 pr-4">
         <DynamicWidget />
       </div>
@@ -22,6 +19,6 @@ export default function Header() {
           <DynamicButton />
         </HamburgerMenu>
       </div>
-    </div>
+    </header>
   );
 }

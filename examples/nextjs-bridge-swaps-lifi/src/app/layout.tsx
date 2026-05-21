@@ -8,7 +8,7 @@ import Footer from "@/components/footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Bridges with Dynamic",
+  title: "LiFi Cross-Chain Swaps with Dynamic",
   description:
     "Bridge tokens across multiple chains seamlessly with Dynamic's MPC wallets and LiFi. Access the best routes and execute cross-chain transfers with confidence.",
 };
@@ -22,9 +22,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} bg-muted`}>
         <Providers>
-          <Header />
-          {children}
-          <Footer />
+          <div className="flex flex-col min-h-screen">
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
         </Providers>
       </body>
     </html>

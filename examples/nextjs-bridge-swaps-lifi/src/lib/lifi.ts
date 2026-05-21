@@ -1,7 +1,8 @@
 import { ChainType, EVM, createConfig, getChains } from "@lifi/sdk";
-import { getWalletClient, switchChain, type Config } from "@wagmi/core";
+import { getWalletClient, switchChain } from "@wagmi/core";
 
-export const initializeLiFiConfig = (wagmiConfig: Config) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const initializeLiFiConfig = (wagmiConfig: any) => {
   return createConfig({
     integrator: "Dynamic",
     providers: [
