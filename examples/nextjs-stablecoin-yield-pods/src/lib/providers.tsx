@@ -1,48 +1,137 @@
 "use client";
 
-import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
-import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
-import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
-import { ZeroDevSmartWalletConnectors } from "@dynamic-labs/ethereum-aa";
-import { WagmiProvider } from "wagmi";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import {
+  getWalletAccounts,
+  onEvent,
+  isSignedIn,
+  logout,
+  detectOAuthRedirect,
+  completeSocialAuthentication,
+  getActiveNetworkId,
+} from "@dynamic-labs-sdk/client";
+import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
+import {
+  isEvmWalletAccount,
+  type EvmWalletAccount,
+} from "@dynamic-labs-sdk/evm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { config } from "@/lib/wagmi";
-import { ThemeProvider } from "@/components/theme-provider";
+import { dynamicClient } from "./dynamic";
 
-// Create a single QueryClient instance outside the component
+interface WalletContextValue {
+  evmAccount: EvmWalletAccount | null;
+  loggedIn: boolean;
+  chainId: number;
+  setChainId: (id: number) => void;
+  ensureEvmWallet: () => Promise<void>;
+  disconnect: () => Promise<void>;
+}
+
+const WalletContext = createContext<WalletContextValue>({
+  evmAccount: null,
+  loggedIn: false,
+  chainId: 8453,
+  setChainId: () => {},
+  ensureEvmWallet: async () => {},
+  disconnect: async () => {},
+});
+
+export function useWallet() {
+  return useContext(WalletContext);
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 5,
       refetchOnWindowFocus: false,
     },
   },
 });
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children }: { children: ReactNode }) {
+  const [evmAccount, setEvmAccount] = useState<EvmWalletAccount | null>(null);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [chainId, setChainId] = useState<number>(8453);
+
+  useEffect(() => {
+    if (!evmAccount) return;
+    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient)
+      .then(({ networkId }) => setChainId(Number(networkId)))
+      .catch(() => {});
+  }, [evmAccount]);
+
+  const refresh = useCallback(() => {
+    const accounts = getWalletAccounts(dynamicClient);
+    const evm = accounts.find(isEvmWalletAccount) ?? null;
+    setEvmAccount(evm);
+    setLoggedIn(isSignedIn(dynamicClient));
+  }, []);
+
+  const disconnect = useCallback(async () => {
+    await logout(dynamicClient);
+    setEvmAccount(null);
+    setLoggedIn(false);
+  }, []);
+
+  const ensureEvmWallet = useCallback(async () => {
+    try {
+      const accounts = getWalletAccounts(dynamicClient);
+      if (!accounts.some(isEvmWalletAccount) && isSignedIn(dynamicClient)) {
+        await createWaasWalletAccounts({ chains: ["EVM"] }, dynamicClient);
+      }
+    } catch {}
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const handleOAuthRedirect = async () => {
+      if (typeof window === "undefined") return;
+      try {
+        const url = new URL(window.location.href);
+        const isOAuth = await detectOAuthRedirect({ url }, dynamicClient);
+        if (isOAuth) {
+          await completeSocialAuthentication({ url }, dynamicClient);
+          await ensureEvmWallet();
+          window.history.replaceState({}, "", window.location.pathname);
+          return;
+        }
+      } catch {}
+      refresh();
+    };
+    handleOAuthRedirect();
+    const unsubWallets = onEvent(
+      { event: "walletAccountsChanged", listener: () => ensureEvmWallet() },
+      dynamicClient
+    );
+    const unsubLogout = onEvent(
+      {
+        event: "logout",
+        listener: () => {
+          setEvmAccount(null);
+          setLoggedIn(false);
+        },
+      },
+      dynamicClient
+    );
+    return () => {
+      unsubWallets();
+      unsubLogout();
+    };
+  }, [refresh, ensureEvmWallet]);
+
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
+    <WalletContext.Provider
+      value={{ evmAccount, loggedIn, chainId, setChainId, ensureEvmWallet, disconnect }}
     >
-      <DynamicContextProvider
-        theme="light"
-        settings={{
-          environmentId: "ff23194d-87cb-4bc5-b021-5dee4b31256b",
-          walletConnectors: [
-            EthereumWalletConnectors,
-            ZeroDevSmartWalletConnectors,
-          ],
-        }}
-      >
-        <WagmiProvider config={config}>
-          <QueryClientProvider client={queryClient}>
-            <DynamicWagmiConnector>{children}</DynamicWagmiConnector>
-          </QueryClientProvider>
-        </WagmiProvider>
-      </DynamicContextProvider>
-    </ThemeProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </WalletContext.Provider>
   );
 }

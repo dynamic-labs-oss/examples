@@ -1,56 +1,111 @@
 "use client";
 
-import { isEthereumWallet } from "@dynamic-labs/ethereum";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { useEffect, useState, useCallback } from "react";
-import { useChainId, useSwitchChain } from "wagmi";
-import { mainnet, base, polygon } from "viem/chains";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import Image from "next/image";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionOperations } from "../lib/useTransactionOperations";
 import { getChainName } from "../lib/utils";
+import { getBalances } from "@dynamic-labs-sdk/client";
+import { dynamicClient } from "../lib/dynamic";
 import { client as podsClient } from "../lib/pods";
-import type {
-  Strategy,
-  WalletPositions,
-  Position,
-  PositionCardProps,
-  StrategyCardProps,
-} from "../lib/pods-types";
+import { useWallet } from "@/lib/providers";
+import type { Strategy, Position, WalletPositions } from "../lib/pods-types";
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+interface AssetInfo { balance: string; symbol: string; }
+
+function formatApy(apy: number | undefined) {
+  if (apy == null) return null;
+  return `${(apy * 100).toFixed(2)}%`;
+}
+
+function ProtocolBadge({ name }: { name: string }) {
+  return (
+    <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: "#E8F0FE", color: "#1967D2" }}>
+      {name}
+    </span>
+  );
+}
+
+function TokenLogo({ url, symbol, size = 36 }: { url?: string; symbol: string; size?: number }) {
+  if (url) {
+    return <Image src={url} alt={symbol} width={size} height={size} className="rounded-full shrink-0" />;
+  }
+  return (
+    <div
+      className="rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+      style={{ width: size, height: size, background: "#4779FF" }}
+    >
+      {symbol.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+function StatBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-earn-light rounded-lg px-3 py-2">
+      <p className="text-[10px] font-medium text-earn-text-secondary uppercase tracking-wide">{label}</p>
+      <p className="text-sm font-semibold text-earn-text-primary mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function CardSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-earn-border p-4 space-y-4">
+      <div className="flex items-center gap-3">
+        <Skeleton className="w-9 h-9 rounded-full" />
+        <div className="flex-1 space-y-1.5"><Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-36" /></div>
+        <Skeleton className="h-6 w-12" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Skeleton className="h-12 rounded-lg" /><Skeleton className="h-12 rounded-lg" />
+        <Skeleton className="h-12 rounded-lg" /><Skeleton className="h-12 rounded-lg" />
+      </div>
+      <Skeleton className="h-9 rounded-lg" />
+    </div>
+  );
+}
+
+function PositionSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-earn-border p-4 space-y-4">
+      <div className="flex items-center gap-3">
+        <Skeleton className="w-9 h-9 rounded-full" />
+        <div className="flex-1 space-y-1.5"><Skeleton className="h-4 w-20" /><Skeleton className="h-3 w-28" /></div>
+        <Skeleton className="h-6 w-14" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Skeleton className="h-12 rounded-lg" /><Skeleton className="h-12 rounded-lg" />
+      </div>
+      <Skeleton className="h-9 rounded-lg" />
+    </div>
+  );
+}
+
+// ─── main ─────────────────────────────────────────────────────────────────────
 
 export function YieldInterface() {
-  const { primaryWallet } = useDynamicContext();
-  const wagmiChainId = useChainId();
-  const { switchChain } = useSwitchChain();
-  const [selectedChainId, setSelectedChainId] = useState<number>(base.id);
-  const [isSwitching, setIsSwitching] = useState(false);
-  const [chainError, setChainError] = useState<string | null>(null);
+  const { evmAccount, loggedIn, chainId } = useWallet();
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [lastTransaction, setLastTransaction] = useState<{
-    type: string;
-    hash: string;
-    timestamp: number;
-  } | null>(null);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [positions, setPositions] = useState<WalletPositions | null>(null);
-
-  // Use selectedChainId if wallet is connected and synced, otherwise use local state
-  const chainId = primaryWallet ? wagmiChainId : selectedChainId;
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  // stores { balance, symbol } keyed by underlying asset address
+  const [assetInfoMap, setAssetInfoMap] = useState<Record<string, AssetInfo>>({});
 
   const fetchStrategies = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch up to 100 strategies at once
-      const response = await podsClient.getStrategies(chainId, 100);
-      const activeStrategies = response.data.filter(
-        (s) => s.isActive !== false
-      );
-      setStrategies(activeStrategies);
-      setRefreshKey((prev) => prev + 1);
+      const res = await podsClient.getStrategies(chainId, 100);
+      setStrategies(res.data.filter((s) => s.isActive !== false));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -58,492 +113,341 @@ export function YieldInterface() {
     }
   }, [chainId]);
 
-  useEffect(() => {
-    fetchStrategies();
-  }, [fetchStrategies]);
-
-  // Fetch positions when wallet is connected
-  useEffect(() => {
-    const fetchPositions = async () => {
-      if (!primaryWallet?.address) {
-        setPositions(null);
-        return;
-      }
-
-      try {
-        const data = await podsClient.getWalletPositions(primaryWallet.address);
-        setPositions(data);
-      } catch (err) {
-        console.error("Failed to fetch positions:", err);
-        setPositions(null);
-      }
-    };
-
-    fetchPositions();
-  }, [primaryWallet?.address]);
-
-  const handleSwitchChain = async (targetChainId: number) => {
-    // If wallet is connected, try to switch the actual network
-    if (primaryWallet && isEthereumWallet(primaryWallet)) {
-      setIsSwitching(true);
-      setChainError(null);
-
-      try {
-        if (primaryWallet.connector.supportsNetworkSwitching()) {
-          await primaryWallet.switchNetwork(targetChainId);
-        } else if (switchChain) {
-          // Fallback to wagmi's switchChain
-          await switchChain({ chainId: targetChainId as 1 | 8453 | 137 });
-        } else {
-          setChainError("Your wallet doesn't support network switching");
-        }
-      } catch (err) {
-        console.error("Failed to switch chain:", err);
-        setChainError("Failed to switch chain. Please try again.");
-      } finally {
-        setIsSwitching(false);
-      }
-    } else {
-      // If no wallet, just update local state to show strategies for that chain
-      setSelectedChainId(targetChainId);
-      setChainError(null);
-    }
-  };
+  useEffect(() => { fetchStrategies(); }, [fetchStrategies]);
 
   useEffect(() => {
-    if (lastTransaction) {
-      const timer = setTimeout(() => {
-        setLastTransaction(null);
-      }, 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [lastTransaction]);
+    if (!loggedIn || !evmAccount?.address) { setPositions(null); return; }
+    setPositionsLoading(true);
+    podsClient.getWalletPositions(evmAccount.address)
+      .then(setPositions)
+      .catch(() => setPositions(null))
+      .finally(() => setPositionsLoading(false));
+  }, [loggedIn, evmAccount?.address, refreshKey]);
 
-  // Sync selectedChainId with wagmi chainId only when wallet is connected
+  const assetAddresses = useMemo(
+    () => [...new Set(strategies.map((s) => s.underlyingAsset).filter(Boolean))],
+    [strategies]
+  );
+
   useEffect(() => {
-    if (primaryWallet && wagmiChainId) {
-      setSelectedChainId(wagmiChainId);
-    }
-  }, [primaryWallet, wagmiChainId]);
-
-  // Use original hook name (internals support smart wallet bundling)
-  const { isOperating, executeDeposit, executeWithdraw } =
-    useTransactionOperations(null, chainId);
-
-  const handleDeposit = async (strategy: Strategy, amount: string) => {
-    try {
-      const hash = await executeDeposit(strategy, amount);
-      if (hash) {
-        setLastTransaction({
-          type: "Deposit",
-          hash,
-          timestamp: Date.now(),
-        });
-        // Refresh strategies after successful deposit
-        await fetchStrategies();
+    if (!evmAccount || assetAddresses.length === 0) return;
+    getBalances(
+      { walletAccount: evmAccount, networkId: chainId, whitelistedContracts: assetAddresses, filterSpamTokens: false },
+      dynamicClient
+    ).then((bals) => {
+      const map: Record<string, AssetInfo> = {};
+      for (const b of bals) {
+        if (b.address) map[b.address.toLowerCase()] = { balance: b.balance, symbol: b.symbol ?? "" };
       }
-    } catch (error) {
-      console.error("Deposit failed:", error);
-      setError(error instanceof Error ? error.message : "Deposit failed");
+      setAssetInfoMap(map);
+    }).catch(() => {});
+  }, [evmAccount, chainId, assetAddresses, refreshKey]);
+
+  useEffect(() => {
+    if (!lastTxHash) return;
+    const t = setTimeout(() => setLastTxHash(null), 4000);
+    return () => clearTimeout(t);
+  }, [lastTxHash]);
+
+  const { isOperating, executeDeposit, executeWithdraw } = useTransactionOperations(null, chainId);
+  const onSuccess = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  const handleDeposit = useCallback(async (strategy: Strategy, amount: string) => {
+    const hash = await executeDeposit(strategy, amount);
+    if (hash) { setLastTxHash(hash); onSuccess(); fetchStrategies(); }
+  }, [executeDeposit, onSuccess, fetchStrategies]);
+
+  const handleWithdraw = useCallback(async (strategy: Strategy, amount: string) => {
+    const hash = await executeWithdraw(strategy, amount);
+    if (hash) { setLastTxHash(hash); onSuccess(); fetchStrategies(); }
+  }, [executeWithdraw, onSuccess, fetchStrategies]);
+
+  const handlePositionWithdraw = useCallback(async (position: Position, amount: string) => {
+    let strategy: Strategy | null = position.strategyId
+      ? await podsClient.getStrategy(position.strategyId).catch(() => null)
+      : null;
+    if (!strategy) {
+      strategy = {
+        asset: position.asset.address, protocol: position.protocol, assetName: position.asset.symbol,
+        network: "", networkId: "", implementationSelector: position.protocol, startDate: "",
+        underlyingAsset: position.asset.address, assetDecimals: parseInt(position.asset.decimals),
+        underlyingDecimals: parseInt(position.asset.decimals),
+        id: `${position.protocol}-${position.asset.symbol}`, fee: "0",
+      };
     }
-  };
+    await handleWithdraw(strategy, amount);
+  }, [handleWithdraw]);
 
-  const handleWithdraw = async (strategy: Strategy, amount: string) => {
-    try {
-      const hash = await executeWithdraw(strategy, amount);
-      if (hash) {
-        setLastTransaction({
-          type: "Withdraw",
-          hash,
-          timestamp: Date.now(),
-        });
-        // Refresh strategies and positions after successful withdraw
-        await fetchStrategies();
-        if (primaryWallet?.address) {
-          const data = await podsClient.getWalletPositions(
-            primaryWallet.address
-          );
-          setPositions(data);
-        }
-      }
-    } catch (error) {
-      console.error("Withdraw failed:", error);
-      setError(error instanceof Error ? error.message : "Withdraw failed");
-    }
-  };
-
-  const handlePositionWithdraw = async (position: Position, amount: string) => {
-    // Prefer using the real strategy from the API when we have the ID
-    try {
-      let strategy: Strategy | null = null;
-      if (position.strategyId) {
-        strategy = await podsClient.getStrategy(position.strategyId);
-      }
-
-      // Fallback: synthesize minimal strategy if no id present
-      if (!strategy) {
-        strategy = {
-          asset: position.asset.address,
-          protocol: position.protocol,
-          assetName: position.asset.symbol,
-          network: "",
-          networkId: "",
-          implementationSelector: position.protocol,
-          startDate: "",
-          underlyingAsset: position.asset.address,
-          assetDecimals: parseInt(position.asset.decimals),
-          underlyingDecimals: parseInt(position.asset.decimals),
-          id: `${position.protocol}-${position.asset.symbol}`,
-          fee: "0",
-        };
-      }
-
-      await handleWithdraw(strategy, amount);
-    } catch (e) {
-      console.error("Failed to resolve strategy for withdraw", e);
-      throw e;
-    }
-  };
-
-  // Don't block the UI with chain errors - just show them as a banner
-
-  // Show loading state when chain is changing
-  if (isSwitching) {
-    return (
-      <div className="min-h-screen flex items-center justify-center mt-24">
-        <Card className="max-w-md mx-auto">
-          <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">
-              Switching to {getChainName(chainId)}...
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const activePositions = positions?.positions ?? [];
 
   return (
-    <div key={`yield-${chainId}-${refreshKey}`} className="space-y-6 mt-6">
-      <h1 className="text-3xl font-bold text-center">
-        Yield Strategies with Dynamic
-      </h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-earn-text-primary">Yield Strategies</h1>
+        <p className="text-sm text-earn-text-secondary mt-1">
+          Deposit into yield strategies on {getChainName(chainId)} · powered by Deframe Pods
+        </p>
+      </div>
 
-      {lastTransaction && (
-        <Card className="max-w-5xl mx-auto bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-          <CardContent className="pt-6">
-            <p className="text-center text-green-600 dark:text-green-400">
-              ✅ {lastTransaction.type} transaction sent! Hash:{" "}
-              {lastTransaction.hash.slice(0, 10)}...
-            </p>
-          </CardContent>
-        </Card>
+      {lastTxHash && (
+        <div className="p-4 rounded-xl border border-green-200 bg-green-50 text-sm text-green-700 flex items-center justify-between">
+          <span>Transaction sent!</span>
+          <span className="font-mono text-xs">{lastTxHash.slice(0, 10)}…</span>
+        </div>
       )}
-
-      {chainError && (
-        <Card className="max-w-5xl mx-auto bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <p className="text-center text-yellow-600 dark:text-yellow-400">
-                ⚠️ {chainError}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setChainError(null)}
-                className="text-yellow-600 dark:text-yellow-400"
-              >
-                Dismiss
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {error && (
-        <Card className="max-w-5xl mx-auto bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <p className="text-center text-red-600 dark:text-red-400">
-                ❌ {error}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setError(null)}
-                className="text-red-600 dark:text-red-400"
-              >
-                Dismiss
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="p-4 rounded-xl border border-red-200 bg-red-50 flex items-center justify-between">
+          <p className="text-sm text-red-600">{error}</p>
+          <button onClick={() => setError(null)} className="cursor-pointer text-red-400 hover:text-red-600 text-lg">&times;</button>
+        </div>
       )}
 
-      {/* Open Positions Section */}
-      {positions && positions.positions.length > 0 && (
-        <Card className="max-w-5xl mx-auto">
-          <CardHeader>
-            <CardTitle>Your Open Positions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {positions.positions.map((position, idx) => (
-                <PositionCard
-                  key={idx}
-                  position={position}
-                  isOperating={isOperating}
-                  onWithdraw={handlePositionWithdraw}
-                />
+      {/* Always-visible Positions section */}
+      {loggedIn && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-earn-text-secondary uppercase tracking-wide">
+              Your Positions
+            </h2>
+            <button
+              onClick={onSuccess}
+              disabled={positionsLoading}
+              className="cursor-pointer text-xs text-earn-primary hover:underline disabled:opacity-40"
+            >
+              {positionsLoading ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+          {positionsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <PositionSkeleton /><PositionSkeleton />
+            </div>
+          ) : activePositions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activePositions.map((position, idx) => (
+                <PositionCard key={idx} position={position} isOperating={isOperating} onWithdraw={handlePositionWithdraw} />
               ))}
             </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <div className="bg-white border border-earn-border rounded-xl p-5 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-earn-text-primary font-medium">No positions yet</p>
+                <p className="text-xs text-earn-text-secondary mt-0.5">
+                  New deposits may take a few minutes to appear. Hit Refresh to check again.
+                </p>
+              </div>
+              <button
+                onClick={onSuccess}
+                disabled={positionsLoading}
+                className="cursor-pointer text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors hover:bg-earn-light disabled:opacity-40"
+                style={{ borderColor: "#DADADA", color: "#4779FF" }}
+              >
+                Refresh
+              </button>
+            </div>
+          )}
+        </section>
       )}
 
-      {/* Available Strategies Section */}
-      <Card className="max-w-5xl mx-auto">
-        <CardHeader>
-          <CardTitle>Available Strategies</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-muted-foreground">Loading strategies...</p>
-          ) : error ? (
-            <p className="text-destructive">
-              Error loading strategies: {error}
-            </p>
-          ) : strategies && strategies.length > 0 ? (
-            <div className={`grid grid-cols-1 md:grid-cols-2 gap-4`}>
-              {strategies.map((strategy) => (
+      {/* Strategies */}
+      <section>
+        <h2 className="text-sm font-semibold text-earn-text-secondary uppercase tracking-wide mb-3">
+          Available Strategies
+        </h2>
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+          </div>
+        ) : strategies.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {strategies.map((strategy) => {
+              const info = assetInfoMap[strategy.underlyingAsset?.toLowerCase() ?? ""];
+              return (
                 <StrategyCard
                   key={strategy.id}
                   strategy={strategy}
                   isOperating={isOperating}
-                  primaryWallet={primaryWallet}
+                  primaryWallet={evmAccount ? { address: evmAccount.address } : null}
+                  assetInfo={info ?? { balance: "0", symbol: strategy.assetName }}
                   onDeposit={handleDeposit}
-                  onWithdraw={handleWithdraw}
                 />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center space-y-4">
-              <p className="text-muted-foreground">
-                No strategies found for {getChainName(chainId)}.
-              </p>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Try switching to a supported network:
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(mainnet.id)}
-                    disabled={isSwitching || Number(chainId) === mainnet.id}
-                  >
-                    {mainnet.name}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(base.id)}
-                    disabled={isSwitching || Number(chainId) === base.id}
-                  >
-                    {base.name}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitchChain(polygon.id)}
-                    disabled={isSwitching || Number(chainId) === polygon.id}
-                  >
-                    {polygon.name}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-white border border-earn-border rounded-xl p-8 text-center">
+            <p className="text-sm text-earn-text-secondary">No strategies on {getChainName(chainId)}.</p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
-// Position Card Component
-function PositionCard({
-  position,
-  isOperating,
-  onWithdraw,
-}: PositionCardProps) {
+// ─── PositionCard ─────────────────────────────────────────────────────────────
+
+interface PositionCardProps {
+  position: Position;
+  isOperating: boolean;
+  onWithdraw: (position: Position, amount: string) => void;
+}
+
+function PositionCard({ position, isOperating, onWithdraw }: PositionCardProps) {
   const [amount, setAmount] = useState("");
-
-  const handleAction = () => {
-    if (!amount || parseFloat(amount) <= 0) return;
-    onWithdraw(position, amount);
-    setAmount("");
-  };
-
-  const apyPercent = (parseFloat(position.apy) * 100).toFixed(2);
+  const maxAmount = position.balance.humanized;
+  const apyRaw = parseFloat(position.apy);
+  // API returns APY as a percentage (e.g., 5.25 means 5.25%) not a fraction
+  const apyFormatted = isFinite(apyRaw) && apyRaw > 0 ? `${apyRaw.toFixed(2)}%` : "—";
 
   return (
-    <Card className="border-blue-200 dark:border-blue-800">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>{position.asset.symbol}</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {position.protocol}
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Balance</span>
-            <span className="font-semibold">
-              {position.balance.humanized.toFixed(4)} {position.asset.symbol}
-            </span>
+    <Card className="bg-white border border-earn-border rounded-xl shadow-sm overflow-hidden flex flex-col">
+      <div className="p-4 border-b border-earn-border">
+        <div className="flex items-center gap-3">
+          <TokenLogo symbol={position.asset.symbol} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-semibold text-earn-text-primary">{position.asset.symbol}</h3>
+              {position.protocol && <ProtocolBadge name={position.protocol} />}
+            </div>
+            <p className="text-xs text-earn-text-secondary mt-0.5">{position.asset.name}</p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">USD Value</span>
-            <span className="font-semibold">${position.balanceUSD}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Current APY</span>
-            <span className="text-lg font-bold text-blue-600">
-              {apyPercent}%
-            </span>
+          <div className="text-right shrink-0">
+            <p className="text-base font-bold text-earn-primary">{apyFormatted}</p>
+            <p className="text-[10px] text-earn-text-secondary">APY</p>
           </div>
         </div>
-
-        {position.rewards && position.rewards.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-muted-foreground">
-              Rewards:
-            </p>
-            {position.rewards.map((reward, idx) => (
-              <div key={idx} className="flex justify-between text-sm">
-                <span>
-                  {reward.amount} {reward.token.symbol}
-                </span>
-                <span className="text-muted-foreground">
-                  ${reward.amountUSD}
-                </span>
-              </div>
-            ))}
+      </div>
+      <CardContent className="p-4 space-y-3 flex-1 flex flex-col">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-earn-light rounded-lg px-3 py-2">
+            <p className="text-[10px] font-medium text-earn-text-secondary uppercase tracking-wide">Balance</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <TokenLogo symbol={position.asset.symbol} size={16} />
+              <p className="text-sm font-semibold text-earn-text-primary">{maxAmount.toFixed(4)} {position.asset.symbol}</p>
+            </div>
           </div>
-        )}
+          <StatBox label="USD Value" value={`$${parseFloat(position.balanceUSD).toFixed(2)}`} />
+          {parseFloat(position.earnedUSD) > 0 && (
+            <StatBox label="Earned" value={`$${parseFloat(position.earnedUSD).toFixed(4)}`} />
+          )}
+        </div>
 
-        <div className="space-y-2 pt-2 border-t">
-          <input
-            type="number"
-            placeholder="Amount to withdraw"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-            disabled={isOperating}
-            max={position.balance.humanized}
-          />
-          <Button
-            onClick={handleAction}
-            variant="outline"
-            disabled={
-              isOperating ||
-              !amount ||
-              parseFloat(amount) <= 0 ||
-              parseFloat(amount) > position.balance.humanized
-            }
-            className="w-full"
+        <div className="flex gap-2 mt-auto pt-1">
+          <div className="relative flex-1">
+            <input
+              type="number" placeholder="Amount" value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full text-xs px-3 py-2 pr-10 border border-earn-border rounded-lg outline-none focus:ring-2 focus:ring-earn-primary/30 bg-white"
+              disabled={isOperating}
+            />
+            <button type="button" onClick={() => setAmount(String(maxAmount))}
+              className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-earn-primary hover:text-earn-primary/80">
+              Max
+            </button>
+          </div>
+          <button
+            onClick={() => { if (!amount || parseFloat(amount) <= 0) return; onWithdraw(position, amount); setAmount(""); }}
+            disabled={isOperating || !amount || parseFloat(amount) <= 0 || parseFloat(amount) > maxAmount}
+            className="cursor-pointer px-3 py-2 text-xs font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: "#DADADA", color: "#606060" }}
           >
             Withdraw
-          </Button>
+          </button>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-// Simple Strategy Card Component
-function StrategyCard({
-  strategy,
-  isOperating,
-  primaryWallet,
-  onDeposit,
-  onWithdraw,
-}: StrategyCardProps) {
+// ─── StrategyCard ─────────────────────────────────────────────────────────────
+
+interface StrategyCardProps {
+  strategy: Strategy;
+  isOperating: boolean;
+  primaryWallet: { address: string } | null;
+  assetInfo: AssetInfo;
+  onDeposit: (strategy: Strategy, amount: string) => void;
+}
+
+function StrategyCard({ strategy, isOperating, primaryWallet, assetInfo, onDeposit }: StrategyCardProps) {
   const [amount, setAmount] = useState("");
-  const [isDeposit, setIsDeposit] = useState(true);
-
-  const handleAction = () => {
-    if (!amount || parseFloat(amount) <= 0) return;
-
-    if (isDeposit) {
-      onDeposit(strategy, amount);
-    } else {
-      onWithdraw(strategy, amount);
-    }
-
-    setAmount("");
-  };
+  const apy = formatApy(strategy.spotPosition?.apy);
+  const avgApy = formatApy(strategy.spotPosition?.avgApy);
+  const description = strategy.metadata?.EN?.description ?? strategy.metadata?.PT?.description;
+  const feeLabel = strategy.fee && strategy.fee !== "0"
+    ? `${(parseFloat(strategy.fee) * 100).toFixed(2)}%`
+    : "None";
+  const hasBalance = Number(assetInfo.balance) > 0;
+  const balanceDisplay = `${Number(assetInfo.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${assetInfo.symbol}`;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>{strategy.assetName}</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {strategy.protocol}
-          </span>
+    <Card className="bg-white border border-earn-border rounded-xl shadow-sm overflow-hidden flex flex-col">
+      <div className="p-4 border-b border-earn-border">
+        <div className="flex items-center gap-3">
+          <TokenLogo url={strategy.logourl} symbol={assetInfo.symbol || strategy.assetName} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-semibold text-earn-text-primary">{strategy.assetName}</h3>
+              {strategy.protocol && <ProtocolBadge name={strategy.protocol} />}
+            </div>
+            {description && <p className="text-xs text-earn-text-secondary mt-0.5 line-clamp-1">{description}</p>}
+          </div>
+          {apy && (
+            <div className="text-right shrink-0">
+              <p className="text-base font-bold text-earn-primary">{apy}</p>
+              <p className="text-[10px] text-earn-text-secondary">APY</p>
+            </div>
+          )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between"></div>
+      </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant={isDeposit ? "default" : "outline"}
-            size="sm"
-            onClick={() => setIsDeposit(true)}
-            disabled={isOperating}
+      <CardContent className="p-4 flex flex-col gap-3 flex-1">
+        <div className="grid grid-cols-2 gap-2">
+          {/* Wallet balance with token logo */}
+          <div className="bg-earn-light rounded-lg px-3 py-2">
+            <p className="text-[10px] font-medium text-earn-text-secondary uppercase tracking-wide">Wallet Balance</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <TokenLogo url={strategy.logourl} symbol={assetInfo.symbol || strategy.assetName} size={16} />
+              <p className="text-sm font-semibold text-earn-text-primary">
+                {primaryWallet ? balanceDisplay : "—"}
+              </p>
+            </div>
+          </div>
+
+          <StatBox label="Fee" value={feeLabel} />
+
+          {avgApy && <StatBox label="Avg APY" value={avgApy} />}
+          {strategy.spotPosition?.inceptionApy != null && (
+            <StatBox label="Inception APY" value={`${(strategy.spotPosition.inceptionApy * 100).toFixed(2)}%`} />
+          )}
+        </div>
+
+        <div className="flex gap-2 mt-auto">
+          <div className="relative flex-1">
+            <input
+              type="number" placeholder="Amount" value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full text-xs px-3 py-2 pr-10 border border-earn-border rounded-lg outline-none focus:ring-2 focus:ring-earn-primary/30 bg-white"
+              disabled={isOperating || !primaryWallet}
+            />
+            {primaryWallet && hasBalance && (
+              <button type="button" onClick={() => setAmount(assetInfo.balance)}
+                className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-earn-primary hover:text-earn-primary/80">
+                Max
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => { if (!amount || parseFloat(amount) <= 0) return; onDeposit(strategy, amount); setAmount(""); }}
+            disabled={isOperating || !primaryWallet || !amount || parseFloat(amount) <= 0}
+            className="cursor-pointer px-4 py-2 text-xs font-medium rounded-lg text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: "#4779FF" }}
           >
             Deposit
-          </Button>
-          <Button
-            variant={!isDeposit ? "default" : "outline"}
-            size="sm"
-            onClick={() => setIsDeposit(false)}
-            disabled={isOperating}
-          >
-            Withdraw
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <input
-            type="number"
-            placeholder="Amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-            disabled={isOperating || !primaryWallet}
-          />
-          <Button
-            onClick={handleAction}
-            disabled={
-              isOperating ||
-              !primaryWallet ||
-              !amount ||
-              parseFloat(amount) <= 0
-            }
-            className="w-full"
-          >
-            {isDeposit ? "Deposit" : "Withdraw"}
-          </Button>
+          </button>
         </div>
 
         {!primaryWallet && (
-          <p className="text-xs text-muted-foreground text-center">
-            Connect wallet to interact
-          </p>
+          <p className="text-xs text-earn-text-secondary text-center">Sign in to deposit</p>
         )}
       </CardContent>
     </Card>

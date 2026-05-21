@@ -1,6 +1,6 @@
 import { useSendTransaction } from "@aave/react/viem";
-import { WalletClient, createPublicClient, http, parseAbiItem } from "viem";
-import { base } from "viem/chains";
+import { useRef } from "react";
+import { WalletClient } from "viem";
 import {
   bigDecimal,
   chainId,
@@ -23,6 +23,11 @@ export function useTransactionOperations(
     walletClient || undefined
   );
 
+  // Keep a stable ref so .andThen() callbacks in multi-step flows (approval → tx)
+  // always call the latest sendTransaction even if a re-render occurs between steps.
+  const sendTxRef = useRef(sendTransaction);
+  sendTxRef.current = sendTransaction;
+
   const isOperating =
     supplying.loading ||
     borrowing.loading ||
@@ -42,82 +47,35 @@ export function useTransactionOperations(
     currencyAddress: string,
     amount: string
   ) => {
-    if (!walletClient?.account?.address) {
-      return;
-    }
+    if (!walletClient?.account?.address) return;
 
-    // Check actual token balance on blockchain
-    try {
-      const publicClient = createPublicClient({
-        chain: base,
-        transport: http(),
-      });
-
-      // ERC20 balanceOf function
-      const balanceOfAbi = parseAbiItem(
-        "function balanceOf(address owner) view returns (uint256)"
-      );
-      await publicClient.readContract({
-        address: currencyAddress as `0x${string}`,
-        abi: [balanceOfAbi],
-        functionName: "balanceOf",
-        args: [walletClient.account.address as `0x${string}`],
-      });
-
-      // Try to get token decimals
-      const decimalsAbi = parseAbiItem(
-        "function decimals() view returns (uint8)"
-      );
-      try {
-        await publicClient.readContract({
-          address: currencyAddress as `0x${string}`,
-          abi: [decimalsAbi],
-          functionName: "decimals",
-        });
-        // Token balance check completed
-      } catch {
-        // Could not fetch token decimals
-      }
-    } catch {
-      // Could not fetch token balance
-    }
-
-    try {
-      const result = await supply({
-        market: evmAddress(marketAddress),
-        amount: {
-          erc20: {
-            currency: evmAddress(currencyAddress),
-            value: bigDecimal(parseFloat(amount)),
-          },
+    const result = await supply({
+      market: evmAddress(marketAddress),
+      amount: {
+        erc20: {
+          currency: evmAddress(currencyAddress),
+          value: bigDecimal(Number.parseFloat(amount)),
         },
-        sender: evmAddress(walletClient.account.address),
-        chainId: chainId(selectedChainId),
-      }).andThen((plan) => {
-        switch (plan.__typename) {
-          case "TransactionRequest":
-            return sendTransaction(plan);
-          case "ApprovalRequired":
-            return sendTransaction(plan.approval).andThen(() =>
-              sendTransaction(plan.originalTransaction)
-            );
-          case "InsufficientBalanceError":
-            throw new Error(
-              `Insufficient balance: ${plan.required.value} required.`
-            );
-          default:
-            throw new Error("Unknown transaction plan type");
-        }
-      });
-
-      if (result.isErr()) {
-        throw result.error;
-      } else {
-        return result.value;
+      },
+      sender: evmAddress(walletClient.account.address),
+      chainId: chainId(selectedChainId),
+    }).andThen((plan) => {
+      switch (plan.__typename) {
+        case "TransactionRequest":
+          return sendTransaction(plan);
+        case "ApprovalRequired":
+          return sendTransaction(plan.approval).andThen(() =>
+            sendTxRef.current(plan.originalTransaction)
+          );
+        case "InsufficientBalanceError":
+          throw new Error(`Insufficient balance: ${plan.required.value} required.`);
+        default:
+          throw new Error("Unknown transaction plan type");
       }
-    } catch (error) {
-      throw error;
-    }
+    });
+
+    if (result.isErr()) throw result.error;
+    return result.value;
   };
 
   const executeBorrow = async (
@@ -125,96 +83,74 @@ export function useTransactionOperations(
     currencyAddress: string,
     amount: string
   ) => {
-    if (!walletClient?.account?.address) {
-      return;
-    }
+    if (!walletClient?.account?.address) return;
 
-    try {
-      const result = await borrow({
-        market: evmAddress(marketAddress),
-        amount: {
-          erc20: {
-            currency: evmAddress(currencyAddress),
-            value: bigDecimal(parseFloat(amount)),
-          },
+    const result = await borrow({
+      market: evmAddress(marketAddress),
+      amount: {
+        erc20: {
+          currency: evmAddress(currencyAddress),
+          value: bigDecimal(Number.parseFloat(amount)),
         },
-        sender: evmAddress(walletClient.account.address),
-        chainId: chainId(selectedChainId),
-      }).andThen((plan) => {
-        switch (plan.__typename) {
-          case "TransactionRequest":
-            return sendTransaction(plan);
-          case "ApprovalRequired":
-            return sendTransaction(plan.approval).andThen(() =>
-              sendTransaction(plan.originalTransaction)
-            );
-          case "InsufficientBalanceError":
-            throw new Error(
-              `Insufficient balance: ${plan.required.value} required.`
-            );
-          default:
-            throw new Error("Unknown transaction plan type");
-        }
-      });
-
-      if (result.isErr()) {
-        throw result.error;
-      } else {
-        return result.value;
+      },
+      sender: evmAddress(walletClient.account.address),
+      chainId: chainId(selectedChainId),
+    }).andThen((plan) => {
+      switch (plan.__typename) {
+        case "TransactionRequest":
+          return sendTransaction(plan);
+        case "ApprovalRequired":
+          return sendTransaction(plan.approval).andThen(() =>
+            sendTxRef.current(plan.originalTransaction)
+          );
+        case "InsufficientBalanceError":
+          throw new Error(`Insufficient balance: ${plan.required.value} required.`);
+        default:
+          throw new Error("Unknown transaction plan type");
       }
-    } catch (error) {
-      throw error;
-    }
+    });
+
+    if (result.isErr()) throw result.error;
+    return result.value;
   };
 
   const executeRepay = async (
     marketAddress: string,
     currencyAddress: string,
-    amount: string | "max"
+    amount: string
   ) => {
-    if (!walletClient?.account?.address) {
-      return;
-    }
+    if (!walletClient?.account?.address) return;
 
-    try {
-      const result = await repay({
-        market: evmAddress(marketAddress),
-        amount: {
-          erc20: {
-            currency: evmAddress(currencyAddress),
-            value:
-              amount === "max"
-                ? { max: true }
-                : { exact: bigDecimal(parseFloat(amount)) },
-          },
+    const result = await repay({
+      market: evmAddress(marketAddress),
+      amount: {
+        erc20: {
+          currency: evmAddress(currencyAddress),
+          value:
+            amount === "max"
+              ? { max: true }
+              : { exact: bigDecimal(Number.parseFloat(amount)) },
         },
-        sender: evmAddress(walletClient.account.address),
-        chainId: chainId(selectedChainId),
-      }).andThen((plan) => {
-        switch (plan.__typename) {
-          case "TransactionRequest":
-            return sendTransaction(plan);
-          case "ApprovalRequired":
-            return sendTransaction(plan.approval).andThen(() =>
-              sendTransaction(plan.originalTransaction)
-            );
-          case "InsufficientBalanceError":
-            throw new Error(
-              `Insufficient balance: ${plan.required.value} required.`
-            );
-          default:
-            throw new Error("Unknown transaction plan type");
-        }
-      });
-
-      if (result.isErr()) {
-        throw result.error;
-      } else {
-        return result.value;
+      },
+      sender: evmAddress(walletClient.account.address),
+      chainId: chainId(selectedChainId),
+    }).andThen((plan) => {
+      switch (plan.__typename) {
+        case "TransactionRequest":
+          return sendTransaction(plan);
+        case "ApprovalRequired":
+          return sendTransaction(plan.approval).andThen(() =>
+            sendTxRef.current(plan.originalTransaction)
+          );
+        case "InsufficientBalanceError":
+          throw new Error(`Insufficient balance: ${plan.required.value} required.`);
+        default:
+          throw new Error("Unknown transaction plan type");
       }
-    } catch (error) {
-      throw error;
-    }
+    });
+
+    if (result.isErr()) throw result.error;
+    return result.value;
   };
 
   const executeWithdraw = async (
@@ -222,48 +158,38 @@ export function useTransactionOperations(
     currencyAddress: string,
     amount: string
   ) => {
-    if (!walletClient?.account?.address) {
-      return;
-    }
+    if (!walletClient?.account?.address) return;
 
-    try {
-      const result = await withdraw({
-        market: evmAddress(marketAddress),
-        amount: {
-          erc20: {
-            currency: evmAddress(currencyAddress),
-            value: {
-              exact: bigDecimal(parseFloat(amount)),
-            },
-          },
+    const result = await withdraw({
+      market: evmAddress(marketAddress),
+      amount: {
+        erc20: {
+          currency: evmAddress(currencyAddress),
+          value:
+            amount === "max"
+              ? { max: true }
+              : { exact: bigDecimal(Number.parseFloat(amount)) },
         },
-        sender: evmAddress(walletClient.account.address),
-        chainId: chainId(selectedChainId),
-      }).andThen((plan) => {
-        switch (plan.__typename) {
-          case "TransactionRequest":
-            return sendTransaction(plan);
-          case "ApprovalRequired":
-            return sendTransaction(plan.approval).andThen(() =>
-              sendTransaction(plan.originalTransaction)
-            );
-          case "InsufficientBalanceError":
-            throw new Error(
-              `Insufficient balance: ${plan.required.value} required.`
-            );
-          default:
-            throw new Error("Unknown transaction plan type");
-        }
-      });
-
-      if (result.isErr()) {
-        throw result.error;
-      } else {
-        return result.value;
+      },
+      sender: evmAddress(walletClient.account.address),
+      chainId: chainId(selectedChainId),
+    }).andThen((plan) => {
+      switch (plan.__typename) {
+        case "TransactionRequest":
+          return sendTransaction(plan);
+        case "ApprovalRequired":
+          return sendTransaction(plan.approval).andThen(() =>
+            sendTxRef.current(plan.originalTransaction)
+          );
+        case "InsufficientBalanceError":
+          throw new Error(`Insufficient balance: ${plan.required.value} required.`);
+        default:
+          throw new Error("Unknown transaction plan type");
       }
-    } catch (error) {
-      throw error;
-    }
+    });
+
+    if (result.isErr()) throw result.error;
+    return result.value;
   };
 
   return {

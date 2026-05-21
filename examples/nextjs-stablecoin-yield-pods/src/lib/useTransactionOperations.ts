@@ -1,55 +1,19 @@
 import { useState, useCallback } from "react";
-import { WalletClient } from "viem";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 import { client as podsClient } from "./pods";
 import type { Strategy, TransactionCall } from "./pods-types";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { isEthereumWallet } from "@dynamic-labs/ethereum";
-import { isZeroDevConnector } from "@dynamic-labs/ethereum-aa";
+import { useWallet } from "@/lib/providers";
 
 export function useTransactionOperations(
-  walletClient: WalletClient | null,
+  _walletClient: unknown,
   selectedChainId: number
 ) {
-  const { primaryWallet } = useDynamicContext();
+  const { evmAccount } = useWallet();
   const [isOperating, setIsOperating] = useState(false);
   const [operationError, setOperationError] = useState<Error | null>(null);
 
-  const getKernelClient = useCallback(async () => {
-    if (!primaryWallet || !isEthereumWallet(primaryWallet)) return null;
-    const { connector } = primaryWallet;
-    if (!isZeroDevConnector(connector)) return null;
-    await connector.getNetwork();
-    return connector.getAccountAbstractionProvider({ withSponsorship: true });
-  }, [primaryWallet]);
-
-  const executeBundledTransaction = useCallback(
-    async (calls: TransactionCall[]): Promise<string> => {
-      setIsOperating(true);
-      setOperationError(null);
-      try {
-        const kernelClient = await getKernelClient();
-        if (!kernelClient) throw new Error("Smart wallet unavailable");
-
-        const callData = await kernelClient.account.encodeCalls(calls);
-        const userOpHash = await kernelClient.sendUserOperation({ callData });
-        const receipt = await kernelClient.waitForUserOperationReceipt({
-          hash: userOpHash,
-        });
-        return receipt.receipt.transactionHash as string;
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        setOperationError(err);
-        throw err;
-      } finally {
-        setIsOperating(false);
-      }
-    },
-    [getKernelClient]
-  );
-
-  const executeDeposit = async (strategy: Strategy, amount: string) => {
-    const walletAddress =
-      primaryWallet?.address || walletClient?.account?.address;
+  const executeDeposit = useCallback(async (strategy: Strategy, amount: string) => {
+    const walletAddress = evmAccount?.address;
     if (!walletAddress) {
       throw new Error("Wallet not connected");
     }
@@ -71,22 +35,13 @@ export function useTransactionOperations(
         wallet: walletAddress,
       });
 
-      const kernelClient = await getKernelClient();
-      if (kernelClient) {
-        const calls: TransactionCall[] = bytecode.map((tx) => ({
-          to: tx.to as `0x${string}`,
-          value: BigInt(tx.value),
-          data: tx.data as `0x${string}`,
-        }));
-        return await executeBundledTransaction(calls);
-      }
+      if (!evmAccount) throw new Error("Wallet account unavailable");
+      const walletClient = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
 
-      if (!walletClient?.account) throw new Error("Wallet client unavailable");
       let lastHash: string | undefined;
       for (const tx of bytecode) {
         const hash = await walletClient.sendTransaction({
-          chain: walletClient.chain,
-          account: walletClient.account,
+          account: evmAccount.address as `0x${string}`,
           to: tx.to as `0x${string}`,
           value: BigInt(tx.value),
           data: tx.data as `0x${string}`,
@@ -101,11 +56,10 @@ export function useTransactionOperations(
     } finally {
       setIsOperating(false);
     }
-  };
+  }, [evmAccount, selectedChainId]);
 
-  const executeWithdraw = async (strategy: Strategy, amount: string) => {
-    const walletAddress =
-      primaryWallet?.address || walletClient?.account?.address;
+  const executeWithdraw = useCallback(async (strategy: Strategy, amount: string) => {
+    const walletAddress = evmAccount?.address;
     if (!walletAddress) {
       throw new Error("Wallet not connected");
     }
@@ -127,25 +81,17 @@ export function useTransactionOperations(
         wallet: walletAddress,
       });
 
-      const kernelClient = await getKernelClient();
-      if (kernelClient) {
-        const calls: TransactionCall[] = bytecode.map((tx) => ({
-          to: tx.to as `0x${string}`,
-          value: BigInt(tx.value),
-          data: tx.data as `0x${string}`,
-        }));
-        return await executeBundledTransaction(calls);
-      }
+      if (!evmAccount) throw new Error("Wallet account unavailable");
+      const walletClient = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
 
-      if (!walletClient?.account) throw new Error("Wallet client unavailable");
       let lastHash: string | undefined;
       for (const tx of bytecode) {
         const hash = await walletClient.sendTransaction({
-          account: walletClient.account,
+          account: evmAccount.address as `0x${string}`,
           to: tx.to as `0x${string}`,
           value: BigInt(tx.value),
           data: tx.data as `0x${string}`,
-        } as Parameters<typeof walletClient.sendTransaction>[0]);
+        });
         lastHash = hash;
       }
       return lastHash!;
@@ -156,7 +102,7 @@ export function useTransactionOperations(
     } finally {
       setIsOperating(false);
     }
-  };
+  }, [evmAccount, selectedChainId]);
 
   return {
     isOperating,

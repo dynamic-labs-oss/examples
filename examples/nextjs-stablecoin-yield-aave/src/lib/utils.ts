@@ -132,3 +132,7 @@ export function getChainName(chainId: number): string {
   const chain = supportedChains[chainId as keyof typeof supportedChains];
   return chain ? chain.name : `Chain ${chainId}`;
 }
+
+export function getViemChain(chainId: number) {
+  return supportedChains[chainId as keyof typeof supportedChains] ?? base;
+}

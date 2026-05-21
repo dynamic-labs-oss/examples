@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getBalances } from "@dynamic-labs-sdk/client";
 import { safeParseUSD, safeParseHealthFactor } from "../lib/utils";
 import type { Market } from "@aave/react";
+import { useWallet } from "@/lib/providers";
+import { dynamicClient } from "@/lib/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -46,12 +49,15 @@ export function MarketCard({
   onSupply,
   onBorrow,
 }: MarketCardProps) {
+  const { evmAccount, chainId } = useWallet();
   const [selectedSupplyToken, setSelectedSupplyToken] = useState<string>(
     () => preferredReserve(market.supplyReserves)
   );
   const [selectedBorrowToken, setSelectedBorrowToken] = useState<string>(
     () => preferredReserve(market.borrowReserves)
   );
+  const [supplyBalance, setSupplyBalance] = useState<string | null>(null);
+  const [supplyAmount, setSupplyAmount] = useState("1.0");
 
   const selectedSupplyReserve = market.supplyReserves.find(
     (reserve) => reserve.underlyingToken.address === selectedSupplyToken
@@ -59,6 +65,23 @@ export function MarketCard({
   const selectedBorrowReserve = market.borrowReserves.find(
     (reserve) => reserve.underlyingToken.address === selectedBorrowToken
   );
+
+  useEffect(() => {
+    if (!evmAccount || !selectedSupplyToken) {
+      setSupplyBalance(null);
+      return;
+    }
+    let cancelled = false;
+    getBalances(
+      { walletAccount: evmAccount, networkId: chainId, whitelistedContracts: [selectedSupplyToken], filterSpamTokens: false },
+      dynamicClient
+    ).then((balances) => {
+      if (cancelled) return;
+      const token = balances.find((b) => b.address?.toLowerCase() === selectedSupplyToken.toLowerCase());
+      setSupplyBalance(token ? Number(token.balance).toLocaleString(undefined, { maximumFractionDigits: 6 }) : null);
+    }).catch(() => { if (!cancelled) setSupplyBalance(null); });
+    return () => { cancelled = true; };
+  }, [evmAccount, selectedSupplyToken, chainId]);
 
   return (
     <Card className="w-full bg-white border border-earn-border rounded-xl shadow-sm">
@@ -171,22 +194,36 @@ export function MarketCard({
             </div>
           )}
 
+          {supplyBalance !== null && selectedSupplyReserve && (
+            <p className="text-xs text-earn-text-secondary">
+              Balance: {supplyBalance} {selectedSupplyReserve.underlyingToken.symbol}
+            </p>
+          )}
           <div className="flex gap-2">
-            <input
-              type="number"
-              placeholder="Amount"
-              className="flex-1 text-xs px-3 py-2 border border-earn-border rounded-lg text-earn-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-earn-primary/30 focus:border-earn-primary"
-              defaultValue="1.0"
-              step="0.1"
-              min="0"
-              id={`supply-amount-${market.address}`}
-            />
+            <div className="relative flex-1">
+              <input
+                type="number"
+                placeholder="Amount"
+                className="w-full text-xs px-3 py-2 pr-12 border border-earn-border rounded-lg text-earn-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-earn-primary/30 focus:border-earn-primary"
+                value={supplyAmount}
+                onChange={(e) => setSupplyAmount(e.target.value)}
+                step="0.1"
+                min="0"
+              />
+              {supplyBalance !== null && (
+                <button
+                  type="button"
+                  onClick={() => setSupplyAmount(supplyBalance.replace(/,/g, ""))}
+                  className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-earn-primary hover:text-earn-primary/80 px-1"
+                >
+                  Max
+                </button>
+              )}
+            </div>
             <Button
               onClick={() => {
-                if (selectedSupplyReserve) {
-                  const input = document.getElementById(`supply-amount-${market.address}`) as HTMLInputElement;
-                  onSupply(market.address, selectedSupplyReserve.underlyingToken.address, input?.value || "1.0");
-                }
+                if (selectedSupplyReserve)
+                  onSupply(market.address, selectedSupplyReserve.underlyingToken.address, supplyAmount || "1.0");
               }}
               disabled={isOperating || !primaryWallet || !selectedSupplyReserve}
               size="sm"

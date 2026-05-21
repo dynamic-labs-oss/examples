@@ -5,7 +5,7 @@ import type {
   StrategyDetailResponse,
   BytecodeResponse,
   StrategiesResponse,
-  RawPosition,
+  RawWalletPosition,
   RawWalletPositions,
 } from "./pods-types";
 
@@ -150,51 +150,37 @@ export async function getYieldStrategies(params: {
 export async function getWalletPositions(
   address: string
 ): Promise<WalletPositions> {
-  const endpoint = `/wallets/${address}`;
-  const raw = await fetchFromPodsAPI<RawWalletPositions>(endpoint);
+  const raw = await fetchFromPodsAPI<RawWalletPositions>(`/wallets/${address}`, { cache: "no-store" });
 
-  const mapped: WalletPositions = {
-    address,
-    positions:
-      (raw?.positions || []).map((p: RawPosition) => {
-        const spot = p?.spotPosition ?? {};
-        const current = spot?.currentPosition ?? {};
-        const strat = p?.strategy ?? {};
+  const positions: Position[] = (raw?.positions ?? []).map((p: RawWalletPosition) => {
+    const strat = p.strategy ?? {};
+    const decimals = String(strat.asset?.decimals ?? 18);
+    const balanceRaw = p.balance ?? "0";
+    const dec = strat.asset?.decimals ?? 18;
+    const humanized = Number(balanceRaw) / 10 ** dec;
 
-        const assetDecimals =
-          typeof strat?.assetDecimals === "number"
-            ? String(strat.assetDecimals)
-            : String(current?.decimals ?? "0");
+    return {
+      name: strat.name ?? strat.asset?.symbol ?? "",
+      protocol: strat.protocol ?? "",
+      asset: {
+        address: strat.asset?.contract ?? "",
+        decimals,
+        symbol: strat.asset?.symbol ?? "",
+        name: strat.name ?? strat.asset?.symbol ?? "",
+      },
+      balance: {
+        raw: balanceRaw,
+        humanized: isFinite(humanized) ? humanized : 0,
+        decimals,
+      },
+      balanceUSD: p.balanceUSD ?? "0",
+      earnedUSD: p.earnedUSD ?? "0",
+      apy: String(strat.apy ?? 0),
+      strategyId: strat._id ?? strat.slug ?? "",
+    };
+  });
 
-        const balanceHumanized =
-          typeof current?.humanized === "number"
-            ? current.humanized
-            : parseFloat(String(current?.humanized ?? 0));
-
-        const position: Position = {
-          protocol: String(strat?.protocol ?? ""),
-          asset: {
-            address: String(strat?.asset ?? strat?.underlyingAsset ?? ""),
-            decimals: assetDecimals,
-            symbol: String(strat?.assetName ?? current?.asset ?? ""),
-            name: String(strat?.assetName ?? current?.asset ?? ""),
-          },
-          balance: {
-            raw: String(current?.value ?? "0"),
-            humanized: isFinite(balanceHumanized) ? balanceHumanized : 0,
-            decimals: assetDecimals,
-          },
-          balanceUSD: String(spot?.underlyingBalanceUSD ?? "0"),
-          apy: String(spot?.apy ?? "0"),
-          rewards: Array.isArray(p?.rewards) ? p.rewards : [],
-          strategyId: String(strat?.id ?? ""),
-        };
-
-        return position;
-      }) ?? [],
-  };
-
-  return mapped;
+  return { address, positions };
 }
 
 export const client = {

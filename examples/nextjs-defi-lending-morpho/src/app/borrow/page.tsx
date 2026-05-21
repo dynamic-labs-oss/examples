@@ -1,10 +1,14 @@
 "use client";
 
-import { useMarketsList } from "@/lib/hooks";
+import { useMarketsList, useMarketsData } from "@/lib/hooks";
 import { MarketCard } from "@/components/MarketCard";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useWallet } from "@/lib/providers";
 
 export default function BorrowPage() {
+  const { evmAccount } = useWallet();
   const { markets, loading, error } = useMarketsList();
+  const marketsData = useMarketsData(evmAccount?.address);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -30,7 +34,26 @@ export default function BorrowPage() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-64 rounded-xl bg-white border border-earn-border animate-pulse" />
+              <div key={i} className="bg-white rounded-xl p-6 border border-earn-border shadow-sm flex flex-col gap-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex flex-col gap-2 flex-1">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-5 w-24" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                  <div className="flex flex-col items-end gap-1 ml-4">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Skeleton className="h-10" />
+                  <Skeleton className="h-10" />
+                  <Skeleton className="h-10" />
+                </div>
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+              </div>
             ))}
           </div>
         ) : error ? (
@@ -44,7 +67,7 @@ export default function BorrowPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {markets.map((market) => (
-              <MarketCard key={market.id} market={market} />
+              <MarketCard key={market.id} market={market} marketsData={marketsData} />
             ))}
           </div>
         )}

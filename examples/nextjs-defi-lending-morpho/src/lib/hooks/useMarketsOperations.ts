@@ -1,109 +1,106 @@
 import { useState } from "react";
-import { parseUnits } from "viem";
-import { useReadContract, useWriteContract, useChainId } from "wagmi";
+import { parseUnits, createPublicClient, http } from "viem";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
 import { ERC20_ABI, MORPHO_MARKETS_ABI } from "../ABIs";
 import { getContractsForChain, getMarketParamsForChain } from "../constants";
+import { useWallet } from "@/lib/providers";
+
+function getViemChain(chainId: number) {
+  switch (chainId) {
+    case mainnet.id: return mainnet;
+    case arbitrum.id: return arbitrum;
+    case optimism.id: return optimism;
+    case polygon.id: return polygon;
+    default: return base;
+  }
+}
 
 export function useMarketsOperations(
   address: string | undefined,
   loanTokenDecimals: number = 18
 ) {
-  const chainId = useChainId();
+  const { chainId, evmAccount } = useWallet();
   const [amount, setAmount] = useState("");
   const [txStatus, setTxStatus] = useState("");
+  const [loanTokenBalance, setLoanTokenBalance] = useState<bigint | undefined>();
+  const [collateralBalance, setCollateralBalance] = useState<bigint | undefined>();
+  const [loanTokenAllowance, setLoanTokenAllowance] = useState<bigint | undefined>();
+  const [collateralAllowance, setCollateralAllowance] = useState<bigint | undefined>();
+  const [isApprovingLoanToken, setIsApprovingLoanToken] = useState(false);
+  const [isApprovingCollateral, setIsApprovingCollateral] = useState(false);
+  const [isSupplying, setIsSupplying] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isBorrowing, setIsBorrowing] = useState(false);
+  const [isRepaying, setIsRepaying] = useState(false);
 
   const contracts = getContractsForChain(chainId);
   const marketParams = getMarketParamsForChain(chainId);
+  const chain = getViemChain(chainId);
 
-  // Read loan token balance
-  const { data: loanTokenBalance } = useReadContract({
-    address: marketParams?.loanToken as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address as `0x${string}`] : undefined,
-    query: { enabled: !!address && !!marketParams?.loanToken },
-  });
+  const publicClient = createPublicClient({ chain, transport: http() });
 
-  // Read collateral balance
-  const { data: collateralBalance } = useReadContract({
-    address: marketParams?.collateralToken as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address as `0x${string}`] : undefined,
-    query: { enabled: !!address && !!marketParams?.collateralToken },
-  });
+  const getWalletClient = async () => {
+    if (!evmAccount) return null;
+    return createWalletClientForWalletAccount({ walletAccount: evmAccount });
+  };
 
-  // Read allowances
-  const { data: loanTokenAllowance } = useReadContract({
-    address: marketParams?.loanToken as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args:
-      address && marketParams?.loanToken
-        ? [address as `0x${string}`, contracts.morphoMarkets as `0x${string}`]
-        : undefined,
-    query: { enabled: !!address && !!marketParams?.loanToken },
-  });
-
-  const { data: collateralAllowance } = useReadContract({
-    address: marketParams?.collateralToken as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args:
-      address && marketParams?.collateralToken
-        ? [address as `0x${string}`, contracts.morphoMarkets as `0x${string}`]
-        : undefined,
-    query: { enabled: !!address && !!marketParams?.collateralToken },
-  });
-
-  // Write contracts
-  const {
-    writeContract: writeApproveLoanToken,
-    isPending: isApprovingLoanToken,
-    error: approveLoanTokenError,
-  } = useWriteContract();
-  const {
-    writeContract: writeApproveCollateral,
-    isPending: isApprovingCollateral,
-    error: approveCollateralError,
-  } = useWriteContract();
-  const {
-    writeContract: writeSupply,
-    isPending: isSupplying,
-    error: supplyError,
-  } = useWriteContract();
-  const {
-    writeContract: writeWithdraw,
-    isPending: isWithdrawing,
-    error: withdrawError,
-  } = useWriteContract();
-  const {
-    writeContract: writeBorrow,
-    isPending: isBorrowing,
-    error: borrowError,
-  } = useWriteContract();
-  const {
-    writeContract: writeRepay,
-    isPending: isRepaying,
-    error: repayError,
-  } = useWriteContract();
+  // Fetch balances on demand
+  const refreshBalances = async () => {
+    if (!address || !marketParams) return;
+    try {
+      const [lb, cb, la, ca] = await Promise.all([
+        publicClient.readContract({
+          address: marketParams.loanToken as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [address as `0x${string}`],
+        }),
+        publicClient.readContract({
+          address: marketParams.collateralToken as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [address as `0x${string}`],
+        }),
+        publicClient.readContract({
+          address: marketParams.loanToken as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: "allowance",
+          args: [address as `0x${string}`, contracts.morphoMarkets as `0x${string}`],
+        }),
+        publicClient.readContract({
+          address: marketParams.collateralToken as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: "allowance",
+          args: [address as `0x${string}`, contracts.morphoMarkets as `0x${string}`],
+        }),
+      ]);
+      setLoanTokenBalance(lb as bigint);
+      setCollateralBalance(cb as bigint);
+      setLoanTokenAllowance(la as bigint);
+      setCollateralAllowance(ca as bigint);
+    } catch {}
+  };
 
   // Approve functions
   const handleApproveLoanToken = async () => {
     if (!marketParams?.loanToken) return;
+    const walletClient = await getWalletClient();
+    if (!walletClient || !address) return;
 
     setTxStatus("");
+    setIsApprovingLoanToken(true);
     try {
-      await writeApproveLoanToken({
+      const { request } = await publicClient.simulateContract({
         address: marketParams.loanToken as `0x${string}`,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [
-          contracts.morphoMarkets as `0x${string}`,
-          parseUnits(amount, loanTokenDecimals),
-        ],
+        args: [contracts.morphoMarkets as `0x${string}`, parseUnits(amount, loanTokenDecimals)],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
       setTxStatus("Loan token approval transaction sent!");
+      await refreshBalances();
     } catch (e: unknown) {
       setTxStatus(
         "Loan token approval failed: " +
@@ -111,24 +108,29 @@ export function useMarketsOperations(
             ? (e as { message?: string }).message
             : String(e))
       );
+    } finally {
+      setIsApprovingLoanToken(false);
     }
   };
 
   const handleApproveCollateral = async () => {
     if (!marketParams?.collateralToken) return;
+    const walletClient = await getWalletClient();
+    if (!walletClient || !address) return;
 
     setTxStatus("");
+    setIsApprovingCollateral(true);
     try {
-      await writeApproveCollateral({
+      const { request } = await publicClient.simulateContract({
         address: marketParams.collateralToken as `0x${string}`,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [
-          contracts.morphoMarkets as `0x${string}`,
-          parseUnits(amount, 6), // Collateral decimals
-        ],
+        args: [contracts.morphoMarkets as `0x${string}`, parseUnits(amount, 6)],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
       setTxStatus("Collateral approval transaction sent!");
+      await refreshBalances();
     } catch (e: unknown) {
       setTxStatus(
         "Collateral approval failed: " +
@@ -136,6 +138,8 @@ export function useMarketsOperations(
             ? (e as { message?: string }).message
             : String(e))
       );
+    } finally {
+      setIsApprovingCollateral(false);
     }
   };
 
@@ -143,20 +147,25 @@ export function useMarketsOperations(
   const handleSupply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!marketParams?.collateralToken) return;
+    const walletClient = await getWalletClient();
+    if (!walletClient || !address) return;
 
     setTxStatus("");
+    setIsSupplying(true);
     try {
-      await writeSupply({
+      const { request } = await publicClient.simulateContract({
         address: contracts.morphoMarkets as `0x${string}`,
         abi: MORPHO_MARKETS_ABI,
         functionName: "supply",
         args: [
           marketParams.collateralToken as `0x${string}`,
-          parseUnits(amount, 6), // Collateral decimals
+          parseUnits(amount, 6),
           address as `0x${string}`,
-          BigInt(5), // maxIterations
+          BigInt(5),
         ],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
       setTxStatus("Supply transaction sent!");
     } catch (e: unknown) {
       setTxStatus(
@@ -165,26 +174,33 @@ export function useMarketsOperations(
             ? (e as { message?: string }).message
             : String(e))
       );
+    } finally {
+      setIsSupplying(false);
     }
   };
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!marketParams?.collateralToken) return;
+    const walletClient = await getWalletClient();
+    if (!walletClient || !address) return;
 
     setTxStatus("");
+    setIsWithdrawing(true);
     try {
-      await writeWithdraw({
+      const { request } = await publicClient.simulateContract({
         address: contracts.morphoMarkets as `0x${string}`,
         abi: MORPHO_MARKETS_ABI,
         functionName: "withdraw",
         args: [
           marketParams.collateralToken as `0x${string}`,
-          parseUnits(amount, 6), // Collateral decimals
+          parseUnits(amount, 6),
           address as `0x${string}`,
           address as `0x${string}`,
         ],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
       setTxStatus("Withdraw transaction sent!");
     } catch (e: unknown) {
       setTxStatus(
@@ -193,16 +209,21 @@ export function useMarketsOperations(
             ? (e as { message?: string }).message
             : String(e))
       );
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
   const handleBorrow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!marketParams?.loanToken) return;
+    const walletClient = await getWalletClient();
+    if (!walletClient || !address) return;
 
     setTxStatus("");
+    setIsBorrowing(true);
     try {
-      await writeBorrow({
+      const { request } = await publicClient.simulateContract({
         address: contracts.morphoMarkets as `0x${string}`,
         abi: MORPHO_MARKETS_ABI,
         functionName: "borrow",
@@ -210,9 +231,11 @@ export function useMarketsOperations(
           marketParams.loanToken as `0x${string}`,
           parseUnits(amount, loanTokenDecimals),
           address as `0x${string}`,
-          BigInt(5), // maxIterations
+          BigInt(5),
         ],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
       setTxStatus("Borrow transaction sent!");
     } catch (e: unknown) {
       setTxStatus(
@@ -221,16 +244,21 @@ export function useMarketsOperations(
             ? (e as { message?: string }).message
             : String(e))
       );
+    } finally {
+      setIsBorrowing(false);
     }
   };
 
   const handleRepay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!marketParams?.loanToken) return;
+    const walletClient = await getWalletClient();
+    if (!walletClient || !address) return;
 
     setTxStatus("");
+    setIsRepaying(true);
     try {
-      await writeRepay({
+      const { request } = await publicClient.simulateContract({
         address: contracts.morphoMarkets as `0x${string}`,
         abi: MORPHO_MARKETS_ABI,
         functionName: "repay",
@@ -239,7 +267,9 @@ export function useMarketsOperations(
           parseUnits(amount, loanTokenDecimals),
           address as `0x${string}`,
         ],
+        account: address as `0x${string}`,
       });
+      await walletClient.writeContract(request);
       setTxStatus("Repay transaction sent!");
     } catch (e: unknown) {
       setTxStatus(
@@ -248,17 +278,18 @@ export function useMarketsOperations(
             ? (e as { message?: string }).message
             : String(e))
       );
+    } finally {
+      setIsRepaying(false);
     }
   };
 
   // Check if approvals are needed
   const needsLoanTokenApproval =
     loanTokenAllowance !== undefined &&
-    parseUnits(amount || "0", loanTokenDecimals) >
-      (loanTokenAllowance as bigint);
+    parseUnits(amount || "0", loanTokenDecimals) > loanTokenAllowance;
   const needsCollateralApproval =
     collateralAllowance !== undefined &&
-    parseUnits(amount || "0", 6) > (collateralAllowance as bigint); // Collateral decimals
+    parseUnits(amount || "0", 6) > collateralAllowance;
 
   return {
     amount,
@@ -275,12 +306,12 @@ export function useMarketsOperations(
     isWithdrawing,
     isBorrowing,
     isRepaying,
-    approveLoanTokenError,
-    approveCollateralError,
-    supplyError,
-    withdrawError,
-    borrowError,
-    repayError,
+    approveLoanTokenError: null,
+    approveCollateralError: null,
+    supplyError: null,
+    withdrawError: null,
+    borrowError: null,
+    repayError: null,
     handleApproveLoanToken,
     handleApproveCollateral,
     handleSupply,

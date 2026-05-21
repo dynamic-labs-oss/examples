@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import { formatUnits } from "viem";
-import { useAccount } from "wagmi";
-import { DynamicConnectButton } from "@dynamic-labs/sdk-react-core";
 import { useVaultOperations } from "@/lib/hooks/useVaultOperations";
 import { Vault } from "@/lib/hooks/useVaultsList";
+import { useWallet } from "@/lib/providers";
 
 interface VaultCardProps {
   vault: Vault;
+  assetBalance?: string;
+  onSuccess?: () => void;
 }
 
-export function VaultCard({ vault }: VaultCardProps) {
-  const { address, isConnected } = useAccount();
+export function VaultCard({ vault, assetBalance: assetBalanceProp = "0", onSuccess }: VaultCardProps) {
+  const { evmAccount, loggedIn } = useWallet();
+  const address = evmAccount?.address;
+  const isConnected = loggedIn && !!evmAccount;
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
 
   const vaultInfo = {
@@ -29,7 +32,6 @@ export function VaultCard({ vault }: VaultCardProps) {
     setAmount,
     txStatus,
     pendingDeposit,
-    assetBalance,
     depositedAssets,
     handleApprove,
     handleDeposit,
@@ -38,12 +40,12 @@ export function VaultCard({ vault }: VaultCardProps) {
     isDepositing,
     isWithdrawing,
     needsApproval,
-  } = useVaultOperations(address, vaultInfo);
+  } = useVaultOperations(address, vaultInfo, onSuccess);
 
   const isLoading = isApproving || isDepositing || isWithdrawing;
 
   const maxAmount = mode === "deposit"
-    ? assetBalance ? formatUnits(assetBalance as bigint, vault.assetDecimals) : "0"
+    ? assetBalanceProp
     : depositedAssets ? formatUnits(depositedAssets as bigint, vault.assetDecimals) : "0";
 
   const depositedDisplay = depositedAssets
@@ -126,7 +128,7 @@ export function VaultCard({ vault }: VaultCardProps) {
             <button
               key={tab}
               onClick={() => setMode(tab)}
-              className="flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-all"
+              className="cursor-pointer flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-all"
               style={
                 mode === tab
                   ? { background: "#fff", color: "#030303", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
@@ -166,7 +168,7 @@ export function VaultCard({ vault }: VaultCardProps) {
             <button
               type="button"
               onClick={() => setAmount(maxAmount)}
-              className="text-xs hover:underline"
+              className="cursor-pointer text-xs hover:underline"
               style={{ color: "#4779FF" }}
               disabled={isLoading}
             >
@@ -186,26 +188,26 @@ export function VaultCard({ vault }: VaultCardProps) {
               style={{ border: `1px solid ${exceedsBalance ? "#EF4444" : "#DADADA"}`, background: "#fff" }}
             />
             {!isConnected ? (
-              <DynamicConnectButton buttonClassName="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap cursor-pointer bg-earn-primary">
-                Connect
-              </DynamicConnectButton>
+              <span className="px-3 py-2 text-xs font-medium rounded-lg text-[#606060]" style={{ background: "#F9F9F9", border: "1px solid #DADADA" }}>
+                Sign in to deposit
+              </span>
             ) : needsApproval && mode === "deposit" ? (
               <button
                 onClick={handleApprove}
                 disabled={isLoading || !amount || parseFloat(amount) <= 0 || exceedsBalance}
-                className="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                className="cursor-pointer px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: "#EAB308" }}
               >
-                {isApproving ? "…" : "Approve"}
+                {isApproving ? "..." : "Approve"}
               </button>
             ) : (
               <button
                 onClick={(e) => { e.preventDefault(); mode === "deposit" ? handleDeposit(e) : handleWithdraw(e); }}
                 disabled={isLoading || !amount || parseFloat(amount) <= 0 || exceedsBalance}
-                className="px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                className="cursor-pointer px-3 py-2 text-xs font-medium rounded-lg text-white transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: mode === "deposit" ? "#4779FF" : "#606060" }}
               >
-                {isLoading ? "…" : mode === "deposit" ? "Deposit" : "Withdraw"}
+                {isLoading ? "..." : mode === "deposit" ? "Deposit" : "Withdraw"}
               </button>
             )}
           </div>

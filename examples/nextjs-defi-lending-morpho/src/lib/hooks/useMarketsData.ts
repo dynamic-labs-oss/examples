@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
-import { useChainId } from "wagmi";
+import { useWallet } from "@/lib/providers";
 import { getApiForChain, getDecimalsForChain } from "../constants";
 
 interface MarketsData {
@@ -56,7 +56,7 @@ interface GraphQLResponse {
 }
 
 export function useMarketsData(address: string | undefined): MarketsData {
-  const chainId = useChainId();
+  const { chainId } = useWallet();
   const [borrowed, setBorrowed] = useState<string | null>(null);
   const [supplied, setSupplied] = useState<string | null>(null);
   const [borrowedUsd, setBorrowedUsd] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function useMarketsData(address: string | undefined): MarketsData {
           query GetMarketPositions($chainId: Int!, $userAddress: String!) {
             marketPositions(
               where: {
-                chainId_in: [$chainId], 
+                chainId_in: [$chainId],
                 userAddress_in: [$userAddress]
               }
             ) {
@@ -127,7 +127,6 @@ export function useMarketsData(address: string | undefined): MarketsData {
         const marketPosition = positions[0];
 
         if (marketPosition) {
-          // Format the values - API returns numbers, so we need to convert to BigInt
           const decimals = getDecimalsForChain(chainId);
           if (!decimals?.weth) {
             return;
@@ -146,24 +145,21 @@ export function useMarketsData(address: string | undefined): MarketsData {
           setBorrowedUsd(`$${marketPosition.state.borrowAssetsUsd.toFixed(2)}`);
           setSuppliedUsd(`$${marketPosition.state.supplyAssetsUsd.toFixed(2)}`);
 
-          // Format collateral amount
           const collateralAmount6 = formatUnits(
             BigInt(marketPosition.state.collateral),
             6
           );
 
-          // Use the correct format - if 5000000 should be 5 collateral, use 6 decimals
           setCollateral(collateralAmount6);
           setCollateralUsd(`$${marketPosition.state.collateralUsd.toFixed(2)}`);
 
-          // Calculate health factor using collateral
           const borrowedUsdValue = marketPosition.state.borrowAssetsUsd;
           const collateralUsdValue = marketPosition.state.collateralUsd;
           let healthFactor = null;
 
           if (collateralUsdValue > 0 && borrowedUsdValue > 0) {
             const ltv = borrowedUsdValue / collateralUsdValue;
-            const maxLtv = 0.85; // 85% LTV
+            const maxLtv = 0.85;
             healthFactor = (maxLtv / ltv).toFixed(2);
           }
 

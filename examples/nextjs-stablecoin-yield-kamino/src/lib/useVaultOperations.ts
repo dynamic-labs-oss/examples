@@ -130,8 +130,8 @@ async function signSendAndConfirm(
   walletAccount: SolanaWalletAccount
 ): Promise<string> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { signature } = await signAndSendSponsoredTransaction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { transaction: tx as any, walletAccount },
       dynamicClient
     );

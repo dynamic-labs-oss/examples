@@ -1,31 +1,18 @@
 import Link from "next/link";
-import { ModeToggle } from "@/components/mode-toggle";
-import { HamburgerMenu } from "@/components/hamburger-menu";
-import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
-import DynamicLogo from "./dynamic/logo";
 import DynamicButton from "./dynamic/dynamic-button";
+import DynamicLogo from "./dynamic/logo";
 
 export function Header() {
   return (
-    <div
-      className={
-        "absolute top-0 flex items-center justify-between w-full py-2 sticky bg-background/80 backdrop-blur-md border-b border-border z-50"
-      }
-    >
-      <div className="pl-4 h-[40px] flex items-center">
-        <Link href="/">
-          <DynamicLogo />
-        </Link>
+    <header className="sticky top-0 z-40 bg-white border-b border-[#DADADA]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Link href="/">
+            <DynamicLogo className="text-[#141839]" />
+          </Link>
+        </div>
+        <DynamicButton />
       </div>
-      <div className="hidden md:flex gap-2 pr-4">
-        <DynamicWidget />
-        <ModeToggle />
-      </div>
-      <div className="md:hidden pr-4">
-        <HamburgerMenu>
-          <DynamicButton />
-        </HamburgerMenu>
-      </div>
-    </div>
+    </header>
   );
 }
