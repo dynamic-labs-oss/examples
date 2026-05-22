@@ -7,32 +7,15 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import {
-  logout,
-  detectOAuthRedirect,
-  completeSocialAuthentication,
-} from "@dynamic-labs-sdk/client";
-import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
-import {
-  isEvmWalletAccount,
-  type EvmWalletAccount,
-} from "@dynamic-labs-sdk/evm";
-import {
-  isSolanaWalletAccount,
-  type SolanaWalletAccount,
-} from "@dynamic-labs-sdk/solana";
+import { logout, detectOAuthRedirect, completeSocialAuthentication } from "@dynamic-labs/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  DynamicProvider,
-  useUser,
-  useWalletAccounts,
-  useEvent,
-} from "@dynamic-labs-sdk/react-hooks";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
+import type { Wallet } from "@dynamic-labs/client";
 import { dynamicClient } from "./dynamic";
 
 interface WalletContextValue {
-  evmAccount: EvmWalletAccount | null;
-  solanaAccount: SolanaWalletAccount | null;
+  evmAccount: Wallet | null;
+  solanaAccount: Wallet | null;
   loggedIn: boolean;
   ensureWallets: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -59,12 +42,12 @@ const queryClient = new QueryClient({
   },
 });
 
-function WalletContextProvider({ children }: { children: ReactNode }) {
-  const user = useUser();
-  const accounts = useWalletAccounts();
-  const evmAccount = accounts.find(isEvmWalletAccount) ?? null;
-  const solanaAccount = accounts.find(isSolanaWalletAccount) ?? null;
-  const loggedIn = user !== null;
+export default function Providers({ children }: { children: ReactNode }) {
+  const client = useReactiveClient(dynamicClient);
+  const userWallets = client.wallets.userWallets ?? [];
+  const evmAccount = userWallets.find(w => w.chain === "EVM") ?? null;
+  const solanaAccount = userWallets.find(w => w.chain === "SOL") ?? null;
+  const loggedIn = client.auth.authenticatedUser !== undefined;
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);
@@ -73,19 +56,15 @@ function WalletContextProvider({ children }: { children: ReactNode }) {
   const ensureWallets = useCallback(async () => {
     if (!loggedIn) return;
     try {
-      const chainsToCreate: ("EVM" | "SOL")[] = [];
-      if (!evmAccount) chainsToCreate.push("EVM");
-      if (!solanaAccount) chainsToCreate.push("SOL");
-      if (chainsToCreate.length > 0) {
-        await createWaasWalletAccounts({ chains: chainsToCreate }, dynamicClient);
+      const wallets = dynamicClient.wallets.userWallets ?? [];
+      if (!wallets.some(w => w.chain === "EVM")) {
+        await dynamicClient.wallets.embedded.createWallet({ chain: "EVM" });
+      }
+      if (!wallets.some(w => w.chain === "SOL")) {
+        await dynamicClient.wallets.embedded.createWallet({ chain: "SOL" });
       }
     } catch {}
-  }, [loggedIn, evmAccount, solanaAccount]);
-
-  useEvent({
-    event: "walletAccountsChanged",
-    listener: () => { void ensureWallets(); },
-  });
+  }, [loggedIn]);
 
   useEffect(() => {
     const handleOAuthRedirect = async () => {
@@ -106,13 +85,5 @@ function WalletContextProvider({ children }: { children: ReactNode }) {
     <WalletContext.Provider value={{ evmAccount, solanaAccount, loggedIn, ensureWallets, disconnect }}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WalletContext.Provider>
-  );
-}
-
-export default function Providers({ children }: { children: ReactNode }) {
-  return (
-    <DynamicProvider client={dynamicClient}>
-      <WalletContextProvider>{children}</WalletContextProvider>
-    </DynamicProvider>
   );
 }

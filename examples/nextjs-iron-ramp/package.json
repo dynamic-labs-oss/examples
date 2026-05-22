@@ -11,10 +11,10 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@dynamic-labs-sdk/client": "^0.24.1",
-    "@dynamic-labs-sdk/evm": "^0.24.1",
-    "@dynamic-labs-sdk/react-hooks": "^0.24.1",
-    "@dynamic-labs-sdk/solana": "^0.24.1",
+    "@dynamic-labs/client": "4.83.1",
+    "@dynamic-labs/react-hooks": "4.83.1",
+    "@dynamic-labs/waas-evm": "4.83.1",
+    "@dynamic-labs/waas-svm": "4.83.1",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "2.1.7",
     "@radix-ui/react-select": "2.2.6",

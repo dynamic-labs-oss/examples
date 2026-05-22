@@ -1,9 +1,10 @@
-import { createDynamicClient } from "@dynamic-labs-sdk/client";
-import { addEvmExtension } from "@dynamic-labs-sdk/evm";
+import { createClient } from "@dynamic-labs/client";
+import { DynamicWaasEVMConnectors } from "@dynamic-labs/waas-evm";
+import { DynamicWaasSVMConnectors } from "@dynamic-labs/waas-svm";
 
-export const dynamicClient = createDynamicClient({
+export const dynamicClient = createClient({
   environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID!,
-  metadata: { name: "Iron Finance Ramp" },
-});
-
-addEvmExtension();
+  appName: "Iron Finance Ramp",
+})
+  .extend(DynamicWaasEVMConnectors())
+  .extend(DynamicWaasSVMConnectors());
