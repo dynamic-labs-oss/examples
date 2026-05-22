@@ -27,6 +27,7 @@ const quoteSchema = z.object({
   source_amount: z.number().positive().optional(),
   destination_amount: z.number().positive().optional(),
   bank_account_id: z.string().min(1, "Bank account ID (IBAN) is required"),
+  bank_id: z.string().optional(),
   blockchain: z.enum(["Ethereum", "Solana", "Polygon", "Arbitrum", "Base", "Stellar", "Citrea"]).optional(),
 });
 
@@ -35,6 +36,7 @@ const executeSchema = z.object({
   quote_id: z.string().min(1, "Quote ID is required"),
   customer_id: z.string().min(1, "Customer ID is required"),
   bank_account_id: z.string().min(1, "Bank account ID (IBAN) is required"),
+  bank_id: z.string().optional(),
   blockchain: z.enum(["Ethereum", "Solana", "Polygon", "Arbitrum", "Base", "Stellar", "Citrea"]).optional(),
   source_currency: z.enum(["USDC", "USDT", "USDB", "EURC"]).optional(),
   destination_currency: z.enum(["USD", "EUR", "GBP", "BRL", "MXN"]).optional(),
@@ -65,7 +67,8 @@ export async function POST(req: NextRequest) {
         source_amount: validated.source_amount,
         destination_amount: validated.destination_amount,
         bank_account_id: validated.bank_account_id,
-        blockchain: validated.blockchain, // Pass blockchain selection
+        bank_id: validated.bank_id,
+        blockchain: validated.blockchain,
       };
 
       const quote = await ironClient.getOfframpQuote(quoteRequest);
@@ -76,9 +79,10 @@ export async function POST(req: NextRequest) {
         quote_id: validated.quote_id,
         customer_id: validated.customer_id,
         bank_account_id: validated.bank_account_id,
-        blockchain: validated.blockchain, // Pass blockchain selection
-        source_currency: validated.source_currency, // Pass source currency
-        destination_currency: validated.destination_currency, // Pass destination currency
+        bank_id: validated.bank_id,
+        blockchain: validated.blockchain,
+        source_currency: validated.source_currency,
+        destination_currency: validated.destination_currency,
       };
 
       const offramp = await ironClient.createOfframp(offrampRequest);

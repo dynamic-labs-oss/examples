@@ -1,6 +1,7 @@
 "use client";
 
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
+import { SolanaWalletConnectors } from "@dynamic-labs/solana";
 import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { config } from "./config";
@@ -20,7 +21,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       theme="light"
       settings={{
         environmentId: config.dynamic.environmentId,
-        walletConnectors: [EthereumWalletConnectors],
+        walletConnectors: [EthereumWalletConnectors, SolanaWalletConnectors],
       }}
     >
       <QueryClientProvider client={queryClient}>

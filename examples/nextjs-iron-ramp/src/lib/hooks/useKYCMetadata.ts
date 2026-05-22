@@ -115,33 +115,38 @@ export function useKYCMetadata() {
         return true;
       }
 
-      try {
-        const metadata: IronKYCMetadata = {
-          ...(user.metadata as IronKYCMetadata),
-          iron: {
-            customerId: newState.customerId,
-            walletId: newState.walletId,
-            walletAddress: newState.walletAddress,
-            bankAccountId: newState.bankAccountId,
-            bankIban: newState.bankIban,
-            identificationId: newState.identificationId,
-            kycUrl: newState.kycUrl,
-            onboardingStep: newState.step,
-            kycCompleted: newState.kycCompleted,
-            updatedAt: new Date().toISOString(),
-            createdAt:
-              (user.metadata as IronKYCMetadata)?.iron?.createdAt ||
-              new Date().toISOString(),
-          },
-        };
+      const metadata: IronKYCMetadata = {
+        ...(user.metadata as IronKYCMetadata),
+        iron: {
+          customerId: newState.customerId,
+          walletId: newState.walletId,
+          walletAddress: newState.walletAddress,
+          bankAccountId: newState.bankAccountId,
+          bankIban: newState.bankIban,
+          identificationId: newState.identificationId,
+          kycUrl: newState.kycUrl,
+          onboardingStep: newState.step,
+          kycCompleted: newState.kycCompleted,
+          updatedAt: new Date().toISOString(),
+          createdAt:
+            (user.metadata as IronKYCMetadata)?.iron?.createdAt ||
+            new Date().toISOString(),
+        },
+      };
 
-        await updateUser({ metadata });
-        lastSyncedState.current = stateHash;
-        return true;
-      } catch (e) {
-        console.error("[useKYCMetadata] Sync failed:", e instanceof Error ? e.message : e);
-        return false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 1000));
+          await updateUser({ metadata });
+          lastSyncedState.current = stateHash;
+          return true;
+        } catch (e) {
+          if (attempt === 2) {
+            console.warn("[useKYCMetadata] Sync failed after retries:", e instanceof Error ? e.message : e);
+          }
+        }
       }
+      return false;
     },
     [user, updateUser]
   );

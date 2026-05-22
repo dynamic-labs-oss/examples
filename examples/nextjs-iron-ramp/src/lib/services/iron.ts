@@ -253,7 +253,8 @@ export interface OnrampQuoteRequest {
   source_amount?: number; // Amount in cents
   destination_amount?: number; // Amount in smallest unit
   payment_rail: PaymentRail;
-  wallet_address: string; // The blockchain address (e.g., 0x...) — must match registered wallet's chain
+  wallet_address: string; // The blockchain address (EVM 0x... or Solana base58) — must match registered wallet's chain
+  wallet_id?: string; // Iron Finance registered wallet ID — preferred over wallet_address when available
   blockchain?: BlockchainType; // The blockchain to use for the destination currency
 }
 
@@ -264,6 +265,7 @@ export interface OfframpQuoteRequest {
   source_amount?: number; // Amount in smallest unit
   destination_amount?: number; // Amount in cents
   bank_account_id: string; // The bank IBAN for receiving fiat
+  bank_id?: string; // Iron Finance registered bank account ID — preferred over IBAN when available
   blockchain?: BlockchainType; // The blockchain to use for the source currency
 }
 
@@ -382,7 +384,8 @@ export interface IronAutorampResponse {
 export interface CreateOnrampRequest {
   quote_id: string;
   customer_id: string;
-  wallet_address: string; // The actual blockchain wallet address (e.g., 0x...)
+  wallet_address: string; // The actual blockchain wallet address (EVM 0x... or Solana base58)
+  wallet_id?: string; // Iron Finance registered wallet ID — preferred over wallet_address when available
   bank_account_id?: string; // Optional if using virtual account
   blockchain?: BlockchainType; // The blockchain to use
   source_currency?: FiatCurrency; // Source fiat currency
@@ -419,6 +422,7 @@ export interface CreateOfframpRequest {
   quote_id: string;
   customer_id: string;
   bank_account_id: string; // The bank IBAN for receiving fiat
+  bank_id?: string; // Iron Finance registered bank account ID — preferred over IBAN when available
   blockchain?: BlockchainType; // The blockchain to use
   source_currency?: CryptoCurrency; // Source crypto currency
   destination_currency?: FiatCurrency; // Destination fiat currency
@@ -797,14 +801,20 @@ class IronFinanceClient {
   async getOnrampQuote(request: OnrampQuoteRequest): Promise<Quote> {
     const params = new URLSearchParams({
       customer_id: request.customer_id,
-      source_currency_code: request.source_currency, // e.g., "EUR"
-      destination_currency_code: request.destination_currency, // e.g., "USDC"
-      destination_currency_chain: request.blockchain || "Base", // Use requested blockchain or default to Base
-      recipient_account: request.wallet_address, // blockchain address (e.g., 0x...)
+      source_currency_code: request.source_currency,
+      destination_currency_code: request.destination_currency,
+      destination_currency_chain: request.blockchain || "Base",
       rate_expiry_policy: "Return",
       expiry_in_hours: "24",
       is_third_party: "false",
     });
+    // Prefer recipient_account_id (registered wallet UUID) over raw address —
+    // Iron Finance requires the ID for some destination currencies (e.g. USDC on Solana).
+    if (request.wallet_id) {
+      params.set("recipient_account_id", request.wallet_id);
+    } else {
+      params.set("recipient_account", request.wallet_address);
+    }
 
     if (request.source_amount) {
       // Convert from cents to decimal string
@@ -837,14 +847,20 @@ class IronFinanceClient {
   async getOfframpQuote(request: OfframpQuoteRequest): Promise<Quote> {
     const params = new URLSearchParams({
       customer_id: request.customer_id,
-      source_currency_code: request.source_currency, // e.g., "USDC"
-      source_currency_chain: request.blockchain || "Base", // Use requested blockchain or default to Base
-      destination_currency_code: request.destination_currency, // e.g., "EUR"
-      recipient_account: request.bank_account_id, // The bank account IBAN
+      source_currency_code: request.source_currency,
+      source_currency_chain: request.blockchain || "Base",
+      destination_currency_code: request.destination_currency,
       rate_expiry_policy: "Return",
       expiry_in_hours: "24",
       is_third_party: "false",
     });
+    // Prefer recipient_account_id (registered bank UUID) over raw IBAN —
+    // Iron Finance requires the ID for some destination currencies.
+    if (request.bank_id) {
+      params.set("recipient_account_id", request.bank_id);
+    } else {
+      params.set("recipient_account", request.bank_account_id);
+    }
 
     if (request.source_amount) {
       // Convert from smallest unit to decimal string
@@ -1025,7 +1041,7 @@ class IronFinanceClient {
         type: "Fiat",
         account_identifier: {
           type: "SEPA",
-          iban: request.bank_account_id, // The bank IBAN
+          iban: request.bank_account_id,
         },
       },
       source_currencies: [

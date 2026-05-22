@@ -1,9 +1,9 @@
 "use client";
 
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { useState, useCallback } from "react";
+import { useDynamicContext, useUserWallets, useSwitchWallet } from "@dynamic-labs/sdk-react-core";
+import { useState, useEffect, useCallback } from "react";
 import { config } from "@/lib/config";
-import { CheckCircle2, Loader2, RotateCcw } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
 import { useKYCMetadata, type OnboardStep } from "@/lib/hooks/useKYCMetadata";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,10 +28,26 @@ const STEPS: { key: OnboardStep; label: string }[] = [
   { key: "complete", label: "Done" },
 ];
 
+function getNetworkLabel(address: string, chain?: string | number | null): string {
+  if (!address.startsWith("0x")) return "Solana";
+  if (!chain || chain === "EVM") return "EVM";
+  const n = parseInt(String(chain));
+  switch (n) {
+    case 1: return "Ethereum";
+    case 137: return "Polygon";
+    case 42161: return "Arbitrum";
+    case 8453: return "Base";
+    default: return "EVM";
+  }
+}
+
 export default function OnboardPage() {
   const { user, primaryWallet } = useDynamicContext();
+  const userWallets = useUserWallets();
+  const switchWallet = useSwitchWallet();
   const {
     customerId,
+    walletAddress: metaWalletAddress,
     identificationId,
     kycUrl,
     step,
@@ -43,6 +59,9 @@ export default function OnboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [requiredSignings, setRequiredSignings] = useState<RequiredSigning[]>([]);
+  const [linkedWalletAddresses, setLinkedWalletAddresses] = useState<string[]>([]);
+  const [fetchingWallets, setFetchingWallets] = useState(false);
+  const [linkingWallet, setLinkingWallet] = useState<string | null>(null);
   const isSandbox =
     process.env.NEXT_PUBLIC_IRON_ENVIRONMENT === "sandbox" ||
     !process.env.NEXT_PUBLIC_IRON_ENVIRONMENT;
@@ -282,33 +301,71 @@ export default function OnboardPage() {
     }
   };
 
-  const handleCreateWallet = async () => {
-    setLoading(true);
+  const fetchRegisteredWallets = useCallback(async () => {
+    if (!customerId) return;
+    setFetchingWallets(true);
+    try {
+      const res = await fetch(
+        `${config.api.baseUrl}/api/iron/customers/${customerId}/wallets`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const wallets: Array<{ address?: string; wallet_address?: string }> =
+          data.data?.data || data.data || [];
+        setLinkedWalletAddresses(
+          wallets.map((w) => w.address || w.wallet_address || "").filter(Boolean)
+        );
+      }
+    } catch {
+      /* silent — we'll just show no linked state */
+    } finally {
+      setFetchingWallets(false);
+    }
+  }, [customerId]);
+
+  useEffect(() => {
+    if (step === "wallet" && customerId) {
+      fetchRegisteredWallets();
+    }
+  }, [step, customerId, fetchRegisteredWallets]);
+
+  const handleLinkWallet = async (wallet: (typeof userWallets)[number]) => {
+    setLinkingWallet(wallet.address);
     setError("");
     try {
-      if (!primaryWallet) throw new Error("No wallet connected.");
-      let walletAddress = primaryWallet.address;
+      let walletAddress = wallet.address;
       if (!walletAddress) throw new Error("Unable to get wallet address");
-      walletAddress = walletAddress.toLowerCase();
 
-      const chainId = primaryWallet.chain;
+      const chainId = wallet.chain;
+      const isSolanaWallet = !walletAddress.startsWith("0x");
       let blockchain = "Base";
-      if (chainId && chainId !== "EVM") {
-        const n = typeof chainId === "string" ? parseInt(chainId) : chainId;
-        if (!isNaN(n)) {
-          switch (n) {
-            case 1: blockchain = "Ethereum"; break;
-            case 137: blockchain = "Polygon"; break;
-            case 42161: blockchain = "Arbitrum"; break;
-            case 8453: blockchain = "Base"; break;
+
+      if (isSolanaWallet) {
+        blockchain = "Solana";
+      } else {
+        walletAddress = walletAddress.toLowerCase();
+        if (chainId && chainId !== "EVM") {
+          const n = typeof chainId === "string" ? parseInt(chainId) : chainId;
+          if (!isNaN(n)) {
+            switch (n) {
+              case 1: blockchain = "Ethereum"; break;
+              case 137: blockchain = "Polygon"; break;
+              case 42161: blockchain = "Arbitrum"; break;
+              case 8453: blockchain = "Base"; break;
+            }
           }
         }
+      }
+
+      // Make this wallet primary in Dynamic before signing so the prompt appears on the right wallet
+      if (wallet.id !== primaryWallet?.id) {
+        await switchWallet(wallet.id);
       }
 
       const now = new Date();
       const dateStr = `${now.getUTCDate().toString().padStart(2, "0")}/${(now.getUTCMonth() + 1).toString().padStart(2, "0")}/${now.getUTCFullYear()}`;
       const proofMessage = `I am verifying ownership of the wallet address ${walletAddress} as customer ${customerId}. This message was signed on ${dateStr} to confirm my control over this wallet.`;
-      const signature = await primaryWallet.signMessage(proofMessage);
+      const signature = await wallet.signMessage(proofMessage);
       if (!signature) throw new Error("Failed to sign message");
 
       const walletPayload = {
@@ -319,7 +376,7 @@ export default function OnboardPage() {
         signature,
       };
 
-      // Retry up to 6 times (12s total) — Iron activates customers async after signing.
+      let linkedId = "";
       let lastMsg = "";
       for (let attempt = 0; attempt < 6; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
@@ -337,7 +394,6 @@ export default function OnboardPage() {
           if (lastMsg.includes("not active") || lastMsg.includes("Customer is not active")) {
             throw new Error("Your account is still being activated by Iron Finance. Please wait a moment and try again.");
           }
-          // Wallet already registered — look up the existing one and advance.
           const isAlreadyRegistered =
             lastMsg.toLowerCase().includes("already") ||
             lastMsg.toLowerCase().includes("duplicate") ||
@@ -350,26 +406,41 @@ export default function OnboardPage() {
             if (walletsRes.ok) {
               const walletsData = await walletsRes.json();
               const existing = (walletsData.data?.data || walletsData.data || []).find(
-                (w: { address?: string; wallet_address?: string }) =>
-                  (w.address || w.wallet_address)?.toLowerCase() === walletAddress
+                (w: { address?: string; wallet_address?: string; id?: string }) => {
+                  const addr = w.address || w.wallet_address || "";
+                  return isSolanaWallet ? addr === walletAddress : addr.toLowerCase() === walletAddress;
+                }
               );
               if (existing?.id) {
-                await updateState({ walletId: existing.id, walletAddress, step: "bank" });
-                return;
+                linkedId = existing.id;
+                break;
               }
             }
           }
-          throw new Error(lastMsg || "Failed to register wallet");
+          if (!linkedId) throw new Error(lastMsg || "Failed to register wallet");
+          break;
         }
         const result = await res.json();
-        await updateState({ walletId: result.data.id, walletAddress, step: "bank" });
+        linkedId = result.data.id;
         break;
       }
+
+      if (!linkedId) throw new Error("Failed to register wallet");
+
+      // Store this wallet as primary in metadata if none is stored yet
+      if (!metaWalletAddress) {
+        await updateState({ walletId: linkedId, walletAddress });
+      }
+      setLinkedWalletAddresses((prev) => [...new Set([...prev, walletAddress])]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register wallet");
     } finally {
-      setLoading(false);
+      setLinkingWallet(null);
     }
+  };
+
+  const handleContinueFromWallet = async () => {
+    await updateState({ step: "bank" });
   };
 
   const handleAddBankAccount = async () => {
@@ -407,6 +478,36 @@ export default function OnboardPage() {
           }
           if (msg.includes("not active") || msg.includes("Customer is not active")) {
             throw new Error("Your account is still being activated by Iron Finance. Please wait a moment and try again.");
+          }
+          // Bank already registered — look up the existing account and advance
+          const isAlreadyRegistered =
+            res.status === 409 ||
+            msg.toLowerCase().includes("already") ||
+            msg.toLowerCase().includes("duplicate") ||
+            msg.toLowerCase().includes("exists");
+          if (isAlreadyRegistered) {
+            const banksRes = await fetch(
+              `${config.api.baseUrl}/api/iron/customers/${customerId}/banks`
+            );
+            if (banksRes.ok) {
+              const banksData = await banksRes.json();
+              const normalizeIban = (s: string) => s.replace(/\s/g, "").toUpperCase();
+              const existing = (banksData.data?.data || banksData.data || []).find(
+                (b: { id?: string; iban?: string; account_identifier?: { iban?: string } }) => {
+                  const bIban = b.iban || b.account_identifier?.iban || "";
+                  return normalizeIban(bIban) === normalizeIban(bankData.iban);
+                }
+              );
+              if (existing?.id) {
+                await updateState({
+                  bankAccountId: existing.id,
+                  bankIban: bankData.iban,
+                  step: "complete",
+                  kycCompleted: true,
+                });
+                return;
+              }
+            }
           }
           throw new Error(msg || "Failed to add bank account");
         }
@@ -669,24 +770,85 @@ export default function OnboardPage() {
       {step === "wallet" && (
         <Card>
           <CardHeader>
-            <CardTitle>Register Wallet</CardTitle>
+            <CardTitle>Register Wallet(s)</CardTitle>
             <CardDescription>
-              Link your embedded wallet to your Iron Finance account.
+              Link one or more wallets to your Iron Finance account. You need at least one to continue.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Your wallet address:{" "}
-              <span className="font-mono text-foreground">
-                {primaryWallet?.address
-                  ? `${primaryWallet.address.slice(0, 6)}...${primaryWallet.address.slice(-4)}`
-                  : "Not connected"}
-              </span>
-            </p>
-            <Button className="w-full" onClick={handleCreateWallet} disabled={loading || !primaryWallet}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Register Wallet
-            </Button>
+            {fetchingWallets ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Checking linked wallets…</span>
+              </div>
+            ) : userWallets.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No wallets connected. Connect a wallet to continue.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {userWallets.map((w) => {
+                  const isSol = !w.address.startsWith("0x");
+                  const networkLabel = getNetworkLabel(w.address, w.chain);
+                  const isLinked = linkedWalletAddresses.some((linked) =>
+                    isSol ? linked === w.address : linked.toLowerCase() === w.address.toLowerCase()
+                  );
+                  const isLinking = linkingWallet === w.address;
+                  return (
+                    <div
+                      key={w.address}
+                      className="flex items-center justify-between rounded-lg border px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            isSol
+                              ? "bg-purple-500/10 text-purple-600"
+                              : "bg-blue-500/10 text-blue-600"
+                          }`}
+                        >
+                          {isSol ? "SOL" : "EVM"}
+                        </span>
+                        <div>
+                          <p className="text-sm font-mono">
+                            {w.address.slice(0, 6)}…{w.address.slice(-4)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{networkLabel}</p>
+                        </div>
+                      </div>
+                      {isLinked ? (
+                        <div className="flex items-center gap-1.5 text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-xs font-medium">Linked</span>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => handleLinkWallet(w)}
+                          disabled={!!linkingWallet}
+                        >
+                          {isLinking && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                          Link
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {linkedWalletAddresses.length > 0 ? (
+              <Button className="w-full" onClick={handleContinueFromWallet} disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Continue <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            ) : (
+              !fetchingWallets && userWallets.length > 0 && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Link at least one wallet to continue.
+                </p>
+              )
+            )}
           </CardContent>
         </Card>
       )}

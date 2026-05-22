@@ -28,6 +28,7 @@ const quoteSchema = z.object({
   destination_amount: z.number().positive().optional(),
   payment_rail: z.enum(["ach", "wire", "sepa", "pix", "faster_payments"]),
   wallet_address: z.string().min(1, "Wallet address is required"),
+  wallet_id: z.string().optional(),
   blockchain: z.enum(["Ethereum", "Solana", "Polygon", "Arbitrum", "Base", "Stellar", "Citrea"]).optional(),
 });
 
@@ -36,6 +37,7 @@ const executeSchema = z.object({
   quote_id: z.string().min(1, "Quote ID is required"),
   customer_id: z.string().min(1, "Customer ID is required"),
   wallet_address: z.string().min(1, "Wallet address is required"),
+  wallet_id: z.string().optional(),
   bank_account_id: z.string().optional(),
   blockchain: z.enum(["Ethereum", "Solana", "Polygon", "Arbitrum", "Base", "Stellar", "Citrea"]).optional(),
   source_currency: z.enum(["USD", "EUR", "GBP", "BRL", "MXN"]).optional(),
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
         destination_amount: validated.destination_amount,
         payment_rail: validated.payment_rail,
         wallet_address: validated.wallet_address,
+        wallet_id: validated.wallet_id,
         blockchain: validated.blockchain,
       };
 
@@ -79,10 +82,11 @@ export async function POST(req: NextRequest) {
         quote_id: validated.quote_id,
         customer_id: validated.customer_id,
         wallet_address: validated.wallet_address,
+        wallet_id: validated.wallet_id,
         bank_account_id: validated.bank_account_id,
-        blockchain: validated.blockchain, // Pass blockchain selection
-        source_currency: validated.source_currency, // Pass source currency
-        destination_currency: validated.destination_currency, // Pass destination currency
+        blockchain: validated.blockchain,
+        source_currency: validated.source_currency,
+        destination_currency: validated.destination_currency,
       };
 
       const onramp = await ironClient.createOnramp(onrampRequest);
