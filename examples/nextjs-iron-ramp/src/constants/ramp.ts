@@ -9,6 +9,7 @@ export const CHAINS: Chain[] = [
   { id: "Ethereum", name: "Ethereum" },
   { id: "Base", name: "Base" },
   { id: "Polygon", name: "Polygon" },
+  { id: "Solana", name: "Solana" },
 ];
 
 export const TOKENS: Token[] = [

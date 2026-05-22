@@ -1,6 +1,6 @@
 "use client";
 
-import { useDynamicContext, DynamicWidget } from "@dynamic-labs/sdk-react-core";
+import { useDynamicContext, DynamicWidget, useUserWallets, useSwitchWallet } from "@dynamic-labs/sdk-react-core";
 import { useState, useEffect, useCallback } from "react";
 import { config } from "@/lib/config";
 import { useKYCMetadata } from "@/lib/hooks/useKYCMetadata";
@@ -105,7 +105,9 @@ const ONBOARD_STEPS = [
 ];
 
 export function RampInterface() {
-  const { user } = useDynamicContext();
+  const { user, primaryWallet } = useDynamicContext();
+  const userWallets = useUserWallets();
+  const switchWallet = useSwitchWallet();
   const {
     customerId: metaCustomerId,
     step: onboardingStep,
@@ -150,6 +152,8 @@ export function RampInterface() {
 
   const [transactions, setTransactions] = useState<AutoRamp[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [showLinkMore, setShowLinkMore] = useState(false);
+  const [linkingExtra, setLinkingExtra] = useState<string | null>(null);
   const [selectedTx, setSelectedTx] = useState<AutoRamp | null>(null);
 
   useEffect(() => {
@@ -232,12 +236,59 @@ export function RampInterface() {
     if (customerId) fetchRegisteredAccounts();
   }, [customerId, fetchRegisteredAccounts]);
 
+  const handleLinkAdditionalWallet = useCallback(async (wallet: (typeof userWallets)[number]) => {
+    setLinkingExtra(wallet.address);
+    setError("");
+    try {
+      let addr = wallet.address;
+      const isSol = !addr.startsWith("0x");
+      let blockchain = "Base";
+      if (isSol) {
+        blockchain = "Solana";
+      } else {
+        addr = addr.toLowerCase();
+        const chain = wallet.chain;
+        if (chain && chain !== "EVM") {
+          const n = parseInt(String(chain));
+          switch (n) {
+            case 1: blockchain = "Ethereum"; break;
+            case 137: blockchain = "Polygon"; break;
+            case 42161: blockchain = "Arbitrum"; break;
+            case 8453: blockchain = "Base"; break;
+          }
+        }
+      }
+      if (wallet.id !== primaryWallet?.id) await switchWallet(wallet.id);
+      const now = new Date();
+      const dateStr = `${now.getUTCDate().toString().padStart(2, "0")}/${(now.getUTCMonth() + 1).toString().padStart(2, "0")}/${now.getUTCFullYear()}`;
+      const msg = `I am verifying ownership of the wallet address ${addr} as customer ${customerId}. This message was signed on ${dateStr} to confirm my control over this wallet.`;
+      const sig = await wallet.signMessage(msg);
+      if (!sig) throw new Error("Failed to sign message");
+      const res = await fetch(`${config.api.baseUrl}/api/iron/wallets/self-hosted`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_id: customerId, blockchain, address: addr, message: msg, signature: sig }),
+      });
+      if (!res.ok) {
+        const ed = await res.json().catch(() => ({}));
+        throw new Error(ed.error || "Failed to link wallet");
+      }
+      await fetchRegisteredAccounts();
+      setShowLinkMore(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to link wallet");
+    } finally {
+      setLinkingExtra(null);
+    }
+  }, [customerId, primaryWallet, switchWallet, fetchRegisteredAccounts]);
+
   useEffect(() => {
     if (registeredWallets.length > 0 && selectedWalletIndex === null) {
       const i = metaWalletAddress
-        ? registeredWallets.findIndex(
-            (w) =>
-              w.address.toLowerCase() === metaWalletAddress.toLowerCase()
+        ? registeredWallets.findIndex((w) =>
+            metaWalletAddress.startsWith("0x")
+              ? w.address.toLowerCase() === metaWalletAddress.toLowerCase()
+              : w.address === metaWalletAddress
           )
         : 0;
       const idx = i >= 0 ? i : 0;
@@ -353,6 +404,7 @@ export function RampInterface() {
               source_amount: parseFloat(amount) * 100,
               payment_rail: "sepa" as const,
               wallet_address: selectedWalletAddr,
+              wallet_id: selectedWallet?.id,
               blockchain: selectedChain,
             }
           : {
@@ -362,6 +414,7 @@ export function RampInterface() {
               destination_currency: selectedFiatCurrency,
               source_amount: parseFloat(amount) * 1000000,
               bank_account_id: selectedIban,
+              bank_id: selectedBank?.id,
               blockchain: selectedChain,
             };
 
@@ -420,6 +473,7 @@ export function RampInterface() {
               quote_id: quote.id || quote.data?.id,
               customer_id: customerId,
               wallet_address: selectedWalletAddr,
+              wallet_id: selectedWallet?.id,
               blockchain: selectedChain,
               source_currency: selectedFiatCurrency,
               destination_currency: selectedToken,
@@ -429,6 +483,7 @@ export function RampInterface() {
               quote_id: quote.id || quote.data?.id,
               customer_id: customerId,
               bank_account_id: selectedIban,
+              bank_id: selectedBank?.id,
               blockchain: selectedChain,
               source_currency: selectedToken,
               destination_currency: selectedFiatCurrency,
@@ -510,30 +565,102 @@ export function RampInterface() {
               </div>
               <div className="grid grid-cols-2 gap-4 pt-2 border-t text-sm">
                 <div>
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
-                    Wallet
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide mb-2">
+                    Linked Wallets
                   </p>
-                  <div className="flex items-center gap-1">
-                    <p className="font-mono text-xs">
-                      {metaWalletAddress
-                        ? `${metaWalletAddress.slice(0, 8)}...${metaWalletAddress.slice(-6)}`
-                        : "—"}
-                    </p>
-                    {metaWalletAddress && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5"
-                        onClick={() => handleCopy(metaWalletAddress, "wallet-addr")}
-                      >
-                        {copiedField === "wallet-addr" ? (
-                          <Check className="h-3 w-3 text-green-500" />
+                  {registeredWallets.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {registeredWallets.map((w, i) => {
+                        const isSol = !w.address.startsWith("0x");
+                        return (
+                          <div key={w.id} className="flex items-center gap-1.5">
+                            <span className={`rounded-full px-1.5 py-0 text-[10px] font-semibold ${
+                              isSol ? "bg-purple-500/10 text-purple-600" : "bg-blue-500/10 text-blue-600"
+                            }`}>
+                              {isSol ? "SOL" : "EVM"}
+                            </span>
+                            <p className="font-mono text-xs">
+                              {w.address.slice(0, 6)}…{w.address.slice(-4)}
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={() => handleCopy(w.address, `wallet-${i}`)}
+                            >
+                              {copiedField === `wallet-${i}` ? (
+                                <Check className="h-3 w-3 text-green-500" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                      {/* Unlinked wallets — offer to link them */}
+                      {(() => {
+                        const unlinked = userWallets.filter(
+                          (uw) => !registeredWallets.some((rw) =>
+                            uw.address.startsWith("0x")
+                              ? rw.address.toLowerCase() === uw.address.toLowerCase()
+                              : rw.address === uw.address
+                          )
+                        );
+                        if (unlinked.length === 0) return null;
+                        return showLinkMore ? (
+                          <div className="mt-1 space-y-1.5">
+                            {unlinked.map((uw) => {
+                              const isSol = !uw.address.startsWith("0x");
+                              const isLinking = linkingExtra === uw.address;
+                              return (
+                                <div key={uw.address} className="flex items-center justify-between rounded-md border px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`rounded-full px-1.5 py-0 text-[10px] font-semibold ${isSol ? "bg-purple-500/10 text-purple-600" : "bg-blue-500/10 text-blue-600"}`}>
+                                      {isSol ? "SOL" : "EVM"}
+                                    </span>
+                                    <span className="font-mono text-xs">{uw.address.slice(0, 6)}…{uw.address.slice(-4)}</span>
+                                  </div>
+                                  <Button size="sm" onClick={() => handleLinkAdditionalWallet(uw)} disabled={!!linkingExtra}>
+                                    {isLinking && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                                    Link
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                            <button className="text-xs text-muted-foreground hover:underline" onClick={() => setShowLinkMore(false)}>
+                              Cancel
+                            </button>
+                          </div>
                         ) : (
-                          <Copy className="h-3 w-3" />
-                        )}
-                      </Button>
-                    )}
-                  </div>
+                          <button className="mt-0.5 text-xs text-primary hover:underline cursor-pointer" onClick={() => setShowLinkMore(true)}>
+                            + Link another wallet
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <p className="font-mono text-xs">
+                        {metaWalletAddress
+                          ? `${metaWalletAddress.slice(0, 6)}…${metaWalletAddress.slice(-4)}`
+                          : "—"}
+                      </p>
+                      {metaWalletAddress && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => handleCopy(metaWalletAddress, "wallet-addr")}
+                        >
+                          {copiedField === "wallet-addr" ? (
+                            <Check className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
@@ -672,7 +799,16 @@ export function RampInterface() {
                             <SelectValue placeholder="Select chain" />
                           </SelectTrigger>
                           <SelectContent>
-                            {CHAINS.map((c) => (
+                            {(registeredWallets.length > 0
+                              ? (() => {
+                                  const hasEVM = registeredWallets.some((w) => w.blockchain !== "Solana");
+                                  const hasSolana = registeredWallets.some((w) => w.blockchain === "Solana");
+                                  return CHAINS.filter((c) =>
+                                    c.id === "Solana" ? hasSolana : hasEVM
+                                  );
+                                })()
+                              : CHAINS
+                            ).map((c) => (
                               <SelectItem key={c.id} value={c.id}>
                                 {c.name}
                               </SelectItem>
@@ -747,10 +883,17 @@ export function RampInterface() {
                             onValueChange={(v) => {
                               const idx = parseInt(v);
                               setSelectedWalletIndex(idx);
-                              setWalletAddress(registeredWallets[idx]?.address || "");
+                              const addr = registeredWallets[idx]?.address || "";
+                              setWalletAddress(addr);
                               if (registeredWallets[idx]?.blockchain) {
                                 setSelectedChain(registeredWallets[idx].blockchain);
                               }
+                              // Switch the Dynamic primary wallet to match the selected registered wallet
+                              const isSol = addr && !addr.startsWith("0x");
+                              const match = userWallets.find((dw) =>
+                                isSol ? dw.address === addr : dw.address.toLowerCase() === addr.toLowerCase()
+                              );
+                              if (match) switchWallet(match.id);
                             }}
                             disabled={loadingAccounts}
                           >
@@ -771,7 +914,7 @@ export function RampInterface() {
                           <Input
                             value={walletAddress}
                             onChange={(e) => setWalletAddress(e.target.value)}
-                            placeholder="0x..."
+                            placeholder="0x... or Solana address"
                           />
                         )}
                       </div>
