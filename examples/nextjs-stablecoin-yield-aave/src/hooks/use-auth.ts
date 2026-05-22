@@ -1,27 +1,12 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { isSignedIn, onEvent } from "@dynamic-labs-sdk/client";
-import { dynamicClient } from "@/lib/dynamic";
-
-const AUTH_EVENTS = [
-  "userChanged",
-  "walletAccountsChanged",
-  "logout",
-  "initStatusChanged",
-] as const;
-
-function subscribe(callback: () => void): () => void {
-  const unsubs = AUTH_EVENTS.map((event) =>
-    onEvent({ event, listener: callback }, dynamicClient),
-  );
-  return () => unsubs.forEach((u) => u?.());
-}
+import { useEffect } from "react";
+import { useUser } from "@dynamic-labs-sdk/react-hooks";
+import { initDynamic } from "@/lib/dynamic";
 
 export function useAuth(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => isSignedIn(dynamicClient),
-    () => false,
-  );
+  useEffect(() => {
+    void initDynamic();
+  }, []);
+  return useUser() !== null;
 }

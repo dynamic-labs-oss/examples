@@ -9,3 +9,6 @@ export const dynamicClient = createDynamicClient({
 if (typeof window !== "undefined") {
   addEvmExtension();
 }
+
+// No-op on clients that auto-initialize; called by useAuth on mount.
+export async function initDynamic(): Promise<void> {}

@@ -18,6 +18,7 @@ import {
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
 import { isEvmWalletAccount, type EvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DynamicProvider } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
 import { useAuth } from "@/hooks/use-auth";
 import { useEvmWalletAccount } from "@/hooks/use-wallet-accounts";
@@ -101,8 +102,10 @@ export default function Providers({ children }: { children: ReactNode }) {
   }, [ensureEvmWallet]);
 
   return (
-    <WalletContext.Provider value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </WalletContext.Provider>
+    <DynamicProvider client={dynamicClient}>
+      <WalletContext.Provider value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </WalletContext.Provider>
+    </DynamicProvider>
   );
 }

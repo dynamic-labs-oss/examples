@@ -13,6 +13,9 @@ export const dynamicClient = createDynamicClient({
 // Register Solana extension — takes NO arguments
 addSolanaExtension();
 
+// No-op on clients that auto-initialize; called by useAuth on mount.
+export async function initDynamic(): Promise<void> {}
+
 /**
  * Returns the Solana RPC URL configured in the Dynamic dashboard.
  * Throws if Dynamic has not been configured with a Solana network.

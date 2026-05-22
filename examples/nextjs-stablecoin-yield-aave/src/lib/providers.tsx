@@ -20,6 +20,7 @@ import {
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
 import { isEvmWalletAccount, type EvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DynamicProvider } from "@dynamic-labs-sdk/react-hooks";
 import { AaveProvider } from "@aave/react";
 import { base } from "viem/chains";
 import { client } from "./aave";
@@ -115,12 +116,14 @@ export default function Providers({ children }: { children: ReactNode }) {
   }, [ensureEvmWallet]);
 
   return (
-    <WalletContext.Provider
-      value={{ evmAccount, loggedIn, chainId, setChainId, ensureEvmWallet, disconnect }}
-    >
-      <QueryClientProvider client={queryClient}>
-        <AaveProvider client={client}>{children}</AaveProvider>
-      </QueryClientProvider>
-    </WalletContext.Provider>
+    <DynamicProvider client={dynamicClient}>
+      <WalletContext.Provider
+        value={{ evmAccount, loggedIn, chainId, setChainId, ensureEvmWallet, disconnect }}
+      >
+        <QueryClientProvider client={queryClient}>
+          <AaveProvider client={client}>{children}</AaveProvider>
+        </QueryClientProvider>
+      </WalletContext.Provider>
+    </DynamicProvider>
   );
 }

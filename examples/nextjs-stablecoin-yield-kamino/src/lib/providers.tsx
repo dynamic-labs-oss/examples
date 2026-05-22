@@ -21,6 +21,7 @@ import {
   type SolanaWalletAccount,
 } from "@dynamic-labs-sdk/solana";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DynamicProvider } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
 import { useAuth } from "@/hooks/use-auth";
 import { useSolanaWalletAccount } from "@/hooks/use-wallet-accounts";
@@ -111,10 +112,12 @@ export default function Providers({ children }: { children: ReactNode }) {
   }, [ensureSolanaWallet]);
 
   return (
-    <WalletContext.Provider
-      value={{ solanaAccount, loggedIn, ensureSolanaWallet, disconnect }}
-    >
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </WalletContext.Provider>
+    <DynamicProvider client={dynamicClient}>
+      <WalletContext.Provider
+        value={{ solanaAccount, loggedIn, ensureSolanaWallet, disconnect }}
+      >
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </WalletContext.Provider>
+    </DynamicProvider>
   );
 }
