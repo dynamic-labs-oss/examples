@@ -8,10 +8,10 @@ import {
   useUserSupplies,
 } from "@aave/react";
 import { useEffect, useMemo, useState } from "react";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { ViemExtension } from "@dynamic-labs/viem-extension";
+import { dynamicClient } from "@/lib/dynamic";
 import { mainnet, base, polygon } from "viem/chains";
 import type { WalletClient } from "viem";
-import type { EvmWalletAccount } from "@dynamic-labs-sdk/evm";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,10 @@ function MarketsInterfaceInner({
       return;
     }
     let cancelled = false;
-    createWalletClientForWalletAccount({ walletAccount: evmAccount })
+    const CHAINS = [mainnet, base, polygon];
+    const viemChain = CHAINS.find((c) => c.id === chainId) ?? base;
+    const viemClient = dynamicClient.extend(ViemExtension());
+    viemClient.viem.createWalletClient({ wallet: evmAccount, chain: viemChain })
       .then((client) => {
         if (cancelled) return;
         setWalletClient(client);

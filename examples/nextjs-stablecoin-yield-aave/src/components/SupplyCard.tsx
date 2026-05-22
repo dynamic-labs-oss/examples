@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { getBalances } from "@dynamic-labs-sdk/client";
+import { createPublicClient, erc20Abi, http, formatUnits } from "viem";
+import { mainnet, base, polygon, arbitrum, optimism } from "viem/chains";
 import { safeParseFloat, safeParseUSD } from "../lib/utils";
 import type { MarketUserReserveSupplyPosition } from "@aave/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/lib/providers";
-import { dynamicClient } from "@/lib/dynamic";
 
 interface PrimaryWallet {
   address: string;
@@ -52,19 +52,31 @@ export function SupplyCard({
       return;
     }
     let cancelled = false;
-    getBalances(
-      {
-        walletAccount: evmAccount,
-        networkId: chainId,
-        whitelistedContracts: [supply.currency.address],
-        filterSpamTokens: false,
-      },
-      dynamicClient
-    ).then((balances) => {
-      if (cancelled) return;
-      const token = balances.find((b) => b.address?.toLowerCase() === supply.currency.address.toLowerCase());
-      setWalletBalance(token ? Number(token.balance).toLocaleString(undefined, { maximumFractionDigits: 6 }) : null);
-    }).catch(() => { if (!cancelled) setWalletBalance(null); });
+    const CHAINS = [mainnet, base, polygon, arbitrum, optimism];
+    const viemChain = CHAINS.find((c) => c.id === chainId) ?? base;
+    const publicClient = createPublicClient({ chain: viemChain, transport: http() });
+    publicClient
+      .readContract({
+        address: supply.currency.address as `0x${string}`,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [evmAccount.address as `0x${string}`],
+      })
+      .then((rawBalance) => {
+        if (cancelled) return;
+        return publicClient
+          .readContract({
+            address: supply.currency.address as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "decimals",
+          })
+          .then((decimals) => {
+            if (cancelled) return;
+            const formatted = formatUnits(rawBalance, decimals);
+            setWalletBalance(Number(formatted).toLocaleString(undefined, { maximumFractionDigits: 6 }));
+          });
+      })
+      .catch(() => { if (!cancelled) setWalletBalance(null); });
     return () => { cancelled = true; };
   }, [evmAccount, supply.currency.address, chainId]);
 

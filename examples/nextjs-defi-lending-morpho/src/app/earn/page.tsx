@@ -7,8 +7,8 @@ import { VaultCard } from "@/components/VaultCard";
 import { PositionCard } from "@/components/PositionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useWallet } from "@/lib/providers";
-import { getBalances } from "@dynamic-labs-sdk/client";
-import { dynamicClient } from "@/lib/dynamic";
+import { createPublicClient, erc20Abi, http, formatUnits } from "viem";
+import { mainnet, base, polygon, arbitrum, optimism } from "viem/chains";
 
 const VAULTS_PER_PAGE = 6;
 
@@ -26,14 +26,33 @@ export default function EarnPage() {
     if (!evmAccount || vaults.length === 0) return;
     const assetAddresses = [...new Set(vaults.map((v) => v.assetAddress).filter(Boolean))];
     if (assetAddresses.length === 0) return;
-    getBalances(
-      { walletAccount: evmAccount, networkId: chainId, whitelistedContracts: assetAddresses, filterSpamTokens: false },
-      dynamicClient
-    ).then((balances) => {
+    const CHAINS = [mainnet, base, polygon, arbitrum, optimism];
+    const viemChain = CHAINS.find((c) => c.id === chainId) ?? base;
+    const publicClient = createPublicClient({ chain: viemChain, transport: http() });
+    Promise.all(
+      assetAddresses.map(async (addr) => {
+        try {
+          const [rawBalance, decimals] = await Promise.all([
+            publicClient.readContract({
+              address: addr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [evmAccount.address as `0x${string}`],
+            }),
+            publicClient.readContract({
+              address: addr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "decimals",
+            }),
+          ]);
+          return [addr.toLowerCase(), formatUnits(rawBalance, decimals)] as const;
+        } catch {
+          return [addr.toLowerCase(), "0"] as const;
+        }
+      })
+    ).then((entries) => {
       const map: Record<string, string> = {};
-      for (const b of balances) {
-        if (b.address) map[b.address.toLowerCase()] = String(b.balance);
-      }
+      for (const [addr, balance] of entries) map[addr] = balance;
       setAssetBalances(map);
     }).catch(() => {});
   }, [evmAccount, chainId, vaults.length, refreshKey]);

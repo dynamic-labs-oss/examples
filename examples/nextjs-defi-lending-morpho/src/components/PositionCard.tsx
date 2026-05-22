@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { parseUnits, createPublicClient, http } from "viem";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { ViemExtension } from "@dynamic-labs/viem-extension";
+import { dynamicClient } from "@/lib/dynamic";
 import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
 import { ERC4626_ABI } from "@/lib/ABIs";
 import { VaultPosition } from "@/lib/hooks/useVaultPositions";
@@ -34,7 +35,8 @@ export function PositionCard({ position, onWithdrawn }: PositionCardProps) {
     if (!address || !evmAccount) return;
     const chain = getViemChain(chainId);
     const publicClient = createPublicClient({ chain, transport: http() });
-    const walletClient = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
+    const viemClient = dynamicClient.extend(ViemExtension());
+    const walletClient = await viemClient.viem.createWalletClient({ wallet: evmAccount, chain });
 
     setIsPending(true);
     try {

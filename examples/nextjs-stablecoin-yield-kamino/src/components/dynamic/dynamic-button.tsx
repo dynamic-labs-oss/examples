@@ -1,16 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import {
-  getAvailableWalletProvidersData,
-  connectAndVerifyWithWalletProvider,
-  sendEmailOTP,
-  verifyOTP,
-  authenticateWithSocial,
-  type WalletProviderData,
-  type OTPVerification,
-} from "@dynamic-labs-sdk/client";
-import { exportWaasPrivateKey } from "@dynamic-labs-sdk/client/waas";
+import type { WalletOptionMetadata } from "@dynamic-labs/client";
 import { useWallet } from "@/lib/providers";
 import { dynamicClient } from "@/lib/dynamic";
 import { shortenAddress } from "@/lib/utils";
@@ -66,7 +57,7 @@ export default function DynamicButton() {
   const [view, setView] = useState<"menu" | "email" | "otp" | "wallet" | "export">("menu");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpVerification, setOtpVerification] = useState<OTPVerification | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -92,7 +83,7 @@ export default function DynamicButton() {
     setView("menu");
     setEmail("");
     setOtp("");
-    setOtpVerification(null);
+    setOtpSent(false);
     setError(null);
     setLoading(false);
     setExportPassword("");
@@ -104,11 +95,9 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      await exportWaasPrivateKey(
-        { displayContainer: exportContainerRef.current, password: exportPassword, walletAccount: solanaAccount },
-        dynamicClient
-      );
-      setExportRevealed(true);
+      // TODO: exportWaasPrivateKey is not yet available in @dynamic-labs/client.
+      // Refer to Dynamic documentation for the migration path.
+      throw new Error("Private key export not yet available in the new SDK. Please use the Dynamic dashboard.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed");
     } finally {
@@ -122,8 +111,8 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      const verification = await sendEmailOTP({ email }, dynamicClient);
-      setOtpVerification(verification);
+      await dynamicClient.auth.email.sendOTP(email);
+      setOtpSent(true);
       setView("otp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send OTP");
@@ -134,11 +123,10 @@ export default function DynamicButton() {
 
   const handleVerifyOTP = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpVerification) return;
     setLoading(true);
     setError(null);
     try {
-      await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
+      await dynamicClient.auth.email.verifyOTP(otp);
       await ensureSolanaWallet();
       setOpen(false);
       reset();
@@ -152,20 +140,17 @@ export default function DynamicButton() {
     } finally {
       setLoading(false);
     }
-  }, [otpVerification, otp, ensureSolanaWallet]);
+  }, [otp, ensureSolanaWallet]);
 
   // ── Google OAuth ───────────────────────────────────────────────────────────
   const handleGoogle = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      await authenticateWithSocial(
-        {
-          provider: "google",
-          redirectUrl: typeof window !== "undefined" ? window.location.href : "",
-        },
-        dynamicClient
-      );
+      await dynamicClient.auth.social.connect({
+        provider: "google",
+        redirectUri: typeof window !== "undefined" ? window.location.href : "",
+      });
       // Page will redirect — no further action needed here
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed");
@@ -174,14 +159,14 @@ export default function DynamicButton() {
   }, []);
 
   // ── External wallet connect ────────────────────────────────────────────────
-  const getSolanaProviders = (): WalletProviderData[] =>
-    getAvailableWalletProvidersData(dynamicClient).filter((p) => p.chain === "SOL");
+  const getSolanaProviders = (): WalletOptionMetadata[] =>
+    (dynamicClient.wallets.walletOptions ?? []).filter((p) => p.chain === "SOL" || p.supportedChains.includes("SOL"));
 
   const handleConnectWallet = useCallback(async (providerKey: string) => {
     setLoading(true);
     setError(null);
     try {
-      await connectAndVerifyWithWalletProvider({ walletProviderKey: providerKey }, dynamicClient);
+      await dynamicClient.wallets.connectWallet(providerKey);
       await ensureSolanaWallet();
       setOpen(false);
       reset();
@@ -415,13 +400,13 @@ export default function DynamicButton() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={provider.metadata.icon}
-                        alt={provider.metadata.displayName}
+                        alt={provider.metadata.name}
                         width={20}
                         height={20}
                         className="rounded-sm shrink-0"
                       />
                     )}
-                    {provider.metadata.displayName}
+                    {provider.metadata.name}
                   </button>
                 ))
               )}

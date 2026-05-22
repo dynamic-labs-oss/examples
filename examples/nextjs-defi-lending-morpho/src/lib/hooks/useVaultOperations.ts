@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { parseUnits, formatUnits, createPublicClient, http } from "viem";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { ViemExtension } from "@dynamic-labs/viem-extension";
+import { dynamicClient } from "@/lib/dynamic";
 import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
 import { ERC20_ABI, ERC4626_ABI } from "../ABIs";
 import { createTxStatusMessage, formatErrorMessage } from "../utils";
@@ -49,7 +50,8 @@ export function useVaultOperations(
 
   const getWalletClient = async () => {
     if (!evmAccount) return null;
-    return createWalletClientForWalletAccount({ walletAccount: evmAccount });
+    const client = dynamicClient.extend(ViemExtension());
+    return client.viem.createWalletClient({ wallet: evmAccount, chain });
   };
 
   const setSuccessStatus = (message: string) => {

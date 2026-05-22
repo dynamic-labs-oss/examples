@@ -2,16 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import {
-  authenticateWithSocial,
-  sendEmailOTP,
-  verifyOTP,
-  connectAndVerifyWithWalletProvider,
-  getAvailableWalletProvidersData,
-  getNetworksData,
-  switchActiveNetwork,
-  getActiveNetworkId,
-} from "@dynamic-labs-sdk/client";
+import type { WalletOptionMetadata } from "@dynamic-labs/client";
 import { dynamicClient } from "@/lib/dynamic";
 import { useWallet } from "@/lib/providers";
 
@@ -24,7 +15,7 @@ export default function DynamicButton() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [otpVerification, setOtpVerification] = useState<Awaited<ReturnType<typeof sendEmailOTP>> | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeNetworkId, setActiveNetworkId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -46,8 +37,8 @@ export default function DynamicButton() {
 
   useEffect(() => {
     if (step !== "networks" || !evmAccount) return;
-    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient)
-      .then((result) => setActiveNetworkId(result.networkId))
+    dynamicClient.wallets.getNetwork({ wallet: evmAccount })
+      .then((result) => setActiveNetworkId(String(result.network)))
       .catch(() => setActiveNetworkId(null));
   }, [step, evmAccount]);
 
@@ -55,7 +46,10 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      await authenticateWithSocial({ provider: "google", redirectUrl: globalThis.location.href }, dynamicClient);
+      await dynamicClient.auth.social.connect({
+        provider: "google",
+        redirectUri: typeof window !== "undefined" ? window.location.href : "",
+      });
     } catch {
       setError("Google sign-in failed. Please try again.");
     } finally {
@@ -68,8 +62,8 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      const verification = await sendEmailOTP({ email }, dynamicClient);
-      setOtpVerification(verification);
+      await dynamicClient.auth.email.sendOTP(email);
+      setOtpSent(true);
       setStep("otp");
     } catch {
       setError("Failed to send code. Please try again.");
@@ -79,17 +73,17 @@ export default function DynamicButton() {
   };
 
   const handleOtpSubmit = async () => {
-    if (!otp || !otpVerification) return;
+    if (!otp) return;
     setLoading(true);
     setError(null);
     try {
-      await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
+      await dynamicClient.auth.email.verifyOTP(otp);
       await ensureEvmWallet();
       setStep("idle");
       setShowDropdown(false);
       setEmail("");
       setOtp("");
-      setOtpVerification(null);
+      setOtpSent(false);
     } catch {
       setError("Invalid code. Please try again.");
     } finally {
@@ -106,10 +100,7 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      await connectAndVerifyWithWalletProvider(
-        { walletProviderKey: providerKey },
-        dynamicClient
-      );
+      await dynamicClient.wallets.connectWallet(providerKey);
       await ensureEvmWallet();
       setShowDropdown(false);
       setStep("idle");
@@ -123,7 +114,7 @@ export default function DynamicButton() {
   if (loggedIn && evmAccount) {
     const addr = evmAccount.address;
     const short = `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-    const evmNetworks = getNetworksData(dynamicClient).filter((n) => n.chain === "EVM");
+    const evmNetworks = dynamicClient.networks?.evm ?? [];
     return (
       <div className="relative" ref={dropdownRef}>
         <button
@@ -188,17 +179,17 @@ export default function DynamicButton() {
                 </p>
                 {error && <p className="text-xs text-red-500">{error}</p>}
                 {evmNetworks.map((n) => {
-                  const isActive = activeNetworkId === n.networkId;
+                  const isActive = activeNetworkId === String(n.networkId);
                   return (
                     <button
-                      key={n.networkId}
+                      key={String(n.networkId)}
                       disabled={loading}
                       onClick={async () => {
                         setLoading(true);
                         setError(null);
                         try {
-                          await switchActiveNetwork({ networkId: n.networkId, walletAccount: evmAccount }, dynamicClient);
-                          setActiveNetworkId(n.networkId);
+                          await dynamicClient.wallets.switchNetwork({ wallet: evmAccount, chainId: n.networkId });
+                          setActiveNetworkId(String(n.networkId));
                           setChainId(Number(n.networkId));
                           setShowDropdown(false);
                           setStep("idle");
@@ -214,10 +205,10 @@ export default function DynamicButton() {
                         background: isActive ? "#F0F0F0" : "transparent",
                       }}
                     >
-                      {n.iconUrl && (
-                        <Image src={n.iconUrl} alt={n.displayName} width={16} height={16} className="rounded-full" />
+                      {(n as { iconUrl?: string }).iconUrl && (
+                        <Image src={(n as { iconUrl?: string }).iconUrl!} alt={n.name} width={16} height={16} className="rounded-full" />
                       )}
-                      <span className="flex-1 text-left">{n.displayName}</span>
+                      <span className="flex-1 text-left">{n.name}</span>
                       {isActive && (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <path d="m20 6-11 11-5-5" />
@@ -319,9 +310,9 @@ export default function DynamicButton() {
               <p className="text-xs font-medium" style={{ color: "#030303" }}>
                 Choose a wallet
               </p>
-              {getAvailableWalletProvidersData(dynamicClient)
-                .filter((p) => p.chain === "EVM")
-                .map((p) => (
+              {(dynamicClient.wallets.walletOptions ?? [])
+                .filter((p: WalletOptionMetadata) => p.chain === "EVM" || p.supportedChains.includes("EVM"))
+                .map((p: WalletOptionMetadata) => (
                   <button
                     key={p.key}
                     onClick={() => handleSelectWallet(p.key)}
@@ -330,9 +321,9 @@ export default function DynamicButton() {
                     style={{ borderColor: "#DADADA", color: "#030303" }}
                   >
                     {p.metadata.icon && (
-                      <Image src={p.metadata.icon} alt={p.metadata.displayName} width={16} height={16} className="rounded" />
+                      <Image src={p.metadata.icon} alt={p.metadata.name} width={16} height={16} className="rounded" />
                     )}
-                    {p.metadata.displayName}
+                    {p.metadata.name}
                   </button>
                 ))}
             </>

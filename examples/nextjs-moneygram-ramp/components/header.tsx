@@ -1,12 +1,12 @@
 "use client";
 
-import { useAuth } from "@/hooks/use-auth";
-import { logout } from "@dynamic-labs-sdk/client";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
 import { dynamicClient } from "@/lib/dynamic";
 import { LogOut } from "lucide-react";
 
 export function Header() {
-  const signedIn = useAuth();
+  const client = useReactiveClient(dynamicClient);
+  const signedIn = client.auth.authenticatedUser !== undefined;
 
   return (
     <header className="border-b border-gray-800/60 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
@@ -22,7 +22,7 @@ export function Header() {
           </div>
           {signedIn && (
             <button
-              onClick={() => logout(dynamicClient)}
+              onClick={() => dynamicClient.auth.logout()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
             >
               <LogOut size={14} />

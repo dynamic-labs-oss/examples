@@ -1,31 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  sendEmailOTP,
-  verifyOTP,
-  getWalletAccounts,
-  type OTPVerification,
-} from "@dynamic-labs-sdk/client";
-import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
+import type { Wallet } from "@dynamic-labs/client";
 import { initDynamic, dynamicClient } from "@/lib/dynamic";
-import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
-import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
-import type { WalletAccount } from "@dynamic-labs-sdk/client";
-import { ArrowRight, Banknote, Check, Copy, Globe, Wallet, Zap } from "lucide-react";
+import { ArrowRight, Banknote, Check, Copy, Globe, Wallet as WalletIcon, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { ChainSelector } from "./chain-selector";
 import { CashPickupWidget } from "./cash-pickup-widget";
 import { CHAINS, type MgChain } from "@/lib/chains";
 import { fetchUsdcBalance } from "@/lib/balance";
-import { useAuth } from "@/hooks/use-auth";
-import { useWalletAccounts } from "@/hooks/use-wallet-accounts";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function getAddressForChain(chain: MgChain, accounts: WalletAccount[]): string {
-  if (chain === "solana") return accounts.find(isSolanaWalletAccount)?.address ?? "";
-  return accounts.find(isEvmWalletAccount)?.address ?? "";
+function getAddressForChain(chain: MgChain, wallets: Wallet[]): string {
+  if (chain === "solana") return wallets.find((w) => w.chain === "SOL")?.address ?? "";
+  return wallets.find((w) => w.chain === "EVM")?.address ?? "";
 }
 
 function truncate(addr: string): string {
@@ -36,8 +26,10 @@ function truncate(addr: string): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function RampApp() {
-  const signedIn = useAuth();
-  const walletAccounts = useWalletAccounts();
+  const client = useReactiveClient(dynamicClient);
+  const signedIn = client.auth.authenticatedUser !== undefined;
+  const wallets = client.wallets.userWallets ?? [];
+
   const [selectedChain, setSelectedChain] = useState<MgChain>("base");
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [widgetOpen, setWidgetOpen] = useState(false);
@@ -45,15 +37,15 @@ export function RampApp() {
 
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpVerification, setOtpVerification] = useState<OTPVerification | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Trigger init on mount (idempotent — useAuth also calls this, but explicit here for clarity)
+  // Trigger init on mount (idempotent)
   useEffect(() => {
     void initDynamic();
   }, []);
 
-  const address = getAddressForChain(selectedChain, walletAccounts);
+  const address = getAddressForChain(selectedChain, wallets);
 
   useEffect(() => {
     if (!address) { setUsdcBalance(null); return; }
@@ -65,8 +57,8 @@ export function RampApp() {
     if (!email) return;
     setLoading(true);
     try {
-      const verification = await sendEmailOTP({ email });
-      setOtpVerification(verification);
+      await dynamicClient.auth.email.sendOTP(email);
+      setOtpSent(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send code");
     } finally {
@@ -75,12 +67,16 @@ export function RampApp() {
   };
 
   const handleVerifyOtp = async () => {
-    if (!otp || !otpVerification) return;
+    if (!otp) return;
     setLoading(true);
     try {
-      await verifyOTP({ otpVerification, verificationToken: otp });
-      if (getWalletAccounts().length === 0) {
-        await createWaasWalletAccounts({ chains: ["EVM", "SOL"] }, dynamicClient);
+      await dynamicClient.auth.email.verifyOTP(otp);
+      const hasWallets = (dynamicClient.wallets.userWallets?.length ?? 0) > 0;
+      if (!hasWallets) {
+        await Promise.all([
+          dynamicClient.wallets.embedded.createWallet({ chain: "EVM" }),
+          dynamicClient.wallets.embedded.createWallet({ chain: "SOL" }),
+        ]);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid code");
@@ -118,7 +114,7 @@ export function RampApp() {
 
             {/* Auth card */}
             <div className="mx-auto max-w-xs bg-gray-900 border border-gray-800 rounded-2xl p-6 text-left space-y-3">
-              {!otpVerification ? (
+              {!otpSent ? (
                 <>
                   <input
                     type="email"
@@ -162,7 +158,7 @@ export function RampApp() {
                     {!loading && <ArrowRight className="w-4 h-4" />}
                   </button>
                   <button
-                    onClick={() => { setOtpVerification(null); setOtp(""); }}
+                    onClick={() => { setOtpSent(false); setOtp(""); }}
                     className="w-full text-gray-500 hover:text-gray-300 text-xs text-center transition-colors py-1"
                   >
                     ← Back
@@ -178,7 +174,7 @@ export function RampApp() {
           <div className="grid md:grid-cols-3 gap-5 max-w-3xl mx-auto">
             {[
               {
-                icon: Wallet,
+                icon: WalletIcon,
                 color: "teal",
                 title: "Embedded wallets",
                 desc: "Non-custodial wallets created automatically — no extensions or seed phrases.",
@@ -277,7 +273,7 @@ export function RampApp() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5 hover:border-gray-700 transition-colors">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0">
-                <Wallet className="w-5 h-5 text-teal-400" />
+                <WalletIcon className="w-5 h-5 text-teal-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-500">{CHAINS[selectedChain].name}</p>
@@ -330,7 +326,7 @@ export function RampApp() {
       <CashPickupWidget
         open={widgetOpen}
         selectedChain={selectedChain}
-        walletAccounts={walletAccounts}
+        wallets={wallets}
         onClose={() => setWidgetOpen(false)}
         onSuccess={handleSuccess}
       />

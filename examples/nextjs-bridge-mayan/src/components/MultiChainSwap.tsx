@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { createPublicClient, createWalletClient, custom, erc20Abi, http, parseUnits, type Chain } from "viem";
 import { mainnet, polygon, bsc, avalanche, arbitrum, optimism, base } from "viem/chains";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+// TODO: install @dynamic-labs/viem-extension and replace with:
+// import { ViemExtension } from "@dynamic-labs/viem-extension";
+// Then: const viemClient = dynamicClient.extend(ViemExtension());
+//       const walletClient = await viemClient.viem.createWalletClient({ wallet: evmAccount, chain });
+import { dynamicClient } from "@/lib/dynamic";
 
 import { ALL_CHAINS, EVM_CHAINS, type ChainKey, isEVMChain } from "@/constants/chains";
 import { fetchTokensForChain, type TokenData } from "@/lib/mayan-api";
@@ -193,30 +197,21 @@ export default function MultiChainSwap() {
 
     const chainId = getEvmChainIdByName(quote.fromChain);
 
-    const dynamicWalletClient = await createWalletClientForWalletAccount({
-      walletAccount: evmAccount,
-    });
-
     // Switch the wallet to the target chain before sending any transactions.
     // For injected wallets (MetaMask etc.) this triggers the chain-switch prompt.
     // For WaaS wallets it updates the active network in Dynamic's context.
-    await dynamicWalletClient.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: `0x${viemChain.id.toString(16)}` }],
-    });
+    await dynamicClient.wallets.switchNetwork({ wallet: evmAccount, chainId: viemChain.id });
 
-    // Build a fresh wallet client now that the wallet is on the correct chain.
+    // TODO: Install @dynamic-labs/viem-extension and use:
+    //   const viemClient = dynamicClient.extend(ViemExtension());
+    //   const walletClient = await viemClient.viem.createWalletClient({ wallet: evmAccount, chain: viemChain });
+    // For now, build a wallet client using window.ethereum if available.
     const walletClient = createWalletClient({
-      account: dynamicWalletClient.account,
+      account: evmAccount.address as `0x${string}`,
       chain: viemChain,
-      transport: custom({
-        request: async ({ method, params }: { method: string; params?: unknown[] }) => {
-          if (method === "eth_chainId") {
-            return `0x${viemChain.id.toString(16)}`;
-          }
-          return dynamicWalletClient.request({ method, params } as Parameters<typeof dynamicWalletClient.request>[0]);
-        },
-      }),
+      transport: typeof window !== "undefined" && (window as { ethereum?: unknown }).ethereum
+        ? custom((window as { ethereum: { request: (args: unknown) => Promise<unknown> } }).ethereum)
+        : http(),
     });
 
     const fromTokenContract = quote.fromToken.contract as `0x${string}`;

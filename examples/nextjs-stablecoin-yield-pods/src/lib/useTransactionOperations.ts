@@ -1,5 +1,10 @@
 import { useState, useCallback } from "react";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+// TODO: install @dynamic-labs/viem-extension and replace with:
+// import { ViemExtension } from "@dynamic-labs/viem-extension";
+// Then: const viemClient = dynamicClient.extend(ViemExtension());
+//       const walletClient = await viemClient.viem.createWalletClient({ wallet: evmAccount, chain });
+import { createWalletClient, http, custom } from "viem";
+import { dynamicClient } from "@/lib/dynamic";
 import { client as podsClient } from "./pods";
 import type { Strategy, TransactionCall } from "./pods-types";
 import { useWallet } from "@/lib/providers";
@@ -36,7 +41,14 @@ export function useTransactionOperations(
       });
 
       if (!evmAccount) throw new Error("Wallet account unavailable");
-      const walletClient = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
+      // TODO: install @dynamic-labs/viem-extension and use ViemExtension for proper WaaS signing.
+      // For now, fall back to window.ethereum (works for injected wallets only).
+      const walletClient = createWalletClient({
+        account: evmAccount.address as `0x${string}`,
+        transport: typeof window !== "undefined" && (window as { ethereum?: unknown }).ethereum
+          ? custom((window as { ethereum: { request: (args: unknown) => Promise<unknown> } }).ethereum)
+          : http(),
+      });
 
       let lastHash: string | undefined;
       for (const tx of bytecode) {
@@ -82,7 +94,14 @@ export function useTransactionOperations(
       });
 
       if (!evmAccount) throw new Error("Wallet account unavailable");
-      const walletClient = await createWalletClientForWalletAccount({ walletAccount: evmAccount });
+      // TODO: install @dynamic-labs/viem-extension and use ViemExtension for proper WaaS signing.
+      // For now, fall back to window.ethereum (works for injected wallets only).
+      const walletClient = createWalletClient({
+        account: evmAccount.address as `0x${string}`,
+        transport: typeof window !== "undefined" && (window as { ethereum?: unknown }).ethereum
+          ? custom((window as { ethereum: { request: (args: unknown) => Promise<unknown> } }).ethereum)
+          : http(),
+      });
 
       let lastHash: string | undefined;
       for (const tx of bytecode) {

@@ -8,21 +8,10 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import {
-  getWalletAccounts,
-  onEvent,
-  isSignedIn,
-  logout,
-  detectOAuthRedirect,
-  completeSocialAuthentication,
-  getActiveNetworkId,
-} from "@dynamic-labs-sdk/client";
-import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
 import type { Wallet } from "@dynamic-labs/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { dynamicClient } from "./dynamic";
-import { useAuth } from "@/hooks/use-auth";
-import { useEvmWalletAccount } from "@/hooks/use-wallet-accounts";
 
 interface WalletContextValue {
   evmAccount: Wallet | null;
@@ -56,60 +45,34 @@ const queryClient = new QueryClient({
 });
 
 export default function Providers({ children }: { children: ReactNode }) {
-  const loggedIn = useAuth();
-  const evmAccount = useEvmWalletAccount();
+  const client = useReactiveClient(dynamicClient);
+  const loggedIn = client.auth.authenticatedUser !== undefined;
+  const evmAccount = client.wallets.userWallets?.find((w) => w.chain === "EVM") ?? null;
   const [chainId, setChainId] = useState<number>(8453);
 
+  // TODO: getActiveNetworkId is not available in @dynamic-labs/client.
+  // chainId defaults to Base (8453) and can be updated via setChainId.
   useEffect(() => {
     if (!evmAccount) return;
-    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient)
-      .then(({ networkId }) => setChainId(Number(networkId)))
-      .catch(() => {});
+    // Network switching is managed externally via setChainId
   }, [evmAccount]);
 
   const disconnect = useCallback(async () => {
-    await logout(dynamicClient);
+    await dynamicClient.auth.logout();
   }, []);
 
   const ensureEvmWallet = useCallback(async () => {
     try {
-      const accounts = getWalletAccounts(dynamicClient);
-      if (!accounts.some((w) => w.chain === "EVM") && isSignedIn(dynamicClient)) {
-        await createWaasWalletAccounts({ chains: ["EVM"] }, dynamicClient);
+      const hasEvm = dynamicClient.wallets.userWallets?.some((w) => w.chain === "EVM");
+      if (!hasEvm && dynamicClient.auth.authenticatedUser !== undefined) {
+        await dynamicClient.wallets.embedded.createWallet({ chain: "EVM" });
       }
     } catch {}
   }, []);
 
-  // Auto-create wallet when accounts change (side effect, not state)
-  useEffect(() => {
-    const unsub = onEvent(
-      {
-        event: "walletAccountsChanged",
-        listener: () => {
-          void ensureEvmWallet();
-        },
-      },
-      dynamicClient,
-    );
-    return () => unsub?.();
-  }, [ensureEvmWallet]);
-
   // Handle OAuth redirect on mount
-  useEffect(() => {
-    const handleOAuthRedirect = async () => {
-      if (typeof window === "undefined") return;
-      try {
-        const url = new URL(window.location.href);
-        const isOAuth = await detectOAuthRedirect({ url }, dynamicClient);
-        if (isOAuth) {
-          await completeSocialAuthentication({ url }, dynamicClient);
-          await ensureEvmWallet();
-          window.history.replaceState({}, "", window.location.pathname);
-        }
-      } catch {}
-    };
-    handleOAuthRedirect();
-  }, [ensureEvmWallet]);
+  // TODO: detectOAuthRedirect / completeSocialAuthentication are not yet available
+  // in @dynamic-labs/client — the reactive client handles auth state automatically.
 
   return (
     <WalletContext.Provider

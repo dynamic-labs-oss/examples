@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { parseUnits, createPublicClient, http } from "viem";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { ViemExtension } from "@dynamic-labs/viem-extension";
+import { dynamicClient } from "@/lib/dynamic";
 import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
 import { ERC20_ABI, MORPHO_MARKETS_ABI } from "../ABIs";
 import { getContractsForChain, getMarketParamsForChain } from "../constants";
@@ -42,7 +43,8 @@ export function useMarketsOperations(
 
   const getWalletClient = async () => {
     if (!evmAccount) return null;
-    return createWalletClientForWalletAccount({ walletAccount: evmAccount });
+    const client = dynamicClient.extend(ViemExtension());
+    return client.viem.createWalletClient({ wallet: evmAccount, chain });
   };
 
   // Fetch balances on demand

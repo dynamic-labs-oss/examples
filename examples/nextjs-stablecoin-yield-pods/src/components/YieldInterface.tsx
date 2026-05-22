@@ -7,8 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionOperations } from "../lib/useTransactionOperations";
 import { getChainName } from "../lib/utils";
-import { getBalances } from "@dynamic-labs-sdk/client";
-import { dynamicClient } from "../lib/dynamic";
+import { createPublicClient, erc20Abi, http, formatUnits } from "viem";
+import { mainnet, base, polygon, arbitrum, optimism } from "viem/chains";
 import { client as podsClient } from "../lib/pods";
 import { useWallet } from "@/lib/providers";
 import type { Strategy, Position, WalletPositions } from "../lib/pods-types";
@@ -131,14 +131,38 @@ export function YieldInterface() {
 
   useEffect(() => {
     if (!evmAccount || assetAddresses.length === 0) return;
-    getBalances(
-      { walletAccount: evmAccount, networkId: chainId, whitelistedContracts: assetAddresses, filterSpamTokens: false },
-      dynamicClient
-    ).then((bals) => {
+    const CHAINS = [mainnet, base, polygon, arbitrum, optimism];
+    const viemChain = CHAINS.find((c) => c.id === chainId) ?? base;
+    const publicClient = createPublicClient({ chain: viemChain, transport: http() });
+    Promise.all(
+      assetAddresses.map(async (addr) => {
+        try {
+          const [rawBalance, decimals, symbol] = await Promise.all([
+            publicClient.readContract({
+              address: addr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [evmAccount.address as `0x${string}`],
+            }),
+            publicClient.readContract({
+              address: addr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "decimals",
+            }),
+            publicClient.readContract({
+              address: addr as `0x${string}`,
+              abi: erc20Abi,
+              functionName: "symbol",
+            }),
+          ]);
+          return [addr.toLowerCase(), { balance: formatUnits(rawBalance, decimals), symbol }] as const;
+        } catch {
+          return [addr.toLowerCase(), { balance: "0", symbol: "" }] as const;
+        }
+      })
+    ).then((entries) => {
       const map: Record<string, AssetInfo> = {};
-      for (const b of bals) {
-        if (b.address) map[b.address.toLowerCase()] = { balance: b.balance, symbol: b.symbol ?? "" };
-      }
+      for (const [addr, info] of entries) map[addr] = info;
       setAssetInfoMap(map);
     }).catch(() => {});
   }, [evmAccount, chainId, assetAddresses, refreshKey]);
