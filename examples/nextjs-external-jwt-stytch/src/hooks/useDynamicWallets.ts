@@ -1,4 +1,4 @@
-import { getWalletAccounts } from "@dynamic-labs-sdk/client";
+import { getWalletAccounts } from "@dynamic-labs/client";
 
 import { useDynamicClientState } from "./useDynamicClientState";
 

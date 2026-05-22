@@ -13,14 +13,16 @@ A Next.js application demonstrating how to integrate [Kamino Finance](https://ka
 
 ### Wallet integration
 
-This example uses the headless Dynamic client SDK (`@dynamic-labs-sdk/client`) and its Solana extension (`@dynamic-labs-sdk/solana`). There is no `DynamicContextProvider` or React widget involved:
+This example uses the headless Dynamic client SDK (`@dynamic-labs/client`) and its Solana extension (`@dynamic-labs/solana`). There is no `DynamicContextProvider` or React widget involved:
 
 ```typescript
 // src/lib/dynamic.ts
-import { createDynamicClient } from "@dynamic-labs-sdk/client";
-import { addSolanaExtension } from "@dynamic-labs-sdk/solana";
+import { createDynamicClient } from "@dynamic-labs/client";
+import { addSolanaExtension } from "@dynamic-labs/solana";
 
-export const dynamicClient = createDynamicClient({ environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID! });
+export const dynamicClient = createDynamicClient({
+  environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID!,
+});
 addSolanaExtension();
 ```
 
@@ -37,7 +39,7 @@ Vault listings, APY, and TVL are fetched from [Kamino's public API](https://api.
 Each Kamino operation returns multiple instruction groups that must be sent as **separate transactions** (combining them exceeds the 1232-byte Solana limit). All transactions are built in parallel and signed in a single MPC round with `signAllTransactions`, then sent and confirmed sequentially:
 
 ```typescript
-import { signAllTransactions } from "@dynamic-labs-sdk/solana";
+import { signAllTransactions } from "@dynamic-labs/solana";
 import { KaminoVault } from "@kamino-finance/klend-sdk";
 
 const vault = new KaminoVault(rpc, address(vaultAddress));
@@ -117,15 +119,15 @@ src/
 
 ## Key packages
 
-| Package | Purpose |
-|---|---|
-| `@dynamic-labs-sdk/client` | Headless Dynamic SDK — auth, wallet accounts, events |
-| `@dynamic-labs-sdk/solana` | Solana extension — `signAllTransactions`, account types |
-| `@kamino-finance/klend-sdk` | Builds deposit/withdraw instruction groups |
-| `@solana/kit` | Transaction construction (used by Kamino SDK and this app) |
-| `@solana/web3.js` | `VersionedTransaction` bridge + `Connection` for send/confirm |
-| `decimal.js` | Token amount handling (required by Kamino SDK) |
-| `@tanstack/react-query` | Data fetching and caching |
+| Package                     | Purpose                                                       |
+| --------------------------- | ------------------------------------------------------------- |
+| `@dynamic-labs/client`      | Headless Dynamic SDK — auth, wallet accounts, events          |
+| `@dynamic-labs/solana`      | Solana extension — `signAllTransactions`, account types       |
+| `@kamino-finance/klend-sdk` | Builds deposit/withdraw instruction groups                    |
+| `@solana/kit`               | Transaction construction (used by Kamino SDK and this app)    |
+| `@solana/web3.js`           | `VersionedTransaction` bridge + `Connection` for send/confirm |
+| `decimal.js`                | Token amount handling (required by Kamino SDK)                |
+| `@tanstack/react-query`     | Data fetching and caching                                     |
 
 ## Resources
 

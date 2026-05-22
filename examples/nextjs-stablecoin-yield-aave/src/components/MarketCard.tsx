@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { createPublicClient, erc20Abi, http, formatUnits } from "viem";
-import { mainnet, base, polygon, arbitrum, optimism } from "viem/chains";
+import { getBalances } from "@dynamic-labs-sdk/client";
 import { safeParseUSD, safeParseHealthFactor } from "../lib/utils";
 import type { Market } from "@aave/react";
 import { useWallet } from "@/lib/providers";
+import { dynamicClient } from "@/lib/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -21,20 +21,20 @@ interface MarketCardProps {
   onSupply: (
     marketAddress: string,
     currencyAddress: string,
-    amount: string
+    amount: string,
   ) => void;
   onBorrow: (
     marketAddress: string,
     currencyAddress: string,
-    amount: string
+    amount: string,
   ) => void;
 }
 
 const PREFERRED_SYMBOLS = ["USDC", "PYUSD", "USDT", "DAI"];
 
-function preferredReserve<T extends { underlyingToken: { symbol: string; address: string } }>(
-  reserves: T[]
-): string {
+function preferredReserve<
+  T extends { underlyingToken: { symbol: string; address: string } },
+>(reserves: T[]): string {
   for (const sym of PREFERRED_SYMBOLS) {
     const match = reserves.find((r) => r.underlyingToken.symbol === sym);
     if (match) return match.underlyingToken.address;
@@ -50,20 +50,20 @@ export function MarketCard({
   onBorrow,
 }: MarketCardProps) {
   const { evmAccount, chainId } = useWallet();
-  const [selectedSupplyToken, setSelectedSupplyToken] = useState<string>(
-    () => preferredReserve(market.supplyReserves)
+  const [selectedSupplyToken, setSelectedSupplyToken] = useState<string>(() =>
+    preferredReserve(market.supplyReserves),
   );
-  const [selectedBorrowToken, setSelectedBorrowToken] = useState<string>(
-    () => preferredReserve(market.borrowReserves)
+  const [selectedBorrowToken, setSelectedBorrowToken] = useState<string>(() =>
+    preferredReserve(market.borrowReserves),
   );
   const [supplyBalance, setSupplyBalance] = useState<string | null>(null);
   const [supplyAmount, setSupplyAmount] = useState("1.0");
 
   const selectedSupplyReserve = market.supplyReserves.find(
-    (reserve) => reserve.underlyingToken.address === selectedSupplyToken
+    (reserve) => reserve.underlyingToken.address === selectedSupplyToken,
   );
   const selectedBorrowReserve = market.borrowReserves.find(
-    (reserve) => reserve.underlyingToken.address === selectedBorrowToken
+    (reserve) => reserve.underlyingToken.address === selectedBorrowToken,
   );
 
   useEffect(() => {
@@ -72,33 +72,34 @@ export function MarketCard({
       return;
     }
     let cancelled = false;
-    const CHAINS = [mainnet, base, polygon, arbitrum, optimism];
-    const viemChain = CHAINS.find((c) => c.id === chainId) ?? base;
-    const publicClient = createPublicClient({ chain: viemChain, transport: http() });
-    publicClient
-      .readContract({
-        address: selectedSupplyToken as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [evmAccount.address as `0x${string}`],
-      })
-      .then((rawBalance) => {
+    getBalances(
+      {
+        walletAccount: evmAccount,
+        networkId: chainId,
+        whitelistedContracts: [selectedSupplyToken],
+        filterSpamTokens: false,
+      },
+      dynamicClient,
+    )
+      .then((balances) => {
         if (cancelled) return;
-        // Fetch decimals for accurate formatting
-        return publicClient
-          .readContract({
-            address: selectedSupplyToken as `0x${string}`,
-            abi: erc20Abi,
-            functionName: "decimals",
-          })
-          .then((decimals) => {
-            if (cancelled) return;
-            const formatted = formatUnits(rawBalance, decimals);
-            setSupplyBalance(Number(formatted).toLocaleString(undefined, { maximumFractionDigits: 6 }));
-          });
+        const token = balances.find(
+          (b) => b.address?.toLowerCase() === selectedSupplyToken.toLowerCase(),
+        );
+        setSupplyBalance(
+          token
+            ? Number(token.balance).toLocaleString(undefined, {
+                maximumFractionDigits: 6,
+              })
+            : null,
+        );
       })
-      .catch(() => { if (!cancelled) setSupplyBalance(null); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setSupplyBalance(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [evmAccount, selectedSupplyToken, chainId]);
 
   return (
@@ -158,23 +159,37 @@ export function MarketCard({
             >
               {[...market.supplyReserves]
                 .sort((a, b) => {
-                  const ai = PREFERRED_SYMBOLS.indexOf(a.underlyingToken.symbol);
-                  const bi = PREFERRED_SYMBOLS.indexOf(b.underlyingToken.symbol);
+                  const ai = PREFERRED_SYMBOLS.indexOf(
+                    a.underlyingToken.symbol,
+                  );
+                  const bi = PREFERRED_SYMBOLS.indexOf(
+                    b.underlyingToken.symbol,
+                  );
                   return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
                 })
                 .map((reserve) => (
-                <option
-                  key={reserve.underlyingToken.address}
-                  value={reserve.underlyingToken.address}
-                >
-                  {reserve.underlyingToken.symbol} —{" "}
-                  {reserve.underlyingToken.name}
-                </option>
-              ))}
+                  <option
+                    key={reserve.underlyingToken.address}
+                    value={reserve.underlyingToken.address}
+                  >
+                    {reserve.underlyingToken.symbol} —{" "}
+                    {reserve.underlyingToken.name}
+                  </option>
+                ))}
             </select>
             <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-              <svg className="w-3 h-3 text-earn-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <svg
+                className="w-3 h-3 text-earn-text-secondary"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </div>
           </div>
@@ -214,7 +229,8 @@ export function MarketCard({
 
           {supplyBalance !== null && selectedSupplyReserve && (
             <p className="text-xs text-earn-text-secondary">
-              Balance: {supplyBalance} {selectedSupplyReserve.underlyingToken.symbol}
+              Balance: {supplyBalance}{" "}
+              {selectedSupplyReserve.underlyingToken.symbol}
             </p>
           )}
           <div className="flex gap-2">
@@ -231,7 +247,9 @@ export function MarketCard({
               {supplyBalance !== null && (
                 <button
                   type="button"
-                  onClick={() => setSupplyAmount(supplyBalance.replace(/,/g, ""))}
+                  onClick={() =>
+                    setSupplyAmount(supplyBalance.replace(/,/g, ""))
+                  }
                   className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-earn-primary hover:text-earn-primary/80 px-1"
                 >
                   Max
@@ -241,7 +259,11 @@ export function MarketCard({
             <Button
               onClick={() => {
                 if (selectedSupplyReserve)
-                  onSupply(market.address, selectedSupplyReserve.underlyingToken.address, supplyAmount || "1.0");
+                  onSupply(
+                    market.address,
+                    selectedSupplyReserve.underlyingToken.address,
+                    supplyAmount || "1.0",
+                  );
               }}
               disabled={isOperating || !primaryWallet || !selectedSupplyReserve}
               size="sm"
@@ -268,23 +290,37 @@ export function MarketCard({
             >
               {[...market.borrowReserves]
                 .sort((a, b) => {
-                  const ai = PREFERRED_SYMBOLS.indexOf(a.underlyingToken.symbol);
-                  const bi = PREFERRED_SYMBOLS.indexOf(b.underlyingToken.symbol);
+                  const ai = PREFERRED_SYMBOLS.indexOf(
+                    a.underlyingToken.symbol,
+                  );
+                  const bi = PREFERRED_SYMBOLS.indexOf(
+                    b.underlyingToken.symbol,
+                  );
                   return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
                 })
                 .map((reserve) => (
-                <option
-                  key={reserve.underlyingToken.address}
-                  value={reserve.underlyingToken.address}
-                >
-                  {reserve.underlyingToken.symbol} —{" "}
-                  {reserve.underlyingToken.name}
-                </option>
-              ))}
+                  <option
+                    key={reserve.underlyingToken.address}
+                    value={reserve.underlyingToken.address}
+                  >
+                    {reserve.underlyingToken.symbol} —{" "}
+                    {reserve.underlyingToken.name}
+                  </option>
+                ))}
             </select>
             <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-              <svg className="w-3 h-3 text-earn-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <svg
+                className="w-3 h-3 text-earn-text-secondary"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </div>
           </div>
@@ -315,7 +351,9 @@ export function MarketCard({
                 <span className="text-earn-text-secondary">
                   Available{" "}
                   <span className="font-medium text-earn-text-primary">
-                    {safeParseUSD(selectedBorrowReserve.borrowInfo.availableLiquidity.usd)}
+                    {safeParseUSD(
+                      selectedBorrowReserve.borrowInfo.availableLiquidity.usd,
+                    )}
                   </span>
                 </span>
               </div>
@@ -341,11 +379,22 @@ export function MarketCard({
             <Button
               onClick={() => {
                 if (selectedBorrowReserve) {
-                  const input = document.getElementById(`borrow-amount-${market.address}`) as HTMLInputElement;
-                  onBorrow(market.address, selectedBorrowReserve.underlyingToken.address, input?.value || "1.0");
+                  const input = document.getElementById(
+                    `borrow-amount-${market.address}`,
+                  ) as HTMLInputElement;
+                  onBorrow(
+                    market.address,
+                    selectedBorrowReserve.underlyingToken.address,
+                    input?.value || "1.0",
+                  );
                 }
               }}
-              disabled={isOperating || !primaryWallet || !selectedBorrowReserve || !market.userState}
+              disabled={
+                isOperating ||
+                !primaryWallet ||
+                !selectedBorrowReserve ||
+                !market.userState
+              }
               size="sm"
               className="bg-earn-dark hover:bg-earn-dark/90 text-white"
             >

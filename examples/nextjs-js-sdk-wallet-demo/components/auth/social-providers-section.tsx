@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ErrorMessage } from "@/components/error-message";
 import { WidgetCard } from "@/components/ui/widget-card";
-import type { SocialProvider } from "@dynamic-labs-sdk/client";
+import type { SocialProvider } from "@dynamic-labs/client";
 import { useSocialAuth } from "@/hooks/use-mutations";
 import {
   detectOAuthRedirect,

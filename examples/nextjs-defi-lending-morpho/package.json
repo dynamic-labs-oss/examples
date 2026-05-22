@@ -10,10 +10,9 @@
   },
   "dependencies": {
     "@coinbase/onchainkit": "0.38.17",
-    "@dynamic-labs/client": "4.83.1",
-    "@dynamic-labs/react-hooks": "4.83.1",
-    "@dynamic-labs/viem-extension": "4.83.1",
-    "@dynamic-labs/waas-evm": "4.83.1",
+    "@dynamic-labs-sdk/client": "1.2.1",
+    "@dynamic-labs-sdk/evm": "1.2.1",
+    "@dynamic-labs-sdk/react-hooks": "0.26.5",
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-dropdown-menu": "2.1.16",
     "@radix-ui/react-slot": "1.2.3",

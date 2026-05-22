@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { createPublicClient, http } from "viem";
-import { ViemExtension } from "@dynamic-labs/viem-extension";
-import { dynamicClient } from "@/lib/dynamic";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 import { base, mainnet, arbitrum, optimism, polygon } from "viem/chains";
 import { getContractsForChain } from "../constants";
 import { REWARDS_ABI } from "../ABIs";
@@ -9,11 +8,16 @@ import { useWallet } from "@/lib/providers";
 
 function getViemChain(chainId: number) {
   switch (chainId) {
-    case mainnet.id: return mainnet;
-    case arbitrum.id: return arbitrum;
-    case optimism.id: return optimism;
-    case polygon.id: return polygon;
-    default: return base;
+    case mainnet.id:
+      return mainnet;
+    case arbitrum.id:
+      return arbitrum;
+    case optimism.id:
+      return optimism;
+    case polygon.id:
+      return polygon;
+    default:
+      return base;
   }
 }
 
@@ -28,8 +32,10 @@ export function useRewardsOperations(vaultAddress?: string) {
 
   const handleClaimReward = async () => {
     if (!vaultAddress || !evmAccount) return;
-    const client = dynamicClient.extend(ViemExtension());
-    const walletClient = await client.viem.createWalletClient({ wallet: evmAccount, chain });
+    const walletClient = createWalletClientForWalletAccount({
+      walletAccount: evmAccount,
+      chain,
+    });
 
     setClaimTxStatus("");
     setIsClaiming(true);
@@ -48,7 +54,7 @@ export function useRewardsOperations(vaultAddress?: string) {
         "Claim failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsClaiming(false);

@@ -1,7 +1,24 @@
 "use client";
 
-import type { Wallet } from "@dynamic-labs/client";
-import { dynamicClient } from "@/lib/dynamic";
+import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
+import {
+  isSolanaWalletAccount,
+  signAndSendTransaction,
+} from "@dynamic-labs-sdk/solana";
+import {
+  Connection,
+  PublicKey,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
+import {
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddress,
+} from "@solana/spl-token";
+import type { WalletAccount } from "@dynamic-labs-sdk/client";
 import { CHAINS, type MgChain } from "./chains";
 
 /**
@@ -14,45 +31,96 @@ export async function sendUsdc({
   to,
   amount,
   chain,
-  wallets,
+  walletAccounts,
 }: {
   to: string;
   amount: string;
   chain: MgChain;
-  wallets: Wallet[];
+  walletAccounts: WalletAccount[];
 }): Promise<string> {
   const config = CHAINS[chain];
 
   // ── EVM (Base Sepolia or Eth Sepolia) ──────────────────────────────────────
   if (config.type === "evm") {
-    const evmWallet = wallets.find((w) => w.chain === "EVM");
-    if (!evmWallet) throw new Error("No EVM wallet found. Connect an EVM embedded wallet.");
+    const evmWallet = walletAccounts.find(isEvmWalletAccount);
+    if (!evmWallet)
+      throw new Error("No EVM wallet found. Connect an EVM embedded wallet.");
 
-    const { hash } = await dynamicClient.wallets.sendBalance({
-      wallet: evmWallet,
-      amount,
-      toAddress: to,
-      token: {
-        address: config.usdcAddress,
-        decimals: 6,
-      },
+    const data = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [to as `0x${string}`, parseUnits(amount, 6)],
     });
-    return hash;
+
+    const walletClient = await createWalletClientForWalletAccount({
+      walletAccount: evmWallet,
+    });
+
+    return walletClient.sendTransaction({
+      to: config.usdcAddress,
+      data,
+      value: BigInt(0),
+      chain: config.viemChain,
+    });
   }
 
   // ── Solana Devnet ──────────────────────────────────────────────────────────
-  const solanaWallet = wallets.find((w) => w.chain === "SOL");
-  if (!solanaWallet) throw new Error("No Solana wallet found. Connect a Solana embedded wallet.");
+  const solanaWallet = walletAccounts.find(isSolanaWalletAccount);
+  if (!solanaWallet)
+    throw new Error(
+      "No Solana wallet found. Connect a Solana embedded wallet.",
+    );
 
-  const { hash } = await dynamicClient.wallets.sendBalance({
-    wallet: solanaWallet,
-    amount,
-    toAddress: to,
-    token: {
-      // TODO: Verify that sendBalance for Solana accepts the SPL token mint address
-      address: config.usdcMint,
-      decimals: 6,
-    },
-  });
-  return hash;
+  const connection = new Connection(config.rpcUrl, "confirmed");
+  const fromPubkey = new PublicKey(solanaWallet.address);
+  const toPubkey = new PublicKey(to);
+  const mintPubkey = new PublicKey(config.usdcMint);
+
+  const senderATA = await getAssociatedTokenAddress(mintPubkey, fromPubkey);
+  const recipientATA = await getAssociatedTokenAddress(mintPubkey, toPubkey);
+  const tokenAmount = BigInt(Math.floor(parseFloat(amount) * 1_000_000));
+
+  const instructions = [];
+
+  const recipientInfo = await connection.getAccountInfo(recipientATA);
+  if (!recipientInfo) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        fromPubkey,
+        recipientATA,
+        toPubkey,
+        mintPubkey,
+      ),
+    );
+  }
+
+  instructions.push(
+    createTransferCheckedInstruction(
+      senderATA,
+      mintPubkey,
+      recipientATA,
+      fromPubkey,
+      tokenAmount,
+      6,
+    ),
+  );
+
+  const { blockhash } = await connection.getLatestBlockhash("finalized");
+  const message = new TransactionMessage({
+    payerKey: fromPubkey,
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message();
+
+  const tx = new VersionedTransaction(message);
+  // Type assertion handles potential @solana/web3.js version mismatches
+  const txPayload = {
+    transaction: tx as unknown as Parameters<
+      typeof signAndSendTransaction
+    >[0]["transaction"],
+    walletAccount: solanaWallet,
+  };
+
+  const { signature } = await signAndSendTransaction(txPayload);
+  return signature;
 }

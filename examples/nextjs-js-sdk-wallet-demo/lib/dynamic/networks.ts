@@ -16,7 +16,7 @@ import {
   switchActiveNetwork as sdkSwitchActiveNetwork,
   type WalletAccount,
   type NetworkData,
-} from "@dynamic-labs-sdk/client";
+} from "@dynamic-labs/client";
 import { getClient, createSafeWrapper, createAsyncSafeWrapper } from "./client";
 
 /**

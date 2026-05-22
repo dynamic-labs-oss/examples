@@ -8,7 +8,7 @@ importers:
 
   .:
     dependencies:
-      '@dynamic-labs-sdk/client':
+      '@dynamic-labs/client':
         specifier: 0.1.0-alpha.12
         version: 0.1.0-alpha.12
       '@dynamic-labs-sdk/evm':
@@ -72,7 +72,7 @@ packages:
   '@dynamic-labs-sdk/assert-package-version@0.1.0-alpha.12':
     resolution: {integrity: sha512-pJngcIyKx/YfugkeUr9/9W/cwY8CyKuzIfejFheofRYCrIhDJ5waZoAGH9R83VRLLssBt5shrXvb2WvsNyXo7w==}
 
-  '@dynamic-labs-sdk/client@0.1.0-alpha.12':
+  '@dynamic-labs/client@0.1.0-alpha.12':
     resolution: {integrity: sha512-WG/IYYxFe4hNumwmfCrfqkFDvSNUkicbGu6ejhlF4oMaQx26ArtPTzCF8lQNbgUdhNa7PiOeM5Luu8jx+Rvn/g==}
 
   '@dynamic-labs-sdk/evm@0.1.0-alpha.12':
@@ -823,7 +823,7 @@ packages:
 
   doctrine@2.1.0:
     resolution: {integrity: sha512-35mSku4ZXK0vfCuHEDAwt55dg2jNajHZ1odvF+8SSr82EsZY4QmXfuWso8oEd8zRhVObSN18aM0CjSdoBX7zIw==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -982,7 +982,7 @@ packages:
 
   esutils@2.0.3:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   eventemitter3@5.0.1:
     resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
@@ -1187,7 +1187,7 @@ packages:
 
   is-extglob@2.1.1:
     resolution: {integrity: sha512-SbKbANkN603Vi4jEZv49LeVJMn4yGwsbzZworEoyEiutsN3nJYdbO36zfhGJ6QEDpOZIFkDtnq5JRxmvl3jsoQ==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   is-finalizationregistry@1.1.1:
     resolution: {integrity: sha512-1pC6N8qWJbWoPtEjgcL2xyhQOP491EQjeUo3qTKcmV8YSDDJrOepfG8pcC7h/QgnQHYSv0mJ3Z/ZWxmatVrysg==}
@@ -1199,7 +1199,7 @@ packages:
 
   is-glob@4.0.3:
     resolution: {integrity: sha512-xelSayHH36ZgE7ZWhli7pW34hNbNl8Ojv5KVmkJD4hBdD3th8Tfk9vYasLM+mXWOZhFkgZfxhLSnrwRr4elSSg==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   is-map@2.0.3:
     resolution: {integrity: sha512-1Qed0/Hr2m+YqxnM09CjA2d/i6YZNfF6R2oRAOj36eUdS6qIV/huPJNSEpKbupewFs+ZsJlxsjjPbc0/afW6Lw==}
@@ -1393,7 +1393,7 @@ packages:
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   object-inspect@1.13.4:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
@@ -1513,7 +1513,7 @@ packages:
 
   react@19.1.2:
     resolution: {integrity: sha512-MdWVitvLbQULD+4DP8GYjZUrepGW7d+GQkNVqJEzNxE+e9WIa4egVFE/RDfVb1u9u/Jw7dNMmPB4IqxzbFYJ0w==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   reflect.getprototypeof@1.0.10:
     resolution: {integrity: sha512-00o4I+DVrefhv+nX0ulyi3biSHCPDe+yLv5o/p6d/UVlirijB8E16FtfwSAi4g3tcqrQ4lRAqQSoFEZJehYEcw==}
@@ -1541,7 +1541,7 @@ packages:
 
   reusify@1.1.0:
     resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
-    engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
+    engines: {iojs: '>=1.0.0', node: '>=4.83.1'}
 
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
@@ -1612,7 +1612,7 @@ packages:
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   stable-hash@0.0.5:
     resolution: {integrity: sha512-+L3ccpzibovGXFK+Ap/f8LOS0ahMrHTf3xu7mMLSpEGU0EO9ucaysSylKo9eRDFNhWve/y275iPmIZ4z39a9iA==}
@@ -1789,7 +1789,7 @@ packages:
 
   word-wrap@1.2.5:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
-    engines: {node: '>=0.10.0'}
+    engines: {node: '>=4.83.1'}
 
   ws@8.18.3:
     resolution: {integrity: sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==}
@@ -1816,7 +1816,7 @@ snapshots:
 
   '@dynamic-labs-sdk/assert-package-version@0.1.0-alpha.12': {}
 
-  '@dynamic-labs-sdk/client@0.1.0-alpha.12':
+  '@dynamic-labs/client@0.1.0-alpha.12':
     dependencies:
       '@dynamic-labs-sdk/assert-package-version': 0.1.0-alpha.12
       '@dynamic-labs-wallet/browser-wallet-client': 0.0.155
@@ -1831,7 +1831,7 @@ snapshots:
   '@dynamic-labs-sdk/evm@0.1.0-alpha.12(viem@2.37.6(typescript@5.9.2)(zod@4.0.5))':
     dependencies:
       '@dynamic-labs-sdk/assert-package-version': 0.1.0-alpha.12
-      '@dynamic-labs-sdk/client': 0.1.0-alpha.12
+      '@dynamic-labs/client': 0.1.0-alpha.12
       '@dynamic-labs/sdk-api-core': 0.0.762
       viem: 2.37.6(typescript@5.9.2)(zod@4.0.5)
     transitivePeerDependencies:

@@ -4,11 +4,11 @@ import { ReactNode, useEffect, useRef } from "react";
 import { StytchProvider as ProviderActual, useStytch } from "@stytch/nextjs";
 import Cookies from "js-cookie";
 import { createStytchUIClient } from "@stytch/nextjs/dist/index.ui";
-import { signInWithExternalJwt, logout } from "@dynamic-labs-sdk/client";
+import { signInWithExternalJwt, logout } from "@dynamic-labs/client";
 import {
   createWaasWalletAccounts,
   getChainsMissingWaasWalletAccounts,
-} from "@dynamic-labs-sdk/client/waas";
+} from "@dynamic-labs/client/waas";
 import { dynamicClient } from "./dynamicClient";
 import { runOnceAcrossTabs } from "@/lib/runOnceAcrossTabs";
 

@@ -1,7 +1,7 @@
 "use client";
 
-import type { DynamicClient } from "@dynamic-labs-sdk/client";
-import { onEvent } from "@dynamic-labs-sdk/client";
+import type { DynamicClient } from "@dynamic-labs/client";
+import { onEvent } from "@dynamic-labs/client";
 import { useRef, useSyncExternalStore } from "react";
 
 import { dynamicClient } from "../components/dynamicClient";

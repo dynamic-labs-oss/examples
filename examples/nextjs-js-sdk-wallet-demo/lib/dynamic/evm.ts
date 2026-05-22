@@ -8,7 +8,7 @@
  * @see https://www.dynamic.xyz/docs/javascript/reference/evm/getting-viem-wallet-client
  */
 
-import { createWalletClientForWalletAccount as sdkCreateWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import { createWalletClientForWalletAccount as sdkCreateWalletClientForWalletAccount } from "@dynamic-labs/evm/viem";
 
 /**
  * Create a viem WalletClient for an EVM wallet account.

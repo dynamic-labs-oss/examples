@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { createPublicClient, erc20Abi, http, formatUnits } from "viem";
-import { mainnet, base, polygon, arbitrum, optimism } from "viem/chains";
+import { getBalances } from "@dynamic-labs-sdk/client";
 import { safeParseFloat, safeParseUSD } from "../lib/utils";
 import type { MarketUserReserveSupplyPosition } from "@aave/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/lib/providers";
+import { dynamicClient } from "@/lib/dynamic";
 
 interface PrimaryWallet {
   address: string;
@@ -20,17 +20,17 @@ interface SupplyCardProps {
   onSupply: (
     marketAddress: string,
     currencyAddress: string,
-    amount: string
+    amount: string,
   ) => void;
   onBorrow: (
     marketAddress: string,
     currencyAddress: string,
-    amount: string
+    amount: string,
   ) => void;
   onWithdraw: (
     marketAddress: string,
     currencyAddress: string,
-    amount: string | "max"
+    amount: string | "max",
   ) => void;
 }
 
@@ -52,32 +52,35 @@ export function SupplyCard({
       return;
     }
     let cancelled = false;
-    const CHAINS = [mainnet, base, polygon, arbitrum, optimism];
-    const viemChain = CHAINS.find((c) => c.id === chainId) ?? base;
-    const publicClient = createPublicClient({ chain: viemChain, transport: http() });
-    publicClient
-      .readContract({
-        address: supply.currency.address as `0x${string}`,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [evmAccount.address as `0x${string}`],
-      })
-      .then((rawBalance) => {
+    getBalances(
+      {
+        walletAccount: evmAccount,
+        networkId: chainId,
+        whitelistedContracts: [supply.currency.address],
+        filterSpamTokens: false,
+      },
+      dynamicClient,
+    )
+      .then((balances) => {
         if (cancelled) return;
-        return publicClient
-          .readContract({
-            address: supply.currency.address as `0x${string}`,
-            abi: erc20Abi,
-            functionName: "decimals",
-          })
-          .then((decimals) => {
-            if (cancelled) return;
-            const formatted = formatUnits(rawBalance, decimals);
-            setWalletBalance(Number(formatted).toLocaleString(undefined, { maximumFractionDigits: 6 }));
-          });
+        const token = balances.find(
+          (b) =>
+            b.address?.toLowerCase() === supply.currency.address.toLowerCase(),
+        );
+        setWalletBalance(
+          token
+            ? Number(token.balance).toLocaleString(undefined, {
+                maximumFractionDigits: 6,
+              })
+            : null,
+        );
       })
-      .catch(() => { if (!cancelled) setWalletBalance(null); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setWalletBalance(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [evmAccount, supply.currency.address, chainId]);
 
   return (
@@ -91,12 +94,15 @@ export function SupplyCard({
             Supplied
           </span>
         </div>
-        <p className="text-xs text-earn-text-secondary mt-1">{supply.market.name}</p>
+        <p className="text-xs text-earn-text-secondary mt-1">
+          {supply.market.name}
+        </p>
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="bg-earn-light rounded-lg px-3 py-2">
             <p className="text-xs text-earn-text-secondary">Balance</p>
             <p className="text-sm font-semibold text-earn-text-primary">
-              {safeParseFloat(supply.balance.amount, 6)} {supply.currency.symbol}
+              {safeParseFloat(supply.balance.amount, 6)}{" "}
+              {supply.currency.symbol}
             </p>
           </div>
           <div className="bg-earn-light rounded-lg px-3 py-2">
@@ -126,9 +132,13 @@ export function SupplyCard({
           <Button
             onClick={() => {
               const input = document.getElementById(
-                `supply-more-amount-${supply.market.address}-${supply.currency.address}`
+                `supply-more-amount-${supply.market.address}-${supply.currency.address}`,
               ) as HTMLInputElement;
-              onSupply(supply.market.address, supply.currency.address, input?.value || "1.0");
+              onSupply(
+                supply.market.address,
+                supply.currency.address,
+                input?.value || "1.0",
+              );
             }}
             disabled={isOperating || !primaryWallet}
             size="sm"
@@ -151,9 +161,13 @@ export function SupplyCard({
           <Button
             onClick={() => {
               const input = document.getElementById(
-                `borrow-amount-${supply.market.address}-${supply.currency.address}`
+                `borrow-amount-${supply.market.address}-${supply.currency.address}`,
               ) as HTMLInputElement;
-              onBorrow(supply.market.address, supply.currency.address, input?.value || "1.0");
+              onBorrow(
+                supply.market.address,
+                supply.currency.address,
+                input?.value || "1.0",
+              );
             }}
             disabled={isOperating || !primaryWallet}
             size="sm"
@@ -185,7 +199,11 @@ export function SupplyCard({
           <Button
             onClick={() => {
               const isMax = withdrawAmount === supply.balance.amount.value;
-              onWithdraw(supply.market.address, supply.currency.address, isMax ? "max" : withdrawAmount);
+              onWithdraw(
+                supply.market.address,
+                supply.currency.address,
+                isMax ? "max" : withdrawAmount,
+              );
             }}
             disabled={isOperating || !primaryWallet}
             size="sm"

@@ -17,14 +17,11 @@
  * @see https://www.dynamic.xyz/docs/javascript/reference/client/create-dynamic-client
  */
 
-import {
-  createDynamicClient,
-  type DynamicClient,
-} from "@dynamic-labs-sdk/client";
+import { createDynamicClient, type DynamicClient } from "@dynamic-labs/client";
 
-import { addEvmExtension } from "@dynamic-labs-sdk/evm";
-import { addSolanaExtension } from "@dynamic-labs-sdk/solana";
-import { addZerodevExtension } from "@dynamic-labs-sdk/zerodev";
+import { addEvmExtension } from "@dynamic-labs/evm";
+import { addSolanaExtension } from "@dynamic-labs/solana";
+import { addZerodevExtension } from "@dynamic-labs/zerodev";
 
 // =============================================================================
 // SINGLETON CLIENT

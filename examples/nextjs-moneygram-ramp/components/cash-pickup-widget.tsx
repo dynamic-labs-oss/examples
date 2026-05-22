@@ -18,7 +18,9 @@
  */
 
 import { useEffect, useRef } from "react";
-import type { Wallet } from "@dynamic-labs/client";
+import type { WalletAccount } from "@dynamic-labs-sdk/client";
+import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
+import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
 import { CHAINS, type MgChain } from "@/lib/chains";
 import { fetchUsdcBalance } from "@/lib/balance";
 import { sendUsdc } from "@/lib/send-usdc";
@@ -30,35 +32,44 @@ const API_BASE_URL = "https://zq4rdvdd9j.execute-api.us-east-2.amazonaws.com";
 interface CashPickupWidgetProps {
   open: boolean;
   selectedChain: MgChain;
-  wallets: Wallet[];
+  walletAccounts: WalletAccount[];
   onClose: () => void;
   onSuccess?: (amount: number) => void;
 }
 
-function getAddressForChain(chain: MgChain, wallets: Wallet[]): string {
-  if (chain === "solana") return wallets.find((w) => w.chain === "SOL")?.address ?? "";
-  return wallets.find((w) => w.chain === "EVM")?.address ?? "";
+function getAddressForChain(chain: MgChain, accounts: WalletAccount[]): string {
+  if (chain === "solana")
+    return accounts.find(isSolanaWalletAccount)?.address ?? "";
+  return accounts.find(isEvmWalletAccount)?.address ?? "";
 }
 
 export function CashPickupWidget({
   open,
   selectedChain,
-  wallets,
+  walletAccounts,
   onClose,
   onSuccess,
 }: CashPickupWidgetProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const selectedChainRef = useRef(selectedChain);
-  const walletsRef = useRef(wallets);
+  const walletAccountsRef = useRef(walletAccounts);
   const onCloseRef = useRef(onClose);
   const onSuccessRef = useRef(onSuccess);
   const pendingAmountRef = useRef(0);
 
-  useEffect(() => { selectedChainRef.current = selectedChain; }, [selectedChain]);
-  useEffect(() => { walletsRef.current = wallets; }, [wallets]);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+  useEffect(() => {
+    selectedChainRef.current = selectedChain;
+  }, [selectedChain]);
+  useEffect(() => {
+    walletAccountsRef.current = walletAccounts;
+  }, [walletAccounts]);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
 
   useEffect(() => {
     if (!open) return;
@@ -81,7 +92,7 @@ export function CashPickupWidget({
       switch (type) {
         case "RAMPS_READY": {
           const chain = selectedChainRef.current;
-          const address = getAddressForChain(chain, walletsRef.current);
+          const address = getAddressForChain(chain, walletAccountsRef.current);
           post("RAMPS_CONFIG", {
             apiKey: env.NEXT_PUBLIC_MG_RAMP_KEY,
             wallet: {
@@ -102,7 +113,7 @@ export function CashPickupWidget({
 
         case "RAMPS_CHECK_BALANCE": {
           const chain = (payload?.chain as MgChain) ?? selectedChainRef.current;
-          const address = getAddressForChain(chain, walletsRef.current);
+          const address = getAddressForChain(chain, walletAccountsRef.current);
           const requestedAmount = (payload?.amount as number) ?? 0;
           const balance = await fetchUsdcBalance(chain, address);
           post("RAMPS_BALANCE_RESULT", {
@@ -123,7 +134,7 @@ export function CashPickupWidget({
               to,
               amount: String(amount),
               chain,
-              wallets: walletsRef.current,
+              walletAccounts: walletAccountsRef.current,
             });
             pendingAmountRef.current = amount;
             post("RAMPS_SIGN_SUCCESS", { txHash: hash });
@@ -162,7 +173,10 @@ export function CashPickupWidget({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
       <div className="relative w-full max-w-md h-[600px] rounded-2xl overflow-hidden shadow-2xl">
         <iframe
           ref={iframeRef}

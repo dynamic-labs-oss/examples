@@ -12,7 +12,7 @@ import {
   getTransactionHistory as sdkGetTransactionHistory,
   type GetTransactionHistoryParams,
   type GetTransactionHistoryResponse,
-} from "@dynamic-labs-sdk/client";
+} from "@dynamic-labs/client";
 import { getClient } from "./client";
 
 /**

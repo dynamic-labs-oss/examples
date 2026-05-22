@@ -12,8 +12,8 @@ import {
   type DynamicClient,
   initializeClient,
   onEvent,
-} from "@dynamic-labs-sdk/client";
-import { addEvmExtension } from "@dynamic-labs-sdk/evm";
+} from "@dynamic-labs/client";
+import { addEvmExtension } from "@dynamic-labs/evm";
 
 /**
  * Private variables for lazy initialization

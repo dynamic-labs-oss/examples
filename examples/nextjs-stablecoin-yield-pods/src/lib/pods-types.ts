@@ -131,20 +131,42 @@ export interface StrategyCardProps {
 }
 
 // Raw API response types matching the actual /wallets/{address} schema
+export interface RawCurrentPosition {
+  value?: string;
+  decimals?: number;
+  humanized?: string;
+  symbol?: string;
+  asset?: string;
+}
+
+export interface RawSpotPosition {
+  currentPosition?: RawCurrentPosition;
+  underlyingBalanceUSD?: number;
+  apy?: number;
+  inceptionApy?: number;
+  avgApy?: number;
+  profit?: RawCurrentPosition & { afterFees?: string };
+  principal?: RawCurrentPosition;
+}
+
 export interface RawWalletPosition {
+  spotPosition?: RawSpotPosition;
   strategy?: {
     _id?: string;
-    name?: string;
+    id?: string;
     slug?: string;
+    name?: string;
+    assetName?: string;
     protocol?: string;
     network?: string;
+    networkId?: string;
+    // asset is a string address in this endpoint (not a nested object)
+    asset?: string;
+    underlyingAsset?: string;
+    assetDecimals?: number;
+    underlyingDecimals?: number;
     apy?: number;
     tvl?: string;
-    asset?: {
-      symbol?: string;
-      contract?: string;
-      decimals?: number;
-    };
     paused?: boolean;
   };
   balance?: string;

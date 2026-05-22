@@ -13,7 +13,7 @@
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { SocialProvider } from "@dynamic-labs-sdk/client";
+import type { SocialProvider } from "@dynamic-labs/client";
 import {
   createWaasWalletAccounts,
   sendEmailOTP,

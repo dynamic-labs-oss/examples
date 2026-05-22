@@ -13,7 +13,7 @@ import {
   authenticateWithSocial as sdkAuthenticateWithSocial,
   detectOAuthRedirect as sdkDetectOAuthRedirect,
   completeSocialAuthentication as sdkCompleteSocialAuthentication,
-} from "@dynamic-labs-sdk/client";
+} from "@dynamic-labs/client";
 import { getClient, createAsyncSafeWrapper } from "./client";
 
 /** Initiate social auth flow (redirects to provider) */

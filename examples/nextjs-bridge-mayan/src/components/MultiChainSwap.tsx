@@ -1,22 +1,44 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPublicClient, createWalletClient, custom, erc20Abi, http, parseUnits, type Chain } from "viem";
-import { mainnet, polygon, bsc, avalanche, arbitrum, optimism, base } from "viem/chains";
-// TODO: install @dynamic-labs/viem-extension and replace with:
-// import { ViemExtension } from "@dynamic-labs/viem-extension";
-// Then: const viemClient = dynamicClient.extend(ViemExtension());
-//       const walletClient = await viemClient.viem.createWalletClient({ wallet: evmAccount, chain });
-import { dynamicClient } from "@/lib/dynamic";
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  erc20Abi,
+  http,
+  parseUnits,
+  type Chain,
+} from "viem";
+import {
+  mainnet,
+  polygon,
+  bsc,
+  avalanche,
+  arbitrum,
+  optimism,
+  base,
+} from "viem/chains";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 
-import { ALL_CHAINS, EVM_CHAINS, type ChainKey, isEVMChain } from "@/constants/chains";
+import {
+  ALL_CHAINS,
+  EVM_CHAINS,
+  type ChainKey,
+  isEVMChain,
+} from "@/constants/chains";
 import { fetchTokensForChain, type TokenData } from "@/lib/mayan-api";
 import { useWallet } from "@/lib/providers";
 import ActionButtons from "./ActionButtons";
 import RouteDisplay from "./RouteDisplay";
 import StatusMessages from "./StatusMessages";
 import SwapForm from "./SwapForm";
-import { fetchQuote, getSwapFromEvmTxPayload, getEvmChainIdByName, addresses } from "@mayanfinance/swap-sdk";
+import {
+  fetchQuote,
+  getSwapFromEvmTxPayload,
+  getEvmChainIdByName,
+  addresses,
+} from "@mayanfinance/swap-sdk";
 import type { Quote, Token } from "@mayanfinance/swap-sdk";
 
 const VIEM_CHAINS: Record<string, Chain> = {
@@ -99,10 +121,10 @@ export default function MultiChainSwap() {
           ]);
 
           const sortedFromTokens = sortTokensByPopularity(
-            fromTokensResponse.map(convertTokenDataToToken)
+            fromTokensResponse.map(convertTokenDataToToken),
           );
           const sortedToTokens = sortTokensByPopularity(
-            toTokensResponse.map(convertTokenDataToToken)
+            toTokensResponse.map(convertTokenDataToToken),
           );
 
           setFromTokens(sortedFromTokens);
@@ -131,7 +153,7 @@ export default function MultiChainSwap() {
 
   const loadTokensForChain = async (
     chainId: number | string,
-    isFromChain: boolean
+    isFromChain: boolean,
   ) => {
     if (typeof chainId !== "number") {
       if (isFromChain) {
@@ -146,7 +168,7 @@ export default function MultiChainSwap() {
     try {
       const tokens = await fetchTokensForChain(chainId);
       const sortedTokens = sortTokensByPopularity(
-        tokens.map(convertTokenDataToToken)
+        tokens.map(convertTokenDataToToken),
       );
 
       if (isFromChain) {
@@ -169,15 +191,24 @@ export default function MultiChainSwap() {
 
   const sortTokensByPopularity = (tokens: Token[]): Token[] => {
     const popularSymbols = [
-      "USDC", "USDT", "ETH", "WETH", "WBTC", "DAI", "MATIC", "BNB", "AVAX", "ARB",
+      "USDC",
+      "USDT",
+      "ETH",
+      "WETH",
+      "WBTC",
+      "DAI",
+      "MATIC",
+      "BNB",
+      "AVAX",
+      "ARB",
     ];
 
     return tokens.sort((a, b) => {
       const aIndex = popularSymbols.findIndex((symbol) =>
-        a.symbol.toUpperCase().includes(symbol.toUpperCase())
+        a.symbol.toUpperCase().includes(symbol.toUpperCase()),
       );
       const bIndex = popularSymbols.findIndex((symbol) =>
-        b.symbol.toUpperCase().includes(symbol.toUpperCase())
+        b.symbol.toUpperCase().includes(symbol.toUpperCase()),
       );
 
       if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
@@ -193,25 +224,34 @@ export default function MultiChainSwap() {
     }
 
     const viemChain = VIEM_CHAINS[quote.fromChain];
-    if (!viemChain) throw new Error(`Unsupported source chain: ${quote.fromChain}`);
+    if (!viemChain)
+      throw new Error(`Unsupported source chain: ${quote.fromChain}`);
 
     const chainId = getEvmChainIdByName(quote.fromChain);
 
-    // Switch the wallet to the target chain before sending any transactions.
-    // For injected wallets (MetaMask etc.) this triggers the chain-switch prompt.
-    // For WaaS wallets it updates the active network in Dynamic's context.
-    await dynamicClient.wallets.switchNetwork({ wallet: evmAccount, chainId: viemChain.id });
+    const dynamicWalletClient = await createWalletClientForWalletAccount({
+      walletAccount: evmAccount,
+    });
 
-    // TODO: Install @dynamic-labs/viem-extension and use:
-    //   const viemClient = dynamicClient.extend(ViemExtension());
-    //   const walletClient = await viemClient.viem.createWalletClient({ wallet: evmAccount, chain: viemChain });
-    // For now, build a wallet client using window.ethereum if available.
     const walletClient = createWalletClient({
-      account: evmAccount.address as `0x${string}`,
+      account: dynamicWalletClient.account,
       chain: viemChain,
-      transport: typeof window !== "undefined" && (window as { ethereum?: unknown }).ethereum
-        ? custom((window as { ethereum: { request: (args: unknown) => Promise<unknown> } }).ethereum)
-        : http(),
+      transport: custom({
+        request: async ({
+          method,
+          params,
+        }: {
+          method: string;
+          params?: unknown[];
+        }) => {
+          if (method === "eth_chainId") {
+            return `0x${viemChain.id.toString(16)}`;
+          }
+          return dynamicWalletClient.request({ method, params } as Parameters<
+            typeof dynamicWalletClient.request
+          >[0]);
+        },
+      }),
     });
 
     const fromTokenContract = quote.fromToken.contract as `0x${string}`;
@@ -220,8 +260,12 @@ export default function MultiChainSwap() {
       fromTokenContract === "0x0000000000000000000000000000000000000000";
 
     if (!isNativeToken) {
-      const publicClient = createPublicClient({ chain: viemChain, transport: http() });
-      const forwarderAddress = addresses.MAYAN_FORWARDER_CONTRACT as `0x${string}`;
+      const publicClient = createPublicClient({
+        chain: viemChain,
+        transport: http(),
+      });
+      const forwarderAddress =
+        addresses.MAYAN_FORWARDER_CONTRACT as `0x${string}`;
       const allowance = await publicClient.readContract({
         address: fromTokenContract,
         abi: erc20Abi,
@@ -250,16 +294,22 @@ export default function MultiChainSwap() {
       address,
       chainId,
       null,
-      null
+      null,
     );
 
     const txHash = await walletClient.sendTransaction({
       to: txPayload.to as `0x${string}`,
       data: txPayload.data as `0x${string}`,
-      value: txPayload.value != null ? BigInt(txPayload.value.toString()) : BigInt(0),
+      value:
+        txPayload.value != null
+          ? BigInt(txPayload.value.toString())
+          : BigInt(0),
       account: address as `0x${string}`,
       chain: viemChain,
-      gas: txPayload.gasLimit != null ? BigInt(txPayload.gasLimit.toString()) : undefined,
+      gas:
+        txPayload.gasLimit != null
+          ? BigInt(txPayload.gasLimit.toString())
+          : undefined,
     });
 
     return txHash;
@@ -291,7 +341,7 @@ export default function MultiChainSwap() {
     try {
       const amountInWei = parseUnits(
         swapState.amount,
-        swapState.fromToken.decimals
+        swapState.fromToken.decimals,
       );
 
       const fromChain = swapState.fromChain;
@@ -361,7 +411,8 @@ export default function MultiChainSwap() {
     } catch (error) {
       setSwapState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : "Failed to execute swap",
+        error:
+          error instanceof Error ? error.message : "Failed to execute swap",
         isLoading: false,
         isExecuting: false,
       }));
@@ -399,7 +450,11 @@ export default function MultiChainSwap() {
         toTokens={toTokens}
         isLoadingTokens={isLoadingTokens}
         onFromChainChange={(chain) => {
-          setSwapState((prev) => ({ ...prev, fromChain: chain, fromToken: null }));
+          setSwapState((prev) => ({
+            ...prev,
+            fromChain: chain,
+            fromToken: null,
+          }));
           if (chain) {
             loadTokensForChain(chain.id, true);
           }

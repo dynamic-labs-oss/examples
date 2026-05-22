@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import DynamicLogo from "./dynamic/logo";
-import DynamicButton from "./dynamic/dynamic-button";
+
+const DynamicButton = dynamic(() => import("./dynamic/dynamic-button"), { ssr: false });
 
 export function Header() {
   return (

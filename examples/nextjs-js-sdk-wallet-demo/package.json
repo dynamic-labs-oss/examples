@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dynamic-labs-sdk/client": "0.10.0",
-    "@dynamic-labs-sdk/evm": "0.10.0",
-    "@dynamic-labs-sdk/solana": "0.10.0",
-    "@dynamic-labs-sdk/zerodev": "0.10.0",
+    "@dynamic-labs/client": "4.83.1",
+    "@dynamic-labs/evm": "4.83.1",
+    "@dynamic-labs/solana": "4.83.1",
+    "@dynamic-labs/zerodev": "4.83.1",
     "@dynamic-labs/iconic": "4.61.1",
     "@solana/spl-token": "0.4.13",
     "@solana/web3.js": "1.98.4",

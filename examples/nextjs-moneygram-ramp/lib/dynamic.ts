@@ -1,11 +1,24 @@
-import { createClient } from "@dynamic-labs/client";
-import { DynamicWaasEVMConnectors } from "@dynamic-labs/waas-evm";
-import { DynamicWaasSVMConnectors } from "@dynamic-labs/waas-svm";
+import {
+  createDynamicClient,
+  initializeClient,
+  type DynamicClient,
+} from "@dynamic-labs-sdk/client";
+import { addWaasEvmExtension } from "@dynamic-labs-sdk/evm/waas";
+import { addWaasSolanaExtension } from "@dynamic-labs-sdk/solana/waas";
 import { env } from "./env";
 
-export const dynamicClient = createClient({
+export const dynamicClient: DynamicClient = createDynamicClient({
   environmentId: env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID,
-  appName: "MoneyGram Ramp Demo",
-})
-  .extend(DynamicWaasEVMConnectors())
-  .extend(DynamicWaasSVMConnectors());
+  autoInitialize: false,
+  metadata: { name: "MoneyGram Ramp Demo" },
+});
+
+let initialized = false;
+
+export async function initDynamic(): Promise<void> {
+  if (initialized) return;
+  initialized = true;
+  addWaasEvmExtension(dynamicClient);
+  addWaasSolanaExtension(dynamicClient);
+  await initializeClient(dynamicClient);
+}

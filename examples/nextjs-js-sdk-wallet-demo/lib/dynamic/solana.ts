@@ -13,7 +13,7 @@ import {
   signAndSendTransaction as sdkSignAndSendTransaction,
   signAndSendSponsoredTransaction as sdkSignAndSendSponsoredTransaction,
   SponsorTransactionError as SdkSponsorTransactionError,
-} from "@dynamic-labs-sdk/solana";
+} from "@dynamic-labs/solana";
 
 /**
  * Sign and send a Solana transaction.
