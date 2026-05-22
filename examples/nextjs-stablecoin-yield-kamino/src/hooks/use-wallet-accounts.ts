@@ -1,8 +1,10 @@
 "use client";
 
-import { useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
-import { isSolanaWalletAccount, type SolanaWalletAccount } from "@dynamic-labs-sdk/solana";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
+import { dynamicClient } from "@/lib/dynamic";
+import type { Wallet } from "@dynamic-labs/client";
 
-export function useSolanaWalletAccount(): SolanaWalletAccount | null {
-  return useWalletAccounts().find(isSolanaWalletAccount) ?? null;
+export function useSolanaWalletAccount(): Wallet | null {
+  const client = useReactiveClient(dynamicClient);
+  return client.wallets.userWallets?.find((w) => w.chain === "SOL") ?? null;
 }

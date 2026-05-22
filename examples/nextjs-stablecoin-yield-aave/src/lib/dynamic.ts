@@ -1,14 +1,7 @@
-import { createDynamicClient } from "@dynamic-labs-sdk/client";
-import { addEvmExtension } from "@dynamic-labs-sdk/evm";
+import { createClient } from "@dynamic-labs/client";
+import { DynamicWaasEVMConnectors } from "@dynamic-labs/waas-evm";
 
-export const dynamicClient = createDynamicClient({
+export const dynamicClient = createClient({
   environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID!,
-  metadata: { name: "Aave Yield" },
-});
-
-if (typeof window !== "undefined") {
-  addEvmExtension();
-}
-
-// No-op on clients that auto-initialize; called by useAuth on mount.
-export async function initDynamic(): Promise<void> {}
+  appName: "Aave Yield",
+}).extend(DynamicWaasEVMConnectors());

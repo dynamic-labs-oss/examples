@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
-import { useUser } from "@dynamic-labs-sdk/react-hooks";
-import { initDynamic } from "@/lib/dynamic";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
+import { dynamicClient } from "@/lib/dynamic";
 
 export function useAuth(): boolean {
-  useEffect(() => {
-    void initDynamic();
-  }, []);
-  return useUser() !== null;
+  const client = useReactiveClient(dynamicClient);
+  return client.auth.authenticatedUser !== undefined;
 }

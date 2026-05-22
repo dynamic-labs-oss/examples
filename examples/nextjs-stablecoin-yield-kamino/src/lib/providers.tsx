@@ -16,18 +16,14 @@ import {
   completeSocialAuthentication,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
-import {
-  isSolanaWalletAccount,
-  type SolanaWalletAccount,
-} from "@dynamic-labs-sdk/solana";
+import type { Wallet } from "@dynamic-labs/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DynamicProvider } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
 import { useAuth } from "@/hooks/use-auth";
 import { useSolanaWalletAccount } from "@/hooks/use-wallet-accounts";
 
 interface WalletContextValue {
-  solanaAccount: SolanaWalletAccount | null;
+  solanaAccount: Wallet | null;
   loggedIn: boolean;
   ensureSolanaWallet: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -67,7 +63,7 @@ export default function Providers({ children }: { children: ReactNode }) {
   const ensureSolanaWallet = useCallback(async () => {
     try {
       const accounts = getWalletAccounts(dynamicClient);
-      const hasSolana = accounts.some(isSolanaWalletAccount);
+      const hasSolana = accounts.some((w) => w.chain === "SOL");
       if (!hasSolana && isSignedIn(dynamicClient)) {
         await createWaasWalletAccounts({ chains: ["SOL"] }, dynamicClient);
       }
@@ -112,12 +108,10 @@ export default function Providers({ children }: { children: ReactNode }) {
   }, [ensureSolanaWallet]);
 
   return (
-    <DynamicProvider client={dynamicClient}>
-      <WalletContext.Provider
-        value={{ solanaAccount, loggedIn, ensureSolanaWallet, disconnect }}
-      >
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      </WalletContext.Provider>
-    </DynamicProvider>
+    <WalletContext.Provider
+      value={{ solanaAccount, loggedIn, ensureSolanaWallet, disconnect }}
+    >
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </WalletContext.Provider>
   );
 }

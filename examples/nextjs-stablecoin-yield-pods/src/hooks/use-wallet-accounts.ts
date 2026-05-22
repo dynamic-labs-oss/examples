@@ -1,8 +1,10 @@
 "use client";
 
-import { useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
-import { isEvmWalletAccount, type EvmWalletAccount } from "@dynamic-labs-sdk/evm";
+import { useReactiveClient } from "@dynamic-labs/react-hooks";
+import { dynamicClient } from "@/lib/dynamic";
+import type { Wallet } from "@dynamic-labs/client";
 
-export function useEvmWalletAccount(): EvmWalletAccount | null {
-  return useWalletAccounts().find(isEvmWalletAccount) ?? null;
+export function useEvmWalletAccount(): Wallet | null {
+  const client = useReactiveClient(dynamicClient);
+  return client.wallets.userWallets?.find((w) => w.chain === "EVM") ?? null;
 }
