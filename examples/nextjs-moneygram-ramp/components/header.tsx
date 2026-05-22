@@ -1,24 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { isSignedIn, logout, onEvent } from "@dynamic-labs-sdk/client";
-import { initDynamic, dynamicClient } from "@/lib/dynamic";
+import { useAuth } from "@/hooks/use-auth";
+import { logout } from "@dynamic-labs-sdk/client";
+import { dynamicClient } from "@/lib/dynamic";
 import { LogOut } from "lucide-react";
 
 export function Header() {
-  const [signedIn, setSignedIn] = useState(false);
-
-  useEffect(() => {
-    let unsub: (() => void) | undefined;
-    initDynamic().then(() => {
-      setSignedIn(isSignedIn());
-      unsub = onEvent(
-        { event: "tokenChanged", listener: ({ token }) => setSignedIn(!!token) },
-        dynamicClient,
-      );
-    });
-    return () => unsub?.();
-  }, []);
+  const signedIn = useAuth();
 
   return (
     <header className="border-b border-gray-800/60 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
