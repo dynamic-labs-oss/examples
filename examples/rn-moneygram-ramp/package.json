@@ -10,11 +10,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dynamic-labs/client": "4.39.0",
-    "@dynamic-labs/react-hooks": "4.39.0",
-    "@dynamic-labs/react-native-extension": "4.39.0",
-    "@dynamic-labs/solana-extension": "4.39.0",
-    "@dynamic-labs/viem-extension": "4.39.0",
+    "@dynamic-labs/client": "4.83.1",
+    "@dynamic-labs/react-hooks": "4.83.1",
+    "@dynamic-labs/react-native-extension": "4.83.1",
+    "@dynamic-labs/solana-extension": "4.83.1",
+    "@dynamic-labs/viem-extension": "4.83.1",
     "@solana/spl-token": "0.4.13",
     "@solana/web3.js": "1.98.1",
     "expo": "~54.0.13",
