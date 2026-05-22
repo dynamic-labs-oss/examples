@@ -18,10 +18,8 @@ import {
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
 import { isEvmWalletAccount, type EvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DynamicProvider } from "@dynamic-labs-sdk/react-hooks";
+import { DynamicProvider, useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
-import { useAuth } from "@/hooks/use-auth";
-import { useEvmWalletAccount } from "@/hooks/use-wallet-accounts";
 
 interface WalletContextValue {
   evmAccount: EvmWalletAccount | null;
@@ -51,8 +49,8 @@ const queryClient = new QueryClient({
 });
 
 function InnerProviders({ children }: { children: ReactNode }) {
-  const loggedIn = useAuth();
-  const evmAccount = useEvmWalletAccount();
+  const loggedIn = useUser() !== null;
+  const evmAccount = useWalletAccounts().find(isEvmWalletAccount) ?? null;
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);

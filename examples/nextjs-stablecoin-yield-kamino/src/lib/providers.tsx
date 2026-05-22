@@ -21,10 +21,8 @@ import {
   type SolanaWalletAccount,
 } from "@dynamic-labs-sdk/solana";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DynamicProvider } from "@dynamic-labs-sdk/react-hooks";
+import { DynamicProvider, useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
-import { useAuth } from "@/hooks/use-auth";
-import { useSolanaWalletAccount } from "@/hooks/use-wallet-accounts";
 
 interface WalletContextValue {
   solanaAccount: SolanaWalletAccount | null;
@@ -54,8 +52,8 @@ const queryClient = new QueryClient({
 });
 
 function InnerProviders({ children }: { children: ReactNode }) {
-  const loggedIn = useAuth();
-  const solanaAccount = useSolanaWalletAccount();
+  const loggedIn = useUser() !== null;
+  const solanaAccount = useWalletAccounts().find(isSolanaWalletAccount) ?? null;
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);

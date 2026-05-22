@@ -1,12 +1,12 @@
 "use client";
 
-import { useAuth } from "@/hooks/use-auth";
+import { useUser } from "@dynamic-labs-sdk/react-hooks";
 import { logout } from "@dynamic-labs-sdk/client";
 import { dynamicClient } from "@/lib/dynamic";
 import { LogOut } from "lucide-react";
 
 export function Header() {
-  const signedIn = useAuth();
+  const signedIn = useUser() !== null;
 
   return (
     <header className="border-b border-gray-800/60 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">

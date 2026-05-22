@@ -8,7 +8,7 @@ import {
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
-import { initDynamic, dynamicClient } from "@/lib/dynamic";
+import { dynamicClient } from "@/lib/dynamic";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
 import type { WalletAccount } from "@dynamic-labs-sdk/client";
@@ -26,8 +26,7 @@ import { ChainSelector } from "./chain-selector";
 import { CashPickupWidget } from "./cash-pickup-widget";
 import { CHAINS, type MgChain } from "@/lib/chains";
 import { fetchUsdcBalance } from "@/lib/balance";
-import { useAuth } from "@/hooks/use-auth";
-import { useWalletAccounts } from "@/hooks/use-wallet-accounts";
+import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +44,7 @@ function truncate(addr: string): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function RampApp() {
-  const signedIn = useAuth();
+  const signedIn = useUser() !== null;
   const walletAccounts = useWalletAccounts();
   const [selectedChain, setSelectedChain] = useState<MgChain>("base");
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
@@ -57,11 +56,6 @@ export function RampApp() {
   const [otpVerification, setOtpVerification] =
     useState<OTPVerification | null>(null);
   const [loading, setLoading] = useState(false);
-
-  // Trigger init on mount (idempotent — useAuth also calls this, but explicit here for clarity)
-  useEffect(() => {
-    void initDynamic();
-  }, []);
 
   const address = getAddressForChain(selectedChain, walletAccounts);
 
