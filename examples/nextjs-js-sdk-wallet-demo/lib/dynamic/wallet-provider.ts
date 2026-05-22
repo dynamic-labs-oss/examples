@@ -8,7 +8,7 @@
  * @see https://www.dynamic.xyz/docs/javascript/reference/wallets
  */
 
-import { getWalletProviderDataByKey as sdkGetWalletProviderDataByKey } from "@dynamic-labs/client";
+import { getWalletProviderDataByKey as sdkGetWalletProviderDataByKey } from "@dynamic-labs-sdk/client";
 import { getClient } from "./client";
 
 /**

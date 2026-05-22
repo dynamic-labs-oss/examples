@@ -11,7 +11,7 @@
 import {
   logout as sdkLogout,
   isSignedIn as sdkIsSignedIn,
-} from "@dynamic-labs/client";
+} from "@dynamic-labs-sdk/client";
 import { getClient, createSafeWrapper } from "./client";
 
 /**

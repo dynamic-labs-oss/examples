@@ -12,7 +12,7 @@
 import {
   onEvent as sdkOnEvent,
   offEvent as sdkOffEvent,
-} from "@dynamic-labs/client";
+} from "@dynamic-labs-sdk/client";
 
 /**
  * Subscribe to a Dynamic SDK event.

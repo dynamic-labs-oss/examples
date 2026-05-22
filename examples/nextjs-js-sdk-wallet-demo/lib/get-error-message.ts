@@ -2,8 +2,8 @@ import {
   NetworkNotAddedError,
   NetworkAddingUnavailableError,
   WalletAccountNotSelectedError,
-} from "@dynamic-labs/client";
-import { isGasSponsorshipError } from "@dynamic-labs/zerodev";
+} from "@dynamic-labs-sdk/client";
+import { isGasSponsorshipError } from "@dynamic-labs-sdk/zerodev";
 import { SponsorTransactionError } from "@/lib/dynamic";
 
 /**

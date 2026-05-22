@@ -301,10 +301,10 @@ In your [Dynamic Dashboard](https://app.dynamic.xyz):
 
 ## Dependencies
 
-- `@dynamic-labs/client` - Core SDK
-- `@dynamic-labs/evm` - EVM chain support
-- `@dynamic-labs/solana` - Solana chain support
-- `@dynamic-labs/zerodev` - Account abstraction & gas sponsorship
+- `@dynamic-labs-sdk/client` - Core SDK
+- `@dynamic-labs-sdk/evm` - EVM chain support
+- `@dynamic-labs-sdk/solana` - Solana chain support
+- `@dynamic-labs-sdk/zerodev` - Account abstraction & gas sponsorship
 - `@dynamic-labs/iconic` - Social provider icons
 - `jose` - JWT signing for dev utilities
 - `viem` - EVM utilities

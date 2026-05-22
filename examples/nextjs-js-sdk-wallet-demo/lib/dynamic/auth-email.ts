@@ -16,7 +16,7 @@ import {
   waitForClientInitialized as sdkWaitForClientInitialized,
   type OTPVerification,
   type VerifyResponse,
-} from "@dynamic-labs/client";
+} from "@dynamic-labs-sdk/client";
 import { getClient } from "./client";
 
 /**

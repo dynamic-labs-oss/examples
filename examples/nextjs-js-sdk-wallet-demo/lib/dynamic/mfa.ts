@@ -15,7 +15,7 @@ import {
   registerTotpMfaDevice as sdkRegisterTotpMfaDevice,
   isMfaRequiredForAction as sdkIsMfaRequiredForAction,
   MFAAction,
-} from "@dynamic-labs/client";
+} from "@dynamic-labs-sdk/client";
 import { getClient } from "./client";
 
 /**

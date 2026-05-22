@@ -13,19 +13,19 @@ import {
   getWalletAccounts as sdkGetWalletAccounts,
   type WalletAccount,
   type Chain,
-} from "@dynamic-labs/client";
+} from "@dynamic-labs-sdk/client";
 import {
   createWaasWalletAccounts as sdkCreateWaasWalletAccounts,
   isWaasWalletAccount as sdkIsWaasWalletAccount,
-} from "@dynamic-labs/client/waas";
+} from "@dynamic-labs-sdk/client/waas";
 import {
   isEvmWalletAccount as sdkIsEvmWalletAccount,
   type EvmWalletAccount,
-} from "@dynamic-labs/evm";
+} from "@dynamic-labs-sdk/evm";
 import {
   isSolanaWalletAccount as sdkIsSolanaWalletAccount,
   type SolanaWalletAccount,
-} from "@dynamic-labs/solana";
+} from "@dynamic-labs-sdk/solana";
 import { getClient, createSafeWrapper } from "./client";
 
 /**

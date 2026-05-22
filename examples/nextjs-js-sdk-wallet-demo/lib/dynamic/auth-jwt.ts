@@ -12,7 +12,7 @@
  * @see https://www.dynamic.xyz/docs/javascript/external-auth/third-party-auth-usage
  */
 
-import { signInWithExternalJwt as sdkSignInWithExternalJwt } from "@dynamic-labs/client";
+import { signInWithExternalJwt as sdkSignInWithExternalJwt } from "@dynamic-labs-sdk/client";
 import { getClient, createAsyncSafeWrapper } from "./client";
 
 /** Sign in with an external JWT token */

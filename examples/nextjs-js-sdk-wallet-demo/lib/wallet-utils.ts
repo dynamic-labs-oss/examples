@@ -12,7 +12,7 @@
  * These utilities are for display and network operations.
  */
 
-import type { WalletAccount } from "@dynamic-labs/client";
+import type { WalletAccount } from "@dynamic-labs-sdk/client";
 
 /**
  * Find the base (non-ZeroDev) wallet for an address

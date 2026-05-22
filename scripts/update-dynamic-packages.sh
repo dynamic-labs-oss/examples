@@ -40,7 +40,7 @@ list_all_projects () {
 }
 
 list_dynamic_deps () {
-    for dep in $(jq -r '(.dependencies // {})|keys[]' package.json | grep -Ee '^@dynamic-labs/|^@dynamic-labs/'); do
+    for dep in $(jq -r '(.dependencies // {})|keys[]' package.json | grep -Ee '^@dynamic-labs/|^@dynamic-labs-sdk/'); do
         # Skip dependencies that are explicitly pinned to "*"
         if [ "$(jq -r ".dependencies.\"$dep\"" package.json)" != "*" ]; then
             # Skip sdk-api-core as it has a different versioning scheme

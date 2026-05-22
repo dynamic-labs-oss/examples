@@ -13,7 +13,7 @@ import {
   getBalance as sdkGetBalance,
   getMultichainBalances as sdkGetMultichainBalances,
   type WalletAccount,
-} from "@dynamic-labs/client";
+} from "@dynamic-labs-sdk/client";
 import { getClient } from "./client";
 
 // =============================================================================
@@ -117,7 +117,7 @@ export async function getTokenBalances({
         balanceRequests: [
           {
             address,
-            // TODO: Use ChainEnum directly once it's exported from @dynamic-labs/client
+            // TODO: Use ChainEnum directly once it's exported from @dynamic-labs-sdk/client
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             chain: chain as any,
             networkIds: [networkId],

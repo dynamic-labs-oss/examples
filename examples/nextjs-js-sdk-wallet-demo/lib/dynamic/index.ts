@@ -102,7 +102,7 @@ export type {
   Chain,
 } from "./wallets";
 export type { NetworkData } from "./networks";
-export type { OTPVerification } from "@dynamic-labs/client";
+export type { OTPVerification } from "@dynamic-labs-sdk/client";
 export type {
   GetTransactionHistoryParams,
   GetTransactionHistoryResponse,

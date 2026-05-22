@@ -9,7 +9,7 @@
  * @see https://www.dynamic.xyz/docs/javascript/reference/client/initialize-dynamic-client
  */
 
-import { waitForClientInitialized as sdkWaitForClientInitialized } from "@dynamic-labs/client";
+import { waitForClientInitialized as sdkWaitForClientInitialized } from "@dynamic-labs-sdk/client";
 import { getClient } from "./client";
 
 /** Possible initialization states for the Dynamic client */

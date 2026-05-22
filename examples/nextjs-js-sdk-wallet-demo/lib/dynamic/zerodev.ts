@@ -14,7 +14,7 @@ import {
   isGasSponsorshipError as sdkIsGasSponsorshipError,
   canSponsorUserOperation as sdkCanSponsorUserOperation,
   signEip7702Authorization as sdkSignEip7702Authorization,
-} from "@dynamic-labs/zerodev";
+} from "@dynamic-labs-sdk/zerodev";
 import { createAsyncSafeWrapper } from "./client";
 
 /**
