@@ -29,9 +29,9 @@ import type {
   WebViewHttpErrorEvent,
 } from 'react-native-webview/lib/WebViewTypes';
 import {
-  Connection,
   PublicKey,
-  Transaction,
+  TransactionMessage,
+  VersionedTransaction,
   ComputeBudgetProgram,
 } from '@solana/web3.js';
 import {
@@ -40,14 +40,12 @@ import {
   createTransferInstruction,
 } from '@solana/spl-token';
 import { dynamicClient } from '@/lib/dynamic';
-import { CHAINS } from '@/lib/chains';
 
 // Sandbox widget domain — update WIDGET_ORIGIN to the production domain for prod
 const WIDGET_ORIGIN    = 'https://playground.xramps.moneygram.com';
 const RAMPS_API_BASE   = process.env.EXPO_PUBLIC_RAMPS_API_URL ?? `${WIDGET_ORIGIN}/api`;
 const SESSION_URL      = process.env.EXPO_PUBLIC_SESSION_URL ?? 'http://localhost:3001/api/moneygram-session';
-const SOLANA_RPC       = process.env.EXPO_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
-const USDC_MINT        = process.env.EXPO_PUBLIC_SOLANA_USDC_MINT ?? '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+const DEFAULT_USDC_MINT = process.env.EXPO_PUBLIC_SOLANA_USDC_MINT ?? '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 
 interface Session {
   sessionToken: string;
@@ -69,6 +67,7 @@ export interface MoneygramWidgetProps {
   open:              boolean;
   walletAddress:     string;   // Solana address
   usdcBalance:       number;   // current USDC balance (fetched by parent)
+  usdcMint?:         string;   // override mint for the active Solana network
   onClose:           () => void;
   onSuccess?:        (amount: string) => void;
 }
@@ -77,6 +76,7 @@ export function MoneygramWidget({
   open,
   walletAddress,
   usdcBalance,
+  usdcMint,
   onClose,
   onSuccess,
 }: MoneygramWidgetProps) {
@@ -89,7 +89,6 @@ export function MoneygramWidget({
   const [signing,   setSigning]   = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
-  // Fetch session each time the modal opens
   useEffect(() => {
     if (!open) return;
     setLoading(true);
@@ -114,8 +113,7 @@ export function MoneygramWidget({
       });
   }, [open]);
 
-  // ── Send a message INTO the WebView ────────────────────────────────────────
-  // Base64-encode the payload so special characters can't break the JS context.
+  // Base64-encode payload so special characters can't break the JS context.
   function post(type: string, payload?: Record<string, unknown>) {
     const json    = JSON.stringify(payload ? { type, payload } : { type });
     const encoded = btoa(unescape(encodeURIComponent(json)));
@@ -132,9 +130,7 @@ export function MoneygramWidget({
     `);
   }
 
-  // ── Handle messages FROM the WebView ───────────────────────────────────────
   async function handleMessage(event: WebViewMessageEvent) {
-    // Validate source URL — reject messages not from the MoneyGram widget
     const sourceUrl = event.nativeEvent.url ?? '';
     if (!sourceUrl.startsWith(WIDGET_ORIGIN)) {
       console.warn('[MG Widget] Ignoring message from unexpected origin:', sourceUrl);
@@ -145,16 +141,20 @@ export function MoneygramWidget({
     try { parsed = JSON.parse(event.nativeEvent.data); } catch { return; }
     const { type, payload } = parsed;
 
-    // Network debug events from the fetch interceptor
     if (type === '__NET__') {
-      const d = parsed as any;
-      if (d.dir === '→') {
-        console.log(`[MG Net] ${d.method} ${d.url}${d.body ? `\n  body: ${d.body}` : ''}`);
-      } else if (d.dir === '←') {
-        const logFn = d.status >= 400 ? console.error : console.log;
-        logFn(`[MG Net] ${d.status} ${d.url}\n${d.body}`);
+      const dir = String(parsed.dir);
+      const url = String(parsed.url);
+      if (dir === '→') {
+        const body = parsed.body ? `\n  body: ${String(parsed.body)}` : '';
+        console.log(`[MG Net] ${String(parsed.method)} ${url}${body}`);
+      } else if (dir === '←') {
+        const status = Number(parsed.status);
+        // 500 on profiles/by-wallet is expected for new wallets — suppress it
+        const isExpected = status === 500 && url.includes('/profiles/by-wallet/');
+        const logFn = status >= 400 && !isExpected ? console.error : console.log;
+        logFn(`[MG Net] ${status} ${url}\n${String(parsed.body ?? '')}`);
       } else {
-        console.error(`[MG Net] FAIL ${d.url}: ${d.err}`);
+        console.error(`[MG Net] FAIL ${url}: ${String(parsed.err)}`);
       }
       return;
     }
@@ -216,11 +216,11 @@ export function MoneygramWidget({
 
         setSigning(true);
         try {
-          const txHash = await sendUsdcViaDynamic(walletAddress, to, amount);
+          const txHash = await sendUsdcViaDynamic(walletAddress, to, amount, usdcMint);
           post('RAMPS_SIGN_SUCCESS', { txHash, walletAddress });
         } catch (err) {
           console.error('[MG Widget] Signing failed:', err);
-          post('RAMPS_SIGN_ERROR', { error: (err as Error).message });
+          post('RAMPS_SIGN_ERROR', { error: err instanceof Error ? err.message : String(err) });
         } finally {
           setSigning(false);
         }
@@ -229,8 +229,7 @@ export function MoneygramWidget({
 
       // ── D. Transaction complete — do NOT close; widget shows its own screen ──
       case 'RAMPS_TRANSACTION_COMPLETE': {
-        const p = (payload ?? {}) as Record<string, unknown>;
-        console.log('[MG Widget] Transaction complete — ref:', p.referenceNumber);
+        console.log('[MG Widget] Transaction complete — ref:', payload?.referenceNumber);
         onSuccess?.(pendingAmountRef.current || '0');
         // Don't close — widget shows completion screen; RAMPS_CLOSE fires on dismiss
         break;
@@ -351,7 +350,6 @@ export function MoneygramWidget({
           />
         )}
 
-        {/* Loading overlay — shown while session fetches + WebView loads */}
         {loading && (
           <View style={styles.overlay}>
             <ActivityIndicator size="large" color="#14b8a6" />
@@ -359,7 +357,6 @@ export function MoneygramWidget({
           </View>
         )}
 
-        {/* Signing overlay — shown while broadcasting the Solana transaction */}
         {signing && (
           <View style={styles.overlay}>
             <ActivityIndicator size="large" color="#14b8a6" />
@@ -371,40 +368,67 @@ export function MoneygramWidget({
   );
 }
 
-// ── Solana USDC transfer via Dynamic ──────────────────────────────────────────
 async function sendUsdcViaDynamic(
   fromAddress: string,
   to: string,
   amount: string,
+  usdcMint?: string,
 ): Promise<string> {
-  const connection = new Connection(SOLANA_RPC, 'confirmed');
-  const mint       = new PublicKey(USDC_MINT);
-  const fromKey    = new PublicKey(fromAddress);
-  const toKey      = new PublicKey(to);
-  const fromATA    = await getAssociatedTokenAddress(mint, fromKey);
-  const toATA      = await getAssociatedTokenAddress(mint, toKey, true);
+  const TAG = '[MG Sign]';
+  console.log(TAG, 'start — from:', fromAddress, 'to:', to, 'amount:', amount, 'mint:', usdcMint ?? DEFAULT_USDC_MINT);
+
+  const userWallets = dynamicClient.wallets.userWallets ?? [];
+  const solanaWallet = userWallets.find(w => w.chain === 'SOL');
+  if (!solanaWallet) throw new Error('No Solana wallet found');
+  console.log(TAG, 'wallet found:', solanaWallet.id ?? solanaWallet.address);
+
+  // getConnection() always reflects the network Dynamic is currently on
+  const connection = dynamicClient.solana.getConnection();
+  console.log(TAG, 'connection rpcEndpoint:', connection.rpcEndpoint);
+
+  const mint    = new PublicKey(usdcMint ?? DEFAULT_USDC_MINT);
+  const fromKey = new PublicKey(fromAddress);
+  const toKey   = new PublicKey(to);
+  const fromATA = await getAssociatedTokenAddress(mint, fromKey);
+  const toATA   = await getAssociatedTokenAddress(mint, toKey, true);
+  console.log(TAG, 'ATAs — from:', fromATA.toBase58(), 'to:', toATA.toBase58());
 
   // Precision-safe USDC amount (6 decimals, avoid float drift)
   const [whole, frac = ''] = amount.split('.');
   const lamports = BigInt(whole) * 1_000_000n + BigInt(frac.padEnd(6, '0').slice(0, 6));
+  console.log(TAG, 'lamports:', lamports.toString());
 
-  const tx = new Transaction();
-  tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }));
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 100_000 }));
-  tx.add(createAssociatedTokenAccountIdempotentInstruction(fromKey, toATA, toKey, mint));
-  tx.add(createTransferInstruction(fromATA, toATA, fromKey, lamports));
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  console.log(TAG, 'blockhash:', blockhash, 'lastValidBlockHeight:', lastValidBlockHeight);
 
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-  tx.recentBlockhash = blockhash;
-  tx.feePayer        = fromKey;
+  const messageV0 = new TransactionMessage({
+    payerKey: fromKey,
+    recentBlockhash: blockhash,
+    instructions: [
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }),
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 100_000 }),
+      createAssociatedTokenAccountIdempotentInstruction(fromKey, toATA, toKey, mint),
+      createTransferInstruction(fromATA, toATA, fromKey, lamports),
+    ],
+  }).compileToV0Message();
+  const tx = new VersionedTransaction(messageV0);
 
-  // Sign via Dynamic's Solana extension
-  const solanaExt = (dynamicClient as any).solana;
-  if (!solanaExt) throw new Error('Solana extension not available on Dynamic client');
+  console.log(TAG, 'getting signer…');
+  const signer = dynamicClient.solana.getSigner({ wallet: solanaWallet });
+  console.log(TAG, 'calling signAndSendTransaction…');
 
-  const signedTx = await solanaExt.signTransaction({ transaction: tx });
-  const sig = await connection.sendRawTransaction(signedTx.serialize());
+  const signTimeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('signAndSendTransaction timed out after 30s')), 30_000),
+  );
+  const { signature: sig } = await Promise.race([
+    signer.signAndSendTransaction(tx),
+    signTimeout,
+  ]);
+  console.log(TAG, 'sent — sig:', sig);
+
+  console.log(TAG, 'waiting for confirmation…');
   await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+  console.log(TAG, 'confirmed ✓');
   return sig;
 }
 

@@ -2,9 +2,13 @@
   "name": "rn-moneygram-ramp-server",
   "version": "1.0.0",
   "description": "Session proxy — holds the MoneyGram secret key server-side",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
 }

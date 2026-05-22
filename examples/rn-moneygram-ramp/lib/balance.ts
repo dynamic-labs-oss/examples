@@ -1,6 +1,7 @@
 import { createPublicClient, erc20Abi, http } from "viem";
 import { base, mainnet } from "viem/chains";
 import type { Chain } from "./chains";
+import { dynamicClient } from "./dynamic";
 
 const publicClients = {
   base: createPublicClient({ chain: base, transport: http() }),
@@ -30,18 +31,19 @@ export async function fetchEvmUsdcBalance(
   }
 }
 
-export async function fetchSolanaUsdcBalance(address: string): Promise<number> {
+export async function fetchSolanaUsdcBalance(
+  address: string,
+  usdcMint?: string,
+): Promise<number> {
   try {
-    const { Connection, PublicKey } = await import("@solana/web3.js");
+    const { PublicKey } = await import("@solana/web3.js");
     const { getAssociatedTokenAddress, getAccount } = await import(
       "@solana/spl-token"
     );
-    const rpc =
-      process.env.EXPO_PUBLIC_SOLANA_RPC_URL ||
-      "https://api.devnet.solana.com";
-    const mint = process.env.EXPO_PUBLIC_SOLANA_USDC_MINT;
+    const mint = usdcMint ?? process.env.EXPO_PUBLIC_SOLANA_USDC_MINT;
     if (!mint) throw new Error("EXPO_PUBLIC_SOLANA_USDC_MINT is not set");
-    const connection = new Connection(rpc, "confirmed");
+    // getConnection() reflects the network Dynamic is currently on
+    const connection = dynamicClient.solana.getConnection();
     const ata = await getAssociatedTokenAddress(
       new PublicKey(mint),
       new PublicKey(address)
@@ -55,9 +57,10 @@ export async function fetchSolanaUsdcBalance(address: string): Promise<number> {
 
 export async function fetchUsdcBalance(
   chain: Chain,
-  address: string
+  address: string,
+  usdcMint?: string,
 ): Promise<number> {
   if (!address) return 0;
-  if (chain === "solana") return fetchSolanaUsdcBalance(address);
+  if (chain === "solana") return fetchSolanaUsdcBalance(address, usdcMint);
   return fetchEvmUsdcBalance(chain as "base" | "ethereum", address);
 }

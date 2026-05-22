@@ -2,7 +2,6 @@ import { useReactiveClient } from "@dynamic-labs/react-hooks";
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-  Clipboard,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,11 +9,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { dynamicClient } from "@/lib/dynamic";
 import { CHAIN_ORDER, CHAINS, type Chain } from "@/lib/chains";
 import { fetchUsdcBalance } from "@/lib/balance";
 import { MoneygramWidget } from "@/components/MoneygramWidget";
+import {
+  type SolanaChainId,
+  SOL_CHAIN_IDS,
+  NETWORK_LABEL,
+  USDC_MINT_BY_CHAIN,
+} from "@/lib/network";
 
 function truncate(addr: string) {
   if (!addr || addr.length < 10) return addr;
@@ -32,6 +38,8 @@ export default function HomeScreen() {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [solanaChainId, setSolanaChainId] = useState<SolanaChainId>(SOL_CHAIN_IDS.devnet);
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
 
   const userWallets = client.wallets.userWallets ?? [];
 
@@ -60,12 +68,43 @@ export default function HomeScreen() {
     }
     setLoadingBalance(true);
     try {
-      const bal = await fetchUsdcBalance(selectedChain, address);
+      const mint = selectedChain === "solana" ? USDC_MINT_BY_CHAIN[solanaChainId] : undefined;
+      const bal = await fetchUsdcBalance(selectedChain, address, mint);
       setBalance(bal);
     } finally {
       setLoadingBalance(false);
     }
-  }, [selectedChain, address]);
+  }, [selectedChain, address, solanaChainId]);
+
+  useEffect(() => {
+    if (!solanaWallet) return;
+    dynamicClient.wallets
+      .getNetwork({ wallet: solanaWallet })
+      .then(({ network }) => {
+        const id = String(network) as SolanaChainId;
+        if (id === SOL_CHAIN_IDS.mainnet || id === SOL_CHAIN_IDS.devnet) {
+          setSolanaChainId(id);
+        }
+      })
+      .catch(() => {});
+  }, [solanaWallet]);
+
+  const handleSwitchSolanaNetwork = useCallback(async () => {
+    if (!solanaWallet || switchingNetwork) return;
+    const next = solanaChainId === SOL_CHAIN_IDS.mainnet
+      ? SOL_CHAIN_IDS.devnet
+      : SOL_CHAIN_IDS.mainnet;
+    setSwitchingNetwork(true);
+    try {
+      await dynamicClient.wallets.switchNetwork({ wallet: solanaWallet, chainId: next });
+      setSolanaChainId(next);
+      refreshBalance();
+    } catch (e) {
+      console.error('[Network] Switch failed:', e);
+    } finally {
+      setSwitchingNetwork(false);
+    }
+  }, [solanaWallet, solanaChainId, switchingNetwork, refreshBalance]);
 
   useEffect(() => {
     setBalance(null);
@@ -74,7 +113,7 @@ export default function HomeScreen() {
 
   const handleCopy = () => {
     if (!address) return;
-    Clipboard.setString(address);
+    Clipboard.setStringAsync(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -90,16 +129,13 @@ export default function HomeScreen() {
     ]);
   };
 
-  // MoneyGram Ramps is Solana-only — always use the Solana wallet + balance
   const solanaBalance = selectedChain === "solana" ? (balance ?? 0) : 0;
 
   const handleSuccess = useCallback(
     (amount: string) => {
-      const parsed = parseFloat(amount);
-      Alert.alert(
-        "Success!",
-        `${parsed > 0 ? `$${parsed.toFixed(2)} USDC` : "Funds"} sent for cash pickup.`
-      );
+      const parsed = Number.parseFloat(amount);
+      const label = parsed > 0 ? `$${parsed.toFixed(2)} USDC` : "Funds";
+      Alert.alert("Success!", `${label} sent for cash pickup.`);
       refreshBalance();
     },
     [refreshBalance]
@@ -115,13 +151,37 @@ export default function HomeScreen() {
           <Text style={styles.headerTitle}>Off-ramp USDC</Text>
           <Text style={styles.headerSub}>Convert to cash worldwide</Text>
         </View>
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={styles.logoutBtn}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.logoutText}>Sign out</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {solanaWallet && (
+            <TouchableOpacity
+              onPress={handleSwitchSolanaNetwork}
+              disabled={switchingNetwork}
+              style={[
+                styles.networkBadge,
+                solanaChainId === SOL_CHAIN_IDS.mainnet
+                  ? styles.networkBadgeMainnet
+                  : styles.networkBadgeDevnet,
+              ]}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.networkBadgeText,
+                solanaChainId === SOL_CHAIN_IDS.mainnet
+                  ? styles.networkBadgeTextMainnet
+                  : styles.networkBadgeTextDevnet,
+              ]}>
+                {switchingNetwork ? "…" : NETWORK_LABEL[solanaChainId]}
+              </Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            onPress={handleLogout}
+            style={styles.logoutBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.logoutText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -166,7 +226,7 @@ export default function HomeScreen() {
             <Text style={[styles.addressText, !address && styles.dimText]}>
               {address ? truncate(address) : "No wallet connected"}
             </Text>
-            {address && (
+            {!!address && (
               <TouchableOpacity
                 onPress={handleCopy}
                 activeOpacity={0.7}
@@ -198,7 +258,7 @@ export default function HomeScreen() {
               Your {CHAINS[selectedChain].name} wallet is still initialising…
             </Text>
           )}
-          {address && balance === 0 && !loadingBalance && (
+          {!!address && balance === 0 && !loadingBalance && (
             <Text style={styles.hint}>
               Fund your wallet with USDC on {CHAINS[selectedChain].name} to get
               started.
@@ -272,6 +332,7 @@ export default function HomeScreen() {
         open={widgetOpen}
         walletAddress={solanaWallet?.address ?? ""}
         usdcBalance={solanaBalance}
+        usdcMint={USDC_MINT_BY_CHAIN[solanaChainId]}
         onClose={() => setWidgetOpen(false)}
         onSuccess={handleSuccess}
       />
@@ -292,6 +353,24 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#f9fafb" },
   headerSub: { fontSize: 13, color: "#9ca3af", marginTop: 2 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  networkBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  networkBadgeDevnet: {
+    backgroundColor: "rgba(234,179,8,0.1)",
+    borderColor: "rgba(234,179,8,0.35)",
+  },
+  networkBadgeMainnet: {
+    backgroundColor: "rgba(34,197,94,0.1)",
+    borderColor: "rgba(34,197,94,0.35)",
+  },
+  networkBadgeText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.4 },
+  networkBadgeTextDevnet:  { color: "#eab308" },
+  networkBadgeTextMainnet: { color: "#22c55e" },
   logoutBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
