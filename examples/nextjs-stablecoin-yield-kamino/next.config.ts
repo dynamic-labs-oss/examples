@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { NormalModuleReplacementPlugin } = require("webpack");
 
@@ -25,21 +26,29 @@ const nextConfig: NextConfig = {
       type: "webassembly/async",
     });
 
-    // Ensure webpack can resolve @kamino-finance/farms-sdk subpaths when the
-    // pnpm virtual-store cache is partially restored on Vercel (stale symlinks).
-    // Uses require.resolve so Node's module resolution handles pnpm symlinks correctly.
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "@kamino-finance/farms-sdk/dist/@codegen/farms/programId": require.resolve(
-        "@kamino-finance/farms-sdk/dist/@codegen/farms/programId"
-      ),
-      "@kamino-finance/farms-sdk/dist/utils/apy": require.resolve(
-        "@kamino-finance/farms-sdk/dist/utils/apy"
-      ),
-      "@kamino-finance/farms-sdk/dist/utils/option": require.resolve(
-        "@kamino-finance/farms-sdk/dist/utils/option"
-      ),
-    };
+    // Redirect farms-sdk subpath imports from klend-sdk to the top-level
+    // farms-sdk installation. Required when Vercel restores a cached
+    // node_modules with stale pnpm virtual-store symlinks for klend-sdk.
+    // Uses NormalModuleReplacementPlugin (evaluated at webpack time) rather
+    // than resolve.alias or require.resolve (evaluated at config eval time).
+    const farmsBase = path.resolve(
+      __dirname,
+      "node_modules/@kamino-finance/farms-sdk/dist"
+    );
+    [
+      ["@codegen/farms/programId", "programId.js"],
+      ["utils/apy", "apy.js"],
+      ["utils/option", "option.js"],
+    ].forEach(([subpath, file]) => {
+      config.plugins.push(
+        new NormalModuleReplacementPlugin(
+          new RegExp(
+            `^@kamino-finance/farms-sdk/dist/${subpath.replace("/", "/")}$`
+          ),
+          path.join(farmsBase, subpath.replace(/[^/]+$/, ""), file)
+        )
+      );
+    });
 
     if (!isServer) {
       config.resolve.fallback = {
