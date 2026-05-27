@@ -21,12 +21,14 @@ export function SubscriptionsInterface() {
     activePlans,
     userSubscriptions,
     subscribedPlanPdas,
+    cancellingPlanPdas,
     loadingPlans,
     loadingSubscriptions,
     plansError,
     subscriptionsError,
     subscribeMutation,
     cancelMutation,
+    resumeMutation,
     merchantAddress,
     tokenDecimals,
     getSubscriptionPdaForPlan,
@@ -34,7 +36,7 @@ export function SubscriptionsInterface() {
   } = useSubscriptionOperations();
 
   const isTransacting =
-    subscribeMutation.isPending || cancelMutation.isPending;
+    subscribeMutation.isPending || cancelMutation.isPending || resumeMutation.isPending;
 
   const handleSubscribe = async (plan: (typeof activePlans)[0]) => {
     await subscribeMutation.mutateAsync(plan);
@@ -42,6 +44,10 @@ export function SubscriptionsInterface() {
 
   const handleCancel = async (planPda: string, subscriptionPda: string) => {
     await cancelMutation.mutateAsync({ planPda, subscriptionPda });
+  };
+
+  const handleResume = async (planPda: string, subscriptionPda: string) => {
+    await resumeMutation.mutateAsync({ planPda, subscriptionPda });
   };
 
   if (!mounted) return null;
@@ -170,12 +176,15 @@ export function SubscriptionsInterface() {
                     key={planPda}
                     plan={plan}
                     isSubscribed={isSubscribed}
+                    isCancelling={cancellingPlanPdas.has(planPda)}
                     onSubscribe={handleSubscribe}
                     onCancel={handleCancel}
-                    disabled={!loggedIn || isTransacting}
+                    onResume={handleResume}
+                    disabled={!loggedIn || !solanaAccount || isTransacting}
                     getSubscriptionPdaForPlan={getSubscriptionPdaForPlan}
                     getTokenBalance={getTokenBalance}
                     tokenDecimals={tokenDecimals}
+                    walletAccount={solanaAccount}
                   />
                 );
               })}
@@ -246,26 +255,32 @@ export function SubscriptionsInterface() {
 function PlanCardWithPda({
   plan,
   isSubscribed,
+  isCancelling,
   onSubscribe,
   onCancel,
+  onResume,
   disabled,
   getSubscriptionPdaForPlan,
   getTokenBalance,
   tokenDecimals,
+  walletAccount,
 }: {
   plan: Parameters<typeof PlanCard>[0]["plan"];
   isSubscribed: boolean;
+  isCancelling: boolean;
   onSubscribe: (plan: Parameters<typeof PlanCard>[0]["plan"]) => Promise<void>;
   onCancel: (planPda: string, subscriptionPda: string) => Promise<void>;
+  onResume: (planPda: string, subscriptionPda: string) => Promise<void>;
   disabled: boolean;
   getSubscriptionPdaForPlan: (planPda: string) => Promise<string | null>;
   getTokenBalance: (tokenMint: string) => Promise<bigint>;
   tokenDecimals: number;
+  walletAccount: Parameters<typeof PlanCard>[0]["walletAccount"];
 }) {
   const [subscriptionPda, setSubscriptionPda] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSubscribed) {
+    if (!isSubscribed && !isCancelling) {
       setSubscriptionPda(null);
       return;
     }
@@ -273,25 +288,21 @@ function PlanCardWithPda({
     getSubscriptionPdaForPlan(plan.address as string).then((pda) => {
       if (!cancelled) setSubscriptionPda(pda);
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [isSubscribed, plan.address, getSubscriptionPdaForPlan]);
-
-  const handleCancel = async () => {
-    if (!subscriptionPda) return;
-    await onCancel(plan.address as string, subscriptionPda);
-  };
+    return () => { cancelled = true; };
+  }, [isSubscribed, isCancelling, plan.address, getSubscriptionPdaForPlan]);
 
   return (
     <PlanCard
       plan={plan}
       isSubscribed={isSubscribed}
+      isCancelling={isCancelling}
       subscriptionPda={subscriptionPda}
       onSubscribe={onSubscribe}
-      onCancel={handleCancel}
+      onCancel={async () => { if (subscriptionPda) await onCancel(plan.address as string, subscriptionPda); }}
+      onResume={async () => { if (subscriptionPda) await onResume(plan.address as string, subscriptionPda); }}
       disabled={disabled}
       getTokenBalance={getTokenBalance}
+      walletAccount={walletAccount}
       tokenDecimals={tokenDecimals}
     />
   );

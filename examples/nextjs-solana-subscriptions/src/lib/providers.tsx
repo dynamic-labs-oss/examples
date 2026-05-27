@@ -1,5 +1,9 @@
 "use client";
 
+// Polyfill BigInt.toJSON so JSON.stringify doesn't throw inside Solana/Dynamic SDKs
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+if (typeof BigInt !== "undefined") (BigInt.prototype as any).toJSON = function () { return this.toString(); };
+
 import {
   createContext,
   useContext,

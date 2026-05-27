@@ -56,7 +56,7 @@ export function useMyPlansOperations() {
         noopSigner, rpc, solanaAccount
       );
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["plans", "my"] }); },
+    onSuccess: () => { setTimeout(() => queryClient.invalidateQueries({ queryKey: ["plans", "my"] }), 2000); },
   });
 
   const deletePlanMutation = useMutation({
@@ -68,7 +68,7 @@ export function useMyPlansOperations() {
         noopSigner, rpc, solanaAccount
       );
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["plans", "my"] }); },
+    onSuccess: () => { setTimeout(() => queryClient.invalidateQueries({ queryKey: ["plans", "my"] }), 2000); },
   });
 
   return { myPlans, loadingMyPlans, myPlansError, tokenMintStr, createPlanMutation, deletePlanMutation, rpc, rpcUrl };

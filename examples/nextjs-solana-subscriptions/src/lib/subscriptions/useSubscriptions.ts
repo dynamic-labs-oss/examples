@@ -35,10 +35,8 @@ export function useSubscriptionOperations() {
   const tokenMintStr = process.env.NEXT_PUBLIC_TOKEN_MINT ?? "";
 
   const invalidateSubscriptions = useCallback(() => {
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ["subscriptions", solanaAccount?.address] });
-      queryClient.invalidateQueries({ queryKey: ["enrichedSubscriptions"] });
-    }, 2000);
+    queryClient.invalidateQueries({ queryKey: ["subscriptions", solanaAccount?.address] });
+    queryClient.invalidateQueries({ queryKey: ["enrichedSubscriptions"] });
   }, [queryClient, solanaAccount?.address]);
 
   const { data: plans = [], isLoading: loadingPlans, error: plansError } = useQuery({
@@ -55,10 +53,21 @@ export function useSubscriptionOperations() {
     enabled: !!solanaAccount,
   });
 
-  const subscribedPlanPdas = useMemo(
-    () => new Set(userSubscriptions.map((s) => s.data.header.delegatee as string)),
-    [userSubscriptions]
-  );
+  const subscribedPlanPdas = useMemo(() => {
+    const set = new Set<string>();
+    for (const sub of userSubscriptions)
+      if (sub.data.expiresAtTs === 0n)
+        set.add(sub.data.header.delegatee as string);
+    return set;
+  }, [userSubscriptions]);
+
+  const cancellingPlanPdas = useMemo(() => {
+    const set = new Set<string>();
+    for (const sub of userSubscriptions)
+      if (sub.data.expiresAtTs > 0n)
+        set.add(sub.data.header.delegatee as string);
+    return set;
+  }, [userSubscriptions]);
 
   const getTokenBalance = useCallback(async (tokenMint: string): Promise<bigint> => {
     if (!solanaAccount) return 0n;
@@ -94,6 +103,10 @@ export function useSubscriptionOperations() {
       return sendKitInstructions(instructions, noopSigner, rpc, solanaAccount);
     },
     onSuccess: invalidateSubscriptions,
+    onError: (err) => {
+      // 0x205 = alreadySubscribed — treat as success and refresh state
+      if (String(err).includes("0x205")) invalidateSubscriptions();
+    },
   });
 
   const cancelMutation = useMutation({
@@ -144,7 +157,7 @@ export function useSubscriptionOperations() {
   });
 
   return {
-    activePlans, userSubscriptions, enrichedSubscriptions, subscribedPlanPdas,
+    activePlans, userSubscriptions, enrichedSubscriptions, subscribedPlanPdas, cancellingPlanPdas,
     loadingPlans, loadingSubscriptions, plansError, subscriptionsError,
     subscribeMutation, cancelMutation, resumeMutation,
     merchantAddress: process.env.NEXT_PUBLIC_MERCHANT_ADDRESS,

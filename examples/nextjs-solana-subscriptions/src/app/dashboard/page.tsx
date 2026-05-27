@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Wallet, Coins, ClipboardList, Repeat, ArrowDownLeft } from "lucide-react";
+import { Loader2, Wallet, Coins, ClipboardList, Repeat, ArrowDownLeft, ArrowUpCircle } from "lucide-react";
 import { useWallet } from "@/lib/providers";
+import { useUser } from "@dynamic-labs-sdk/react-hooks";
 import {
   useSubscriptionOperations,
   useMyPlansOperations,
   useDelegationOperations,
   useWalletBalances,
 } from "@/lib/subscriptions";
+import { fundWalletWithSol } from "@/lib/useCheckoutFunding";
+import { toast } from "@/lib/toast";
 
 function StatCard({
   icon: Icon,
@@ -44,7 +47,11 @@ function StatCard({
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
-  const { loggedIn } = useWallet();
+  const [toppingUp, setToppingUp] = useState(false);
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState("5");
+  const { loggedIn, solanaAccount } = useWallet();
+  const user = useUser();
 
   const { solBalance, tokenBalance, loading: loadingBalances } = useWalletBalances();
   const { userSubscriptions, loadingSubscriptions } = useSubscriptionOperations();
@@ -59,6 +66,23 @@ export default function DashboardPage() {
 
   const solDisplay = (Number(solBalance) / 1e9).toFixed(4) + " SOL";
   const usdcDisplay = (Number(tokenBalance) / 1e6).toFixed(2) + " USDC";
+
+  const handleTopUp = async () => {
+    if (!solanaAccount) return;
+    const amount = parseFloat(topUpAmount);
+    if (!amount || amount <= 0) return;
+    setShowTopUpModal(false);
+    setToppingUp(true);
+    try {
+      await fundWalletWithSol(amount, solanaAccount.address, solanaAccount);
+      toast.success(`Topped up ${amount} USDC!`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Top up failed";
+      toast.error(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+    } finally {
+      setToppingUp(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 pb-24">
@@ -79,6 +103,27 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-8">
+          {/* Account info */}
+          <section>
+            <h2 className="text-sm font-semibold text-[#606060] uppercase tracking-wider mb-3">
+              Account
+            </h2>
+            <div className="rounded-xl border border-[#DADADA] bg-white p-5 space-y-3 text-sm">
+              {user?.email && (
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[#606060]">Email</span>
+                  <span className="text-[#030303] font-medium">{user.email}</span>
+                </div>
+              )}
+              {solanaAccount && (
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[#606060]">Wallet</span>
+                  <span className="font-mono text-xs text-[#030303]">{solanaAccount.address}</span>
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* Balances */}
           <section>
             <h2 className="text-sm font-semibold text-[#606060] uppercase tracking-wider mb-3">
@@ -93,14 +138,29 @@ export default function DashboardPage() {
                 iconColor="text-[#9945FF]"
                 iconBg="bg-[#9945FF]/10"
               />
-              <StatCard
-                icon={Coins}
-                label="USDC Balance"
-                value={usdcDisplay}
-                loading={loadingBalances}
-                iconColor="text-[#2775CA]"
-                iconBg="bg-[#2775CA]/10"
-              />
+              <div className="rounded-xl border border-[#DADADA] bg-white p-5 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-[#2775CA]/10 flex items-center justify-center shrink-0">
+                      <Coins className="w-4 h-4 text-[#2775CA]" />
+                    </div>
+                    <p className="text-xs font-medium text-[#606060]">USDC Balance</p>
+                  </div>
+                  <button
+                    onClick={() => setShowTopUpModal(true)}
+                    disabled={toppingUp || !solanaAccount}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#4779FF] text-white hover:bg-[#3366ee] disabled:opacity-50 transition-colors"
+                  >
+                    {toppingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowUpCircle className="w-3 h-3" />}
+                    {toppingUp ? "Swapping…" : "Top Up"}
+                  </button>
+                </div>
+                {loadingBalances ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-[#606060]" />
+                ) : (
+                  <p className="text-2xl font-bold text-[#030303]">{usdcDisplay}</p>
+                )}
+              </div>
             </div>
           </section>
 
@@ -132,6 +192,42 @@ export default function DashboardPage() {
               />
             </div>
           </section>
+        </div>
+      )}
+
+      {showTopUpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl border border-[#DADADA] p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-[#030303]">Top Up USDC</h2>
+            <p className="text-xs text-[#606060]">Swap SOL → USDC via Dynamic. Enter the USD amount to receive.</p>
+            <div>
+              <label className="block text-xs font-medium text-[#606060] mb-1">Amount (USD)</label>
+              <input
+                type="number"
+                min="0.01"
+                step="any"
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                className="w-full rounded-lg border border-[#DADADA] px-3 py-2 text-sm text-[#030303] focus:outline-none focus:ring-2 focus:ring-[#4779FF]/30"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowTopUpModal(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium border border-[#DADADA] text-[#606060] hover:bg-[#F9F9F9] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTopUp}
+                disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}
+                className="flex-1 py-2 rounded-lg text-sm font-medium bg-[#4779FF] text-white hover:bg-[#3366ee] disabled:opacity-50 transition-colors"
+              >
+                Swap
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

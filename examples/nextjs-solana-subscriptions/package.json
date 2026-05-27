@@ -12,9 +12,9 @@
     "clean": "rm -rf .next && rm -rf node_modules/.cache"
   },
   "dependencies": {
-    "@dynamic-labs-sdk/client": "1.2.1",
-    "@dynamic-labs-sdk/react-hooks": "0.26.5",
-    "@dynamic-labs-sdk/solana": "1.2.1",
+    "@dynamic-labs-sdk/client": "1.4.0",
+    "@dynamic-labs-sdk/react-hooks": "0.26.10",
+    "@dynamic-labs-sdk/solana": "1.4.0",
     "@solana-program/token": "^0.13.0",
     "@solana/kit": "6.8.0",
     "@solana/subscriptions": "0.2.0",
