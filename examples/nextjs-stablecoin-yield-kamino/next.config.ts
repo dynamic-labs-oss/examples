@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { NormalModuleReplacementPlugin } = require("webpack");
 
@@ -28,11 +27,17 @@ const nextConfig: NextConfig = {
 
     // Ensure webpack can resolve @kamino-finance/farms-sdk subpaths when the
     // pnpm virtual-store cache is partially restored on Vercel (stale symlinks).
+    // Uses require.resolve so Node's module resolution handles pnpm symlinks correctly.
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@kamino-finance/farms-sdk/dist/@codegen/farms/programId": path.resolve(
-        __dirname,
-        "node_modules/@kamino-finance/farms-sdk/dist/@codegen/farms/programId.js"
+      "@kamino-finance/farms-sdk/dist/@codegen/farms/programId": require.resolve(
+        "@kamino-finance/farms-sdk/dist/@codegen/farms/programId"
+      ),
+      "@kamino-finance/farms-sdk/dist/utils/apy": require.resolve(
+        "@kamino-finance/farms-sdk/dist/utils/apy"
+      ),
+      "@kamino-finance/farms-sdk/dist/utils/option": require.resolve(
+        "@kamino-finance/farms-sdk/dist/utils/option"
       ),
     };
 
