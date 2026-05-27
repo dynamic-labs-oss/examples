@@ -38,7 +38,8 @@ interface CashPickupWidgetProps {
 }
 
 function getAddressForChain(chain: MgChain, accounts: WalletAccount[]): string {
-  if (chain === "solana") return accounts.find(isSolanaWalletAccount)?.address ?? "";
+  if (chain === "solana")
+    return accounts.find(isSolanaWalletAccount)?.address ?? "";
   return accounts.find(isEvmWalletAccount)?.address ?? "";
 }
 
@@ -57,10 +58,18 @@ export function CashPickupWidget({
   const onSuccessRef = useRef(onSuccess);
   const pendingAmountRef = useRef(0);
 
-  useEffect(() => { selectedChainRef.current = selectedChain; }, [selectedChain]);
-  useEffect(() => { walletAccountsRef.current = walletAccounts; }, [walletAccounts]);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+  useEffect(() => {
+    selectedChainRef.current = selectedChain;
+  }, [selectedChain]);
+  useEffect(() => {
+    walletAccountsRef.current = walletAccounts;
+  }, [walletAccounts]);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
 
   useEffect(() => {
     if (!open) return;
@@ -164,7 +173,10 @@ export function CashPickupWidget({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
       <div className="relative w-full max-w-md h-[600px] rounded-2xl overflow-hidden shadow-2xl">
         <iframe
           ref={iframeRef}

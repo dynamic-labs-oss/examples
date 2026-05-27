@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { NormalModuleReplacementPlugin } = require("webpack");
 
@@ -23,6 +24,30 @@ const nextConfig: NextConfig = {
     config.module.rules.push({
       test: /\.wasm$/,
       type: "webassembly/async",
+    });
+
+    // Redirect farms-sdk subpath imports from klend-sdk to the top-level
+    // farms-sdk installation. Required when Vercel restores a cached
+    // node_modules with stale pnpm virtual-store symlinks for klend-sdk.
+    // Uses NormalModuleReplacementPlugin (evaluated at webpack time) rather
+    // than resolve.alias or require.resolve (evaluated at config eval time).
+    const farmsBase = path.resolve(
+      __dirname,
+      "node_modules/@kamino-finance/farms-sdk/dist"
+    );
+    [
+      ["@codegen/farms/programId", "programId.js"],
+      ["utils/apy", "apy.js"],
+      ["utils/option", "option.js"],
+    ].forEach(([subpath, file]) => {
+      config.plugins.push(
+        new NormalModuleReplacementPlugin(
+          new RegExp(
+            `^@kamino-finance/farms-sdk/dist/${subpath.replace("/", "/")}$`
+          ),
+          path.join(farmsBase, subpath.replace(/[^/]+$/, ""), file)
+        )
+      );
     });
 
     if (!isServer) {

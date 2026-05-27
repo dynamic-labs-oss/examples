@@ -4,8 +4,8 @@ A cross-chain swap demo using **Dynamic's JavaScript SDK** (no React SDK depende
 
 ## Features
 
-- **Dynamic JS SDK**: Headless auth with email OTP, Google OAuth, and injected EVM wallets via `@dynamic-labs-sdk/client`
-- **Embedded EVM Wallets**: WaaS wallets created automatically on sign-up via `@dynamic-labs-sdk/evm`
+- **Dynamic JS SDK**: Headless auth with email OTP, Google OAuth, and injected EVM wallets via `@dynamic-labs/client`
+- **Embedded EVM Wallets**: WaaS wallets created automatically on sign-up via `@dynamic-labs/evm`
 - **Mayan Routing**: Cross-chain quotes and swap execution using `@mayanfinance/swap-sdk`
 - **EVM → Any Chain**: Source chain must be EVM; destination supports Solana, Sui, HyperCore, and all EVM chains
 - **ERC-20 Approvals**: Automatic allowance check and approval before swap execution
@@ -13,12 +13,12 @@ A cross-chain swap demo using **Dynamic's JavaScript SDK** (no React SDK depende
 
 ## Tech Stack
 
-| Layer | Library |
-|---|---|
-| Auth & Wallets | `@dynamic-labs-sdk/client` + `@dynamic-labs-sdk/evm` |
-| Chain interaction | `viem` |
-| Cross-chain swaps | `@mayanfinance/swap-sdk` |
-| UI | Next.js 15, Tailwind CSS |
+| Layer             | Library                                      |
+| ----------------- | -------------------------------------------- |
+| Auth & Wallets    | `@dynamic-labs/client` + `@dynamic-labs/evm` |
+| Chain interaction | `viem`                                       |
+| Cross-chain swaps | `@mayanfinance/swap-sdk`                     |
+| UI                | Next.js 15, Tailwind CSS                     |
 
 ## Getting Started
 
@@ -59,10 +59,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Supported Networks
 
-| Direction | Chains |
-|---|---|
-| FROM (source) | Ethereum, Polygon, BSC, Avalanche, Arbitrum, Optimism, Base |
-| TO (destination) | All of the above + Solana, Sui, HyperCore |
+| Direction        | Chains                                                      |
+| ---------------- | ----------------------------------------------------------- |
+| FROM (source)    | Ethereum, Polygon, BSC, Avalanche, Arbitrum, Optimism, Base |
+| TO (destination) | All of the above + Solana, Sui, HyperCore                   |
 
 ## Learn More
 

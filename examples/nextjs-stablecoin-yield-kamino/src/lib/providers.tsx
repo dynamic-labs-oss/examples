@@ -3,7 +3,6 @@
 import {
   createContext,
   useContext,
-  useState,
   useEffect,
   useCallback,
   type ReactNode,
@@ -22,6 +21,7 @@ import {
   type SolanaWalletAccount,
 } from "@dynamic-labs-sdk/solana";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DynamicProvider, useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
 
 interface WalletContextValue {
@@ -51,94 +51,64 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function Providers({ children }: { children: ReactNode }) {
-  const [solanaAccount, setSolanaAccount] =
-    useState<SolanaWalletAccount | null>(null);
-  const [loggedIn, setLoggedIn] = useState(false);
-
-  const refresh = useCallback(() => {
-    const accounts = getWalletAccounts(dynamicClient);
-    const solana = accounts.find(isSolanaWalletAccount) ?? null;
-    setSolanaAccount(solana);
-    setLoggedIn(isSignedIn(dynamicClient));
-  }, []);
+function InnerProviders({ children }: { children: ReactNode }) {
+  const loggedIn = useUser() !== null;
+  const solanaAccount = useWalletAccounts().find(isSolanaWalletAccount) ?? null;
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);
-    setSolanaAccount(null);
-    setLoggedIn(false);
   }, []);
 
-  // After a successful login (email OTP, Google, or external wallet), ensure
-  // the user has a Solana embedded wallet. Silently ignores errors (e.g. wallet
-  // already exists or WaaS not enabled for this environment).
   const ensureSolanaWallet = useCallback(async () => {
     try {
       const accounts = getWalletAccounts(dynamicClient);
-      const hasSolana = accounts.some(isSolanaWalletAccount);
-      if (!hasSolana && isSignedIn(dynamicClient)) {
+      if (!accounts.some(isSolanaWalletAccount) && isSignedIn(dynamicClient)) {
         await createWaasWalletAccounts({ chains: ["SOL"] }, dynamicClient);
       }
-    } catch {
-      // wallet may already exist — ignore
-    }
-    refresh();
-  }, [refresh]);
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    // Handle OAuth redirect (Google sign-in callback)
+    const unsub = onEvent(
+      {
+        event: "walletAccountsChanged",
+        listener: () => {
+          void ensureSolanaWallet();
+        },
+      },
+      dynamicClient,
+    );
+    return () => unsub?.();
+  }, [ensureSolanaWallet]);
+
+  useEffect(() => {
     const handleOAuthRedirect = async () => {
       if (typeof window === "undefined") return;
       try {
         const url = new URL(window.location.href);
-        const isOAuth = await detectOAuthRedirect({ url }, dynamicClient);
-        if (isOAuth) {
+        if (await detectOAuthRedirect({ url }, dynamicClient)) {
           await completeSocialAuthentication({ url }, dynamicClient);
           await ensureSolanaWallet();
-          // Clean up OAuth query params from URL
           window.history.replaceState({}, "", window.location.pathname);
-          return;
         }
-      } catch {
-        // not an OAuth redirect — continue normally
-      }
-      refresh();
+      } catch {}
     };
-
     handleOAuthRedirect();
-
-    const unsubWallets = onEvent(
-      {
-        event: "walletAccountsChanged",
-        listener: () => ensureSolanaWallet(),
-      },
-      dynamicClient
-    );
-
-    const unsubLogout = onEvent(
-      {
-        event: "logout",
-        listener: () => {
-          setSolanaAccount(null);
-          setLoggedIn(false);
-        },
-      },
-      dynamicClient
-    );
-
-    return () => {
-      unsubWallets();
-      unsubLogout();
-    };
-  }, [refresh, ensureSolanaWallet]);
+  }, [ensureSolanaWallet]);
 
   return (
     <WalletContext.Provider
       value={{ solanaAccount, loggedIn, ensureSolanaWallet, disconnect }}
     >
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WalletContext.Provider>
+  );
+}
+
+export default function Providers({ children }: { children: ReactNode }) {
+  return (
+    <DynamicProvider client={dynamicClient}>
+      <InnerProviders>{children}</InnerProviders>
+    </DynamicProvider>
   );
 }

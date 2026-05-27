@@ -3,7 +3,6 @@
 import {
   createContext,
   useContext,
-  useState,
   useEffect,
   useCallback,
   type ReactNode,
@@ -17,11 +16,9 @@ import {
   completeSocialAuthentication,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
-import {
-  isEvmWalletAccount,
-  type EvmWalletAccount,
-} from "@dynamic-labs-sdk/evm";
+import { isEvmWalletAccount, type EvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DynamicProvider, useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
 
 interface WalletContextValue {
@@ -51,20 +48,12 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function Providers({ children }: { children: ReactNode }) {
-  const [evmAccount, setEvmAccount] = useState<EvmWalletAccount | null>(null);
-  const [loggedIn, setLoggedIn] = useState(false);
-
-  const refresh = useCallback(() => {
-    const accounts = getWalletAccounts(dynamicClient);
-    setEvmAccount(accounts.find(isEvmWalletAccount) ?? null);
-    setLoggedIn(isSignedIn(dynamicClient));
-  }, []);
+function InnerProviders({ children }: { children: ReactNode }) {
+  const loggedIn = useUser() !== null;
+  const evmAccount = useWalletAccounts().find(isEvmWalletAccount) ?? null;
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);
-    setEvmAccount(null);
-    setLoggedIn(false);
   }, []);
 
   const ensureEvmWallet = useCallback(async () => {
@@ -76,8 +65,20 @@ export default function Providers({ children }: { children: ReactNode }) {
     } catch {
       // wallet may already exist — ignore
     }
-    refresh();
-  }, [refresh]);
+  }, []);
+
+  useEffect(() => {
+    const unsub = onEvent(
+      {
+        event: "walletAccountsChanged",
+        listener: () => {
+          void ensureEvmWallet();
+        },
+      },
+      dynamicClient,
+    );
+    return () => unsub?.();
+  }, [ensureEvmWallet]);
 
   useEffect(() => {
     const handleOAuthRedirect = async () => {
@@ -88,40 +89,27 @@ export default function Providers({ children }: { children: ReactNode }) {
           await completeSocialAuthentication({ url }, dynamicClient);
           await ensureEvmWallet();
           window.history.replaceState({}, "", window.location.pathname);
-          return;
         }
       } catch {
-        // not an OAuth redirect — continue normally
+        // not an OAuth redirect
       }
-      refresh();
     };
-
     handleOAuthRedirect();
-
-    const unsub1 = onEvent(
-      { event: "walletAccountsChanged", listener: () => ensureEvmWallet() },
-      dynamicClient
-    );
-    const unsub2 = onEvent(
-      {
-        event: "logout",
-        listener: () => {
-          setEvmAccount(null);
-          setLoggedIn(false);
-        },
-      },
-      dynamicClient
-    );
-
-    return () => {
-      unsub1();
-      unsub2();
-    };
-  }, [refresh, ensureEvmWallet]);
+  }, [ensureEvmWallet]);
 
   return (
-    <WalletContext.Provider value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}>
+    <WalletContext.Provider
+      value={{ evmAccount, loggedIn, ensureEvmWallet, disconnect }}
+    >
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WalletContext.Provider>
+  );
+}
+
+export default function Providers({ children }: { children: ReactNode }) {
+  return (
+    <DynamicProvider client={dynamicClient}>
+      <InnerProviders>{children}</InnerProviders>
+    </DynamicProvider>
   );
 }

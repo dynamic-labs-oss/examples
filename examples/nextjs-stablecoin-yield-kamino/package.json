@@ -12,8 +12,10 @@
     "clean": "rm -rf .next && rm -rf node_modules/.cache"
   },
   "dependencies": {
-    "@dynamic-labs-sdk/client": "^0.24.1",
-    "@dynamic-labs-sdk/solana": "^0.24.1",
+    "@dynamic-labs-sdk/client": "1.2.1",
+    "@dynamic-labs-sdk/react-hooks": "0.26.5",
+    "@dynamic-labs-sdk/solana": "1.2.1",
+    "@kamino-finance/farms-sdk": "^3.2.24",
     "@kamino-finance/klend-sdk": "^7.3.21",
     "@solana/kit": "^2.3.0",
     "@solana/spl-token": "^0.4.14",

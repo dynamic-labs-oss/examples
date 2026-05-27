@@ -63,18 +63,36 @@ function MarketsSkeleton() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[0, 1].map((i) => (
-          <div key={i} className="bg-white border border-earn-border rounded-xl p-5 space-y-4">
+          <div
+            key={i}
+            className="bg-white border border-earn-border rounded-xl p-5 space-y-4"
+          >
             <div className="flex items-center justify-between">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-5 w-14 rounded-full" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28" /></div>
-              <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-28" /></div>
-              <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-20" /></div>
-              <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-12" /></div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-28" />
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-5 w-28" />
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-5 w-20" />
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-12" />
+              </div>
             </div>
-            <div className="space-y-2"><Skeleton className="h-9 w-full rounded-lg" /><Skeleton className="h-9 w-full rounded-lg" /></div>
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-full rounded-lg" />
+              <Skeleton className="h-9 w-full rounded-lg" />
+            </div>
           </div>
         ))}
       </div>
@@ -114,32 +132,51 @@ function MarketsInterfaceInner({
         console.error("Wallet client creation failed:", err);
         setWalletClient(null);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [evmAccount, chainId]);
 
-  const { isOperating, executeSupply, executeBorrow, executeRepay, executeWithdraw } =
-    useTransactionOperations(walletClient, chainId);
+  const {
+    isOperating,
+    executeSupply,
+    executeBorrow,
+    executeRepay,
+    executeWithdraw,
+  } = useTransactionOperations(walletClient, chainId);
 
   const userAddress = useMemo(
-    () => evmAccount?.address ? evmAddress(evmAccount.address) : undefined,
-    [evmAccount?.address]
+    () => (evmAccount?.address ? evmAddress(evmAccount.address) : undefined),
+    [evmAccount?.address],
   );
 
-  const { data: markets, loading: marketsLoading, error: marketsError } = useAaveMarkets({
+  const {
+    data: markets,
+    loading: marketsLoading,
+    error: marketsError,
+  } = useAaveMarkets({
     chainIds: [aaveChainId(chainId)],
     user: userAddress,
   });
 
   const marketRefs = useMemo(
-    () => markets?.map((m) => ({ chainId: m.chain.chainId, address: m.address })) ?? [],
-    [markets]
+    () =>
+      markets?.map((m) => ({ chainId: m.chain.chainId, address: m.address })) ??
+      [],
+    [markets],
   );
 
-  const { data: userSupplies, loading: userSuppliesLoading, error: userSuppliesError } =
-    useUserSupplies({ markets: marketRefs, user: userAddress });
+  const {
+    data: userSupplies,
+    loading: userSuppliesLoading,
+    error: userSuppliesError,
+  } = useUserSupplies({ markets: marketRefs, user: userAddress });
 
-  const { data: userBorrows, loading: userBorrowsLoading, error: userBorrowsError } =
-    useUserBorrows({ markets: marketRefs, user: userAddress });
+  const {
+    data: userBorrows,
+    loading: userBorrowsLoading,
+    error: userBorrowsError,
+  } = useUserBorrows({ markets: marketRefs, user: userAddress });
 
   const friendlyError = (action: string, error: unknown): string => {
     const msg = error instanceof Error ? error.message : String(error);
@@ -170,8 +207,12 @@ function MarketsInterfaceInner({
   const handleWithdraw = wrap("Withdraw", executeWithdraw);
 
   const sortedMarkets = (markets ?? []).slice().sort((a, b) => {
-    const aFeatured = a.supplyReserves.some((r) => FEATURED_SYMBOLS.has(r.underlyingToken.symbol));
-    const bFeatured = b.supplyReserves.some((r) => FEATURED_SYMBOLS.has(r.underlyingToken.symbol));
+    const aFeatured = a.supplyReserves.some((r) =>
+      FEATURED_SYMBOLS.has(r.underlyingToken.symbol),
+    );
+    const bFeatured = b.supplyReserves.some((r) =>
+      FEATURED_SYMBOLS.has(r.underlyingToken.symbol),
+    );
     if (aFeatured !== bFeatured) return aFeatured ? -1 : 1;
     return 0;
   });
@@ -181,9 +222,12 @@ function MarketsInterfaceInner({
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-earn-text-primary">Aave Markets</h1>
+        <h1 className="text-2xl font-bold text-earn-text-primary">
+          Aave Markets
+        </h1>
         <p className="text-sm text-earn-text-secondary mt-1">
-          Supply assets and borrow against your collateral on {getChainName(chainId)}
+          Supply assets and borrow against your collateral on{" "}
+          {getChainName(chainId)}
         </p>
       </div>
 
@@ -202,7 +246,8 @@ function MarketsInterfaceInner({
       {evmAccount && walletChainId !== null && walletChainId !== chainId && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <p className="text-sm text-amber-800">
-            Wallet is on {getChainName(walletChainId)}. Switch in the network menu.
+            Wallet is on {getChainName(walletChainId)}. Switch in the network
+            menu.
           </p>
         </div>
       )}
@@ -246,11 +291,23 @@ function MarketsInterfaceInner({
 }
 
 type Market = NonNullable<ReturnType<typeof useAaveMarkets>["data"]>[number];
-type UserSupply = NonNullable<ReturnType<typeof useUserSupplies>["data"]>[number];
-type UserBorrow = NonNullable<ReturnType<typeof useUserBorrows>["data"]>[number];
+type UserSupply = NonNullable<
+  ReturnType<typeof useUserSupplies>["data"]
+>[number];
+type UserBorrow = NonNullable<
+  ReturnType<typeof useUserBorrows>["data"]
+>[number];
 
 function MarketsSection({
-  loading, error, markets, chainId, isOperating, primaryWallet, onChainChange, onSupply, onBorrow,
+  loading,
+  error,
+  markets,
+  chainId,
+  isOperating,
+  primaryWallet,
+  onChainChange,
+  onSupply,
+  onBorrow,
 }: Readonly<{
   loading: boolean;
   error: unknown;
@@ -263,7 +320,8 @@ function MarketsSection({
   onBorrow: (...args: string[]) => void;
 }>) {
   if (loading) return <MarketCardSkeletons count={2} cols="md:grid-cols-2" />;
-  if (error) return <ErrorBox message={`Error loading markets: ${String(error)}`} />;
+  if (error)
+    return <ErrorBox message={`Error loading markets: ${String(error)}`} />;
   if (markets.length > 0) {
     return (
       <section>
@@ -291,7 +349,9 @@ function MarketsSection({
           No markets found for {getChainName(chainId)}.
         </p>
         <div className="space-y-2">
-          <p className="text-xs text-earn-text-secondary">Try switching to a supported network:</p>
+          <p className="text-xs text-earn-text-secondary">
+            Try switching to a supported network:
+          </p>
           <div className="flex flex-wrap gap-2">
             {[mainnet, base, polygon].map((chain) => (
               <Button
@@ -313,7 +373,14 @@ function MarketsSection({
 }
 
 function SuppliesSection({
-  loading, error, supplies, isOperating, evmAccount, onSupply, onBorrow, onWithdraw,
+  loading,
+  error,
+  supplies,
+  isOperating,
+  evmAccount,
+  onSupply,
+  onBorrow,
+  onWithdraw,
 }: Readonly<{
   loading: boolean;
   error: unknown;
@@ -332,7 +399,9 @@ function SuppliesSection({
       ) : error ? (
         <ErrorBox message={`Error loading supplies: ${String(error)}`} />
       ) : supplies && supplies.length > 0 ? (
-        <div className={`grid grid-cols-1 gap-4 ${supplies.length >= 2 ? "md:grid-cols-2 lg:grid-cols-3" : ""}`}>
+        <div
+          className={`grid grid-cols-1 gap-4 ${supplies.length >= 2 ? "md:grid-cols-2 lg:grid-cols-3" : ""}`}
+        >
           {supplies.map((supply) => (
             <SupplyCard
               key={`${supply.market.address}-${supply.currency.address}`}
@@ -353,7 +422,12 @@ function SuppliesSection({
 }
 
 function BorrowsSection({
-  loading, error, borrows, isOperating, evmAccount, onRepay,
+  loading,
+  error,
+  borrows,
+  isOperating,
+  evmAccount,
+  onRepay,
 }: Readonly<{
   loading: boolean;
   error: unknown;
@@ -366,7 +440,11 @@ function BorrowsSection({
     <section className="pb-8">
       <SectionHeading>Your Borrows</SectionHeading>
       {loading ? (
-        <MarketCardSkeletons count={2} cols="md:grid-cols-2 lg:grid-cols-3" compact />
+        <MarketCardSkeletons
+          count={2}
+          cols="md:grid-cols-2 lg:grid-cols-3"
+          compact
+        />
       ) : error ? (
         <ErrorBox message={`Error loading borrows: ${String(error)}`} />
       ) : borrows && borrows.length > 0 ? (
@@ -413,23 +491,40 @@ function EmptyBox({ message }: Readonly<{ message: string }>) {
 }
 
 function MarketCardSkeletons({
-  count, cols, compact = false,
+  count,
+  cols,
+  compact = false,
 }: Readonly<{ count: number; cols: string; compact?: boolean }>) {
   return (
     <div className={`grid grid-cols-1 ${cols} gap-4`}>
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="bg-white border border-earn-border rounded-xl p-5 space-y-3">
+        <div
+          key={i}
+          className="bg-white border border-earn-border rounded-xl p-5 space-y-3"
+        >
           <div className="flex items-center justify-between">
             <Skeleton className="h-5 w-32" />
             <Skeleton className="h-5 w-14 rounded-full" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-28" /></div>
-            <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-28" /></div>
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-5 w-28" />
+            </div>
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-28" />
+            </div>
             {!compact && (
               <>
-                <div className="space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-20" /></div>
-                <div className="space-y-1.5"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-12" /></div>
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-5 w-20" />
+                </div>
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-5 w-12" />
+                </div>
               </>
             )}
           </div>

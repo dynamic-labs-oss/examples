@@ -17,11 +17,14 @@ import { useWallet } from "@/lib/providers";
 type AuthStep = "idle" | "menu" | "email" | "otp" | "wallets" | "networks";
 
 export default function DynamicButton() {
-  const { evmAccount, loggedIn, ensureEvmWallet, disconnect, setChainId } = useWallet();
+  const { evmAccount, loggedIn, ensureEvmWallet, disconnect, setChainId } =
+    useWallet();
   const [step, setStep] = useState<AuthStep>("idle");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpVerification, setOtpVerification] = useState<Awaited<ReturnType<typeof sendEmailOTP>> | null>(null);
+  const [otpVerification, setOtpVerification] = useState<Awaited<
+    ReturnType<typeof sendEmailOTP>
+  > | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -45,9 +48,9 @@ export default function DynamicButton() {
 
   useEffect(() => {
     if (step !== "networks" || !evmAccount) return;
-    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient).then(
-      (result) => setActiveNetworkId(result.networkId)
-    ).catch(() => setActiveNetworkId(null));
+    getActiveNetworkId({ walletAccount: evmAccount }, dynamicClient)
+      .then((result) => setActiveNetworkId(result.networkId))
+      .catch(() => setActiveNetworkId(null));
   }, [step, evmAccount]);
 
   const handleGoogleAuth = async () => {
@@ -56,7 +59,7 @@ export default function DynamicButton() {
     try {
       await authenticateWithSocial(
         { provider: "google", redirectUrl: globalThis.location.href },
-        dynamicClient
+        dynamicClient,
       );
     } catch {
       setError("Google sign-in failed. Please try again.");
@@ -85,7 +88,10 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
+      await verifyOTP(
+        { otpVerification, verificationToken: otp },
+        dynamicClient,
+      );
       await ensureEvmWallet();
       setStep("idle");
       setShowDropdown(false);
@@ -110,7 +116,7 @@ export default function DynamicButton() {
     try {
       await connectAndVerifyWithWalletProvider(
         { walletProviderKey: providerKey },
-        dynamicClient
+        dynamicClient,
       );
       await ensureEvmWallet();
       setShowDropdown(false);
@@ -125,11 +131,16 @@ export default function DynamicButton() {
   if (loggedIn && evmAccount) {
     const addr = evmAccount.address;
     const short = `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-    const evmNetworks = getNetworksData(dynamicClient).filter((n) => n.chain === "EVM");
+    const evmNetworks = getNetworksData(dynamicClient).filter(
+      (n) => n.chain === "EVM",
+    );
     return (
       <div className="relative" ref={dropdownRef}>
         <button
-          onClick={() => { setShowDropdown((v) => !v); setStep("idle"); }}
+          onClick={() => {
+            setShowDropdown((v) => !v);
+            setStep("idle");
+          }}
           className="cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors"
           style={{
             borderColor: "#DADADA",
@@ -148,7 +159,11 @@ export default function DynamicButton() {
         {showDropdown && (
           <div
             className="absolute right-0 mt-1 rounded-xl shadow-lg border z-50 overflow-hidden"
-            style={{ borderColor: "#DADADA", background: "#fff", minWidth: "12rem" }}
+            style={{
+              borderColor: "#DADADA",
+              background: "#fff",
+              minWidth: "12rem",
+            }}
           >
             {step !== "networks" ? (
               <>
@@ -180,12 +195,22 @@ export default function DynamicButton() {
                   className="cursor-pointer text-xs flex items-center gap-1 mb-1"
                   style={{ color: "#606060" }}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
                     <path d="m15 18-6-6 6-6" />
                   </svg>
                   Back
                 </button>
-                <p className="text-xs font-medium pb-1" style={{ color: "#030303" }}>
+                <p
+                  className="text-xs font-medium pb-1"
+                  style={{ color: "#030303" }}
+                >
                   Select network
                 </p>
                 {error && <p className="text-xs text-red-500">{error}</p>}
@@ -199,7 +224,13 @@ export default function DynamicButton() {
                         setLoading(true);
                         setError(null);
                         try {
-                          await switchActiveNetwork({ networkId: n.networkId, walletAccount: evmAccount }, dynamicClient);
+                          await switchActiveNetwork(
+                            {
+                              networkId: n.networkId,
+                              walletAccount: evmAccount,
+                            },
+                            dynamicClient,
+                          );
                           setActiveNetworkId(n.networkId);
                           setChainId(Number(n.networkId));
                           setShowDropdown(false);
@@ -218,11 +249,24 @@ export default function DynamicButton() {
                     >
                       {n.iconUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={n.iconUrl} alt={n.displayName} width={16} height={16} className="rounded-full" />
+                        <img
+                          src={n.iconUrl}
+                          alt={n.displayName}
+                          width={16}
+                          height={16}
+                          className="rounded-full"
+                        />
                       )}
                       <span className="flex-1 text-left">{n.displayName}</span>
                       {isActive && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
                           <path d="m20 6-11 11-5-5" />
                         </svg>
                       )}
@@ -256,9 +300,7 @@ export default function DynamicButton() {
           className="absolute right-0 mt-1 w-72 rounded-xl shadow-lg border z-50 p-4 space-y-3"
           style={{ borderColor: "#DADADA", background: "#fff" }}
         >
-          {error && (
-            <p className="text-xs text-red-500 text-center">{error}</p>
-          )}
+          {error && <p className="text-xs text-red-500 text-center">{error}</p>}
 
           {step === "menu" && (
             <>
@@ -308,10 +350,7 @@ export default function DynamicButton() {
                 Continue with Email
               </button>
 
-              <div
-                className="border-t pt-3"
-                style={{ borderColor: "#DADADA" }}
-              >
+              <div className="border-t pt-3" style={{ borderColor: "#DADADA" }}>
                 <button
                   onClick={handleConnectWallet}
                   disabled={loading}
@@ -339,11 +378,21 @@ export default function DynamicButton() {
           {step === "wallets" && (
             <>
               <button
-                onClick={() => { setStep("menu"); setError(null); }}
+                onClick={() => {
+                  setStep("menu");
+                  setError(null);
+                }}
                 className="cursor-pointer text-xs flex items-center gap-1"
                 style={{ color: "#606060" }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="m15 18-6-6 6-6" />
                 </svg>
                 Back
@@ -363,7 +412,13 @@ export default function DynamicButton() {
                   >
                     {p.metadata.icon && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.metadata.icon} alt={p.metadata.displayName} width={16} height={16} className="rounded" />
+                      <img
+                        src={p.metadata.icon}
+                        alt={p.metadata.displayName}
+                        width={16}
+                        height={16}
+                        className="rounded"
+                      />
                     )}
                     {p.metadata.displayName}
                   </button>
@@ -393,10 +448,7 @@ export default function DynamicButton() {
                 </svg>
                 Back
               </button>
-              <p
-                className="text-xs font-medium"
-                style={{ color: "#030303" }}
-              >
+              <p className="text-xs font-medium" style={{ color: "#030303" }}>
                 Enter your email
               </p>
               <input

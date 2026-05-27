@@ -18,18 +18,23 @@ interface VaultInfo {
 
 function getViemChain(chainId: number) {
   switch (chainId) {
-    case mainnet.id: return mainnet;
-    case arbitrum.id: return arbitrum;
-    case optimism.id: return optimism;
-    case polygon.id: return polygon;
-    default: return base;
+    case mainnet.id:
+      return mainnet;
+    case arbitrum.id:
+      return arbitrum;
+    case optimism.id:
+      return optimism;
+    case polygon.id:
+      return polygon;
+    default:
+      return base;
   }
 }
 
 export function useVaultOperations(
   address: string | undefined,
   vaultInfo: VaultInfo | null,
-  onSuccess?: () => void
+  onSuccess?: () => void,
 ) {
   const { chainId, evmAccount } = useWallet();
   const [amount, setAmount] = useState("");
@@ -106,13 +111,19 @@ export function useVaultOperations(
 
   useEffect(() => {
     if (!address || !vaultInfo) return;
-    const client = createPublicClient({ chain: getViemChain(chainId), transport: http() });
-    client.readContract({
-      address: vaultInfo.asset.address as `0x${string}`,
-      abi: ERC20_ABI,
-      functionName: "allowance",
-      args: [address as `0x${string}`, vaultInfo.address as `0x${string}`],
-    }).then((al) => setAllowance(al as bigint)).catch(() => {});
+    const client = createPublicClient({
+      chain: getViemChain(chainId),
+      transport: http(),
+    });
+    client
+      .readContract({
+        address: vaultInfo.asset.address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "allowance",
+        args: [address as `0x${string}`, vaultInfo.address as `0x${string}`],
+      })
+      .then((al) => setAllowance(al as bigint))
+      .catch(() => {});
   }, [address, vaultInfo?.address, chainId]);
 
   const handleDepositAfterApproval = async () => {
@@ -125,7 +136,10 @@ export function useVaultOperations(
         address: vaultInfo.address as `0x${string}`,
         abi: ERC4626_ABI,
         functionName: "deposit",
-        args: [parseUnits(amount, vaultInfo.asset.decimals), address as `0x${string}`],
+        args: [
+          parseUnits(amount, vaultInfo.asset.decimals),
+          address as `0x${string}`,
+        ],
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
@@ -133,7 +147,9 @@ export function useVaultOperations(
       setSuccessStatus(createTxStatusMessage("Deposit", true));
       refetchData();
     } catch (e: unknown) {
-      setTxStatus(createTxStatusMessage("Deposit", false, formatErrorMessage(e)));
+      setTxStatus(
+        createTxStatusMessage("Deposit", false, formatErrorMessage(e)),
+      );
       setPendingDeposit(false);
     }
   };
@@ -151,7 +167,10 @@ export function useVaultOperations(
         address: vaultInfo.asset.address as `0x${string}`,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [vaultInfo.address as `0x${string}`, parseUnits(amount, vaultInfo.asset.decimals)],
+        args: [
+          vaultInfo.address as `0x${string}`,
+          parseUnits(amount, vaultInfo.asset.decimals),
+        ],
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
@@ -161,7 +180,9 @@ export function useVaultOperations(
         handleDepositAfterApproval();
       }, 1000);
     } catch (e: unknown) {
-      setTxStatus(createTxStatusMessage("Approval", false, formatErrorMessage(e)));
+      setTxStatus(
+        createTxStatusMessage("Approval", false, formatErrorMessage(e)),
+      );
       setPendingDeposit(false);
     } finally {
       setIsApproving(false);
@@ -181,7 +202,10 @@ export function useVaultOperations(
         address: vaultInfo.address as `0x${string}`,
         abi: ERC4626_ABI,
         functionName: "deposit",
-        args: [parseUnits(amount, vaultInfo.asset.decimals), address as `0x${string}`],
+        args: [
+          parseUnits(amount, vaultInfo.asset.decimals),
+          address as `0x${string}`,
+        ],
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
@@ -189,7 +213,9 @@ export function useVaultOperations(
       setSuccessStatus(createTxStatusMessage("Deposit", true));
       refetchData();
     } catch (e: unknown) {
-      setTxStatus(createTxStatusMessage("Deposit", false, formatErrorMessage(e)));
+      setTxStatus(
+        createTxStatusMessage("Deposit", false, formatErrorMessage(e)),
+      );
       setPendingDeposit(false);
     } finally {
       setIsDepositing(false);
@@ -220,7 +246,9 @@ export function useVaultOperations(
       setSuccessStatus(createTxStatusMessage("Withdraw", true));
       refetchData();
     } catch (e: unknown) {
-      setTxStatus(createTxStatusMessage("Withdraw", false, formatErrorMessage(e)));
+      setTxStatus(
+        createTxStatusMessage("Withdraw", false, formatErrorMessage(e)),
+      );
     } finally {
       setIsWithdrawing(false);
     }

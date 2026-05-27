@@ -8,25 +8,38 @@ import { useWallet } from "@/lib/providers";
 
 function getViemChain(chainId: number) {
   switch (chainId) {
-    case mainnet.id: return mainnet;
-    case arbitrum.id: return arbitrum;
-    case optimism.id: return optimism;
-    case polygon.id: return polygon;
-    default: return base;
+    case mainnet.id:
+      return mainnet;
+    case arbitrum.id:
+      return arbitrum;
+    case optimism.id:
+      return optimism;
+    case polygon.id:
+      return polygon;
+    default:
+      return base;
   }
 }
 
 export function useMarketsOperations(
   address: string | undefined,
-  loanTokenDecimals: number = 18
+  loanTokenDecimals: number = 18,
 ) {
   const { chainId, evmAccount } = useWallet();
   const [amount, setAmount] = useState("");
   const [txStatus, setTxStatus] = useState("");
-  const [loanTokenBalance, setLoanTokenBalance] = useState<bigint | undefined>();
-  const [collateralBalance, setCollateralBalance] = useState<bigint | undefined>();
-  const [loanTokenAllowance, setLoanTokenAllowance] = useState<bigint | undefined>();
-  const [collateralAllowance, setCollateralAllowance] = useState<bigint | undefined>();
+  const [loanTokenBalance, setLoanTokenBalance] = useState<
+    bigint | undefined
+  >();
+  const [collateralBalance, setCollateralBalance] = useState<
+    bigint | undefined
+  >();
+  const [loanTokenAllowance, setLoanTokenAllowance] = useState<
+    bigint | undefined
+  >();
+  const [collateralAllowance, setCollateralAllowance] = useState<
+    bigint | undefined
+  >();
   const [isApprovingLoanToken, setIsApprovingLoanToken] = useState(false);
   const [isApprovingCollateral, setIsApprovingCollateral] = useState(false);
   const [isSupplying, setIsSupplying] = useState(false);
@@ -66,13 +79,19 @@ export function useMarketsOperations(
           address: marketParams.loanToken as `0x${string}`,
           abi: ERC20_ABI,
           functionName: "allowance",
-          args: [address as `0x${string}`, contracts.morphoMarkets as `0x${string}`],
+          args: [
+            address as `0x${string}`,
+            contracts.morphoMarkets as `0x${string}`,
+          ],
         }),
         publicClient.readContract({
           address: marketParams.collateralToken as `0x${string}`,
           abi: ERC20_ABI,
           functionName: "allowance",
-          args: [address as `0x${string}`, contracts.morphoMarkets as `0x${string}`],
+          args: [
+            address as `0x${string}`,
+            contracts.morphoMarkets as `0x${string}`,
+          ],
         }),
       ]);
       setLoanTokenBalance(lb as bigint);
@@ -95,7 +114,10 @@ export function useMarketsOperations(
         address: marketParams.loanToken as `0x${string}`,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [contracts.morphoMarkets as `0x${string}`, parseUnits(amount, loanTokenDecimals)],
+        args: [
+          contracts.morphoMarkets as `0x${string}`,
+          parseUnits(amount, loanTokenDecimals),
+        ],
         account: address as `0x${string}`,
       });
       await walletClient.writeContract(request);
@@ -106,7 +128,7 @@ export function useMarketsOperations(
         "Loan token approval failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsApprovingLoanToken(false);
@@ -136,7 +158,7 @@ export function useMarketsOperations(
         "Collateral approval failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsApprovingCollateral(false);
@@ -172,7 +194,7 @@ export function useMarketsOperations(
         "Supply failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsSupplying(false);
@@ -207,7 +229,7 @@ export function useMarketsOperations(
         "Withdraw failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsWithdrawing(false);
@@ -242,7 +264,7 @@ export function useMarketsOperations(
         "Borrow failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsBorrowing(false);
@@ -276,7 +298,7 @@ export function useMarketsOperations(
         "Repay failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsRepaying(false);

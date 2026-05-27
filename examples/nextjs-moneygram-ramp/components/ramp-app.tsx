@@ -2,29 +2,37 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  isSignedIn,
   sendEmailOTP,
   verifyOTP,
   getWalletAccounts,
-  onEvent,
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
-import { initDynamic, dynamicClient } from "@/lib/dynamic";
+import { dynamicClient } from "@/lib/dynamic";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
 import type { WalletAccount } from "@dynamic-labs-sdk/client";
-import { ArrowRight, Banknote, Check, Copy, Globe, Wallet, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  Banknote,
+  Check,
+  Copy,
+  Globe,
+  Wallet,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import { ChainSelector } from "./chain-selector";
 import { CashPickupWidget } from "./cash-pickup-widget";
 import { CHAINS, type MgChain } from "@/lib/chains";
 import { fetchUsdcBalance } from "@/lib/balance";
+import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function getAddressForChain(chain: MgChain, accounts: WalletAccount[]): string {
-  if (chain === "solana") return accounts.find(isSolanaWalletAccount)?.address ?? "";
+  if (chain === "solana")
+    return accounts.find(isSolanaWalletAccount)?.address ?? "";
   return accounts.find(isEvmWalletAccount)?.address ?? "";
 }
 
@@ -36,8 +44,8 @@ function truncate(addr: string): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function RampApp() {
-  const [signedIn, setSignedIn] = useState(false);
-  const [walletAccounts, setWalletAccounts] = useState<WalletAccount[]>([]);
+  const signedIn = useUser() !== null;
+  const walletAccounts = useWalletAccounts();
   const [selectedChain, setSelectedChain] = useState<MgChain>("base");
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [widgetOpen, setWidgetOpen] = useState(false);
@@ -45,43 +53,17 @@ export function RampApp() {
 
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpVerification, setOtpVerification] = useState<OTPVerification | null>(null);
+  const [otpVerification, setOtpVerification] =
+    useState<OTPVerification | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    let unsubToken: (() => void) | undefined;
-    let unsubWallets: (() => void) | undefined;
-    initDynamic().then(async () => {
-      if (isSignedIn()) {
-        const existing = getWalletAccounts();
-        if (existing.length === 0) {
-          await createWaasWalletAccounts({ chains: ["EVM", "SOL"] }, dynamicClient);
-        }
-        setSignedIn(true);
-        setWalletAccounts(getWalletAccounts());
-      }
-      unsubToken = onEvent(
-        { event: "tokenChanged", listener: ({ token }) => {
-          setSignedIn(!!token);
-          if (!token) setWalletAccounts([]);
-        }},
-        dynamicClient,
-      );
-      unsubWallets = onEvent(
-        { event: "walletAccountsChanged", listener: ({ walletAccounts }) => setWalletAccounts(walletAccounts) },
-        dynamicClient,
-      );
-    });
-    return () => {
-      unsubToken?.();
-      unsubWallets?.();
-    };
-  }, []);
 
   const address = getAddressForChain(selectedChain, walletAccounts);
 
   useEffect(() => {
-    if (!address) { setUsdcBalance(null); return; }
+    if (!address) {
+      setUsdcBalance(null);
+      return;
+    }
     setUsdcBalance(null);
     fetchUsdcBalance(selectedChain, address).then(setUsdcBalance);
   }, [selectedChain, address]);
@@ -105,7 +87,10 @@ export function RampApp() {
     try {
       await verifyOTP({ otpVerification, verificationToken: otp });
       if (getWalletAccounts().length === 0) {
-        await createWaasWalletAccounts({ chains: ["EVM", "SOL"] }, dynamicClient);
+        await createWaasWalletAccounts(
+          { chains: ["EVM", "SOL"] },
+          dynamicClient,
+        );
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid code");
@@ -114,10 +99,16 @@ export function RampApp() {
     }
   };
 
-  const handleSuccess = useCallback((amount: number) => {
-    toast.success(`${amount > 0 ? `$${amount.toFixed(2)} USDC` : "Funds"} sent for cash pickup on ${CHAINS[selectedChain].name}`);
-    if (address) fetchUsdcBalance(selectedChain, address).then(setUsdcBalance);
-  }, [selectedChain, address]);
+  const handleSuccess = useCallback(
+    (amount: number) => {
+      toast.success(
+        `${amount > 0 ? `$${amount.toFixed(2)} USDC` : "Funds"} sent for cash pickup on ${CHAINS[selectedChain].name}`,
+      );
+      if (address)
+        fetchUsdcBalance(selectedChain, address).then(setUsdcBalance);
+    },
+    [selectedChain, address],
+  );
 
   // ── Landing / Auth ──────────────────────────────────────────────────────────
 
@@ -137,8 +128,8 @@ export function RampApp() {
               </span>
             </h1>
             <p className="text-lg text-gray-400 mb-10 max-w-md mx-auto leading-relaxed">
-              Off-ramp your USDC across Base, Ethereum, and Solana. Pick up
-              cash at thousands of locations worldwide.
+              Off-ramp your USDC across Base, Ethereum, and Solana. Pick up cash
+              at thousands of locations worldwide.
             </p>
 
             {/* Auth card */}
@@ -187,7 +178,10 @@ export function RampApp() {
                     {!loading && <ArrowRight className="w-4 h-4" />}
                   </button>
                   <button
-                    onClick={() => { setOtpVerification(null); setOtp(""); }}
+                    onClick={() => {
+                      setOtpVerification(null);
+                      setOtp("");
+                    }}
                     className="w-full text-gray-500 hover:text-gray-300 text-xs text-center transition-colors py-1"
                   >
                     ← Back
@@ -227,12 +221,20 @@ export function RampApp() {
               >
                 <div
                   className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${
-                    color === "teal" ? "bg-teal-500/10" : color === "purple" ? "bg-purple-500/10" : "bg-blue-500/10"
+                    color === "teal"
+                      ? "bg-teal-500/10"
+                      : color === "purple"
+                        ? "bg-purple-500/10"
+                        : "bg-blue-500/10"
                   }`}
                 >
                   <Icon
                     className={`w-5 h-5 ${
-                      color === "teal" ? "text-teal-400" : color === "purple" ? "text-purple-400" : "text-blue-400"
+                      color === "teal"
+                        ? "text-teal-400"
+                        : color === "purple"
+                          ? "text-purple-400"
+                          : "text-blue-400"
                     }`}
                   />
                 </div>
@@ -244,7 +246,9 @@ export function RampApp() {
 
           {/* How it works */}
           <div className="max-w-lg mx-auto mt-20">
-            <h2 className="text-2xl font-bold text-center mb-10">How it works</h2>
+            <h2 className="text-2xl font-bold text-center mb-10">
+              How it works
+            </h2>
             <div className="relative space-y-0">
               {[
                 {
@@ -266,13 +270,17 @@ export function RampApp() {
                 <div key={step} className="flex gap-5">
                   <div className="flex flex-col items-center">
                     <div className="w-9 h-9 rounded-full bg-teal-600/20 border border-teal-600/40 flex items-center justify-center flex-shrink-0">
-                      <span className="text-teal-400 text-xs font-bold">{step}</span>
+                      <span className="text-teal-400 text-xs font-bold">
+                        {step}
+                      </span>
                     </div>
                     {i < 2 && <div className="w-px h-10 bg-gray-800 mt-1" />}
                   </div>
                   <div className="pb-10">
                     <h4 className="font-semibold text-white mb-1">{title}</h4>
-                    <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                    <p className="text-sm text-gray-500 leading-relaxed">
+                      {desc}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -305,9 +313,15 @@ export function RampApp() {
                 <Wallet className="w-5 h-5 text-teal-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500">{CHAINS[selectedChain].name}</p>
+                <p className="text-xs text-gray-500">
+                  {CHAINS[selectedChain].name}
+                </p>
                 <p className="text-sm font-mono text-white">
-                  {address ? truncate(address) : <span className="text-gray-600">No wallet</span>}
+                  {address ? (
+                    truncate(address)
+                  ) : (
+                    <span className="text-gray-600">No wallet</span>
+                  )}
                 </p>
               </div>
               {address && (
@@ -320,7 +334,11 @@ export function RampApp() {
                   className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
                   title="Copy address"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-teal-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-teal-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
                 </button>
               )}
             </div>
@@ -329,7 +347,9 @@ export function RampApp() {
               <p className="text-xs text-gray-500 mb-1">USDC balance</p>
               <p className="text-3xl font-bold text-white">
                 {usdcBalance === null ? (
-                  <span className="text-gray-700 text-xl font-normal">Loading...</span>
+                  <span className="text-gray-700 text-xl font-normal">
+                    Loading...
+                  </span>
                 ) : (
                   <>${usdcBalance.toFixed(2)}</>
                 )}
@@ -347,7 +367,8 @@ export function RampApp() {
           </div>
 
           <p className="text-center text-xs text-gray-600">
-            USDC on {CHAINS[selectedChain].name} → cash at pickup locations worldwide
+            USDC on {CHAINS[selectedChain].name} → cash at pickup locations
+            worldwide
           </p>
         </div>
       </div>

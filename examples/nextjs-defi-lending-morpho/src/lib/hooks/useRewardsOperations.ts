@@ -8,11 +8,16 @@ import { useWallet } from "@/lib/providers";
 
 function getViemChain(chainId: number) {
   switch (chainId) {
-    case mainnet.id: return mainnet;
-    case arbitrum.id: return arbitrum;
-    case optimism.id: return optimism;
-    case polygon.id: return polygon;
-    default: return base;
+    case mainnet.id:
+      return mainnet;
+    case arbitrum.id:
+      return arbitrum;
+    case optimism.id:
+      return optimism;
+    case polygon.id:
+      return polygon;
+    default:
+      return base;
   }
 }
 
@@ -27,7 +32,10 @@ export function useRewardsOperations(vaultAddress?: string) {
 
   const handleClaimReward = async () => {
     if (!vaultAddress || !evmAccount) return;
-    const walletClient = createWalletClientForWalletAccount({ walletAccount: evmAccount, chain });
+    const walletClient = createWalletClientForWalletAccount({
+      walletAccount: evmAccount,
+      chain,
+    });
 
     setClaimTxStatus("");
     setIsClaiming(true);
@@ -46,7 +54,7 @@ export function useRewardsOperations(vaultAddress?: string) {
         "Claim failed: " +
           (e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message
-            : String(e))
+            : String(e)),
       );
     } finally {
       setIsClaiming(false);

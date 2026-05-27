@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import DynamicButton from "./dynamic/DynamicButton";
 import DynamicLogo from "./dynamic/Logo";
+
+const DynamicButton = dynamic(() => import("./dynamic/DynamicButton"), { ssr: false });
 
 export default function Navigation() {
   const currentPath = usePathname();

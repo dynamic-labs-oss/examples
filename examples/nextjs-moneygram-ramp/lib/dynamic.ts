@@ -1,4 +1,8 @@
-import { createDynamicClient, initializeClient, type DynamicClient } from "@dynamic-labs-sdk/client";
+import {
+  createDynamicClient,
+  initializeClient,
+  type DynamicClient,
+} from "@dynamic-labs-sdk/client";
 import { addWaasEvmExtension } from "@dynamic-labs-sdk/evm/waas";
 import { addWaasSolanaExtension } from "@dynamic-labs-sdk/solana/waas";
 import { env } from "./env";

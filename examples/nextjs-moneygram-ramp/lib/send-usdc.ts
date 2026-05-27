@@ -43,7 +43,8 @@ export async function sendUsdc({
   // ── EVM (Base Sepolia or Eth Sepolia) ──────────────────────────────────────
   if (config.type === "evm") {
     const evmWallet = walletAccounts.find(isEvmWalletAccount);
-    if (!evmWallet) throw new Error("No EVM wallet found. Connect an EVM embedded wallet.");
+    if (!evmWallet)
+      throw new Error("No EVM wallet found. Connect an EVM embedded wallet.");
 
     const data = encodeFunctionData({
       abi: erc20Abi,
@@ -65,7 +66,10 @@ export async function sendUsdc({
 
   // ── Solana Devnet ──────────────────────────────────────────────────────────
   const solanaWallet = walletAccounts.find(isSolanaWalletAccount);
-  if (!solanaWallet) throw new Error("No Solana wallet found. Connect a Solana embedded wallet.");
+  if (!solanaWallet)
+    throw new Error(
+      "No Solana wallet found. Connect a Solana embedded wallet.",
+    );
 
   const connection = new Connection(config.rpcUrl, "confirmed");
   const fromPubkey = new PublicKey(solanaWallet.address);
@@ -111,7 +115,9 @@ export async function sendUsdc({
   const tx = new VersionedTransaction(message);
   // Type assertion handles potential @solana/web3.js version mismatches
   const txPayload = {
-    transaction: tx as unknown as Parameters<typeof signAndSendTransaction>[0]["transaction"],
+    transaction: tx as unknown as Parameters<
+      typeof signAndSendTransaction
+    >[0]["transaction"],
     walletAccount: solanaWallet,
   };
 

@@ -151,32 +151,36 @@ export async function getWalletPositions(
   address: string
 ): Promise<WalletPositions> {
   const raw = await fetchFromPodsAPI<RawWalletPositions>(`/wallets/${address}`, { cache: "no-store" });
-
   const positions: Position[] = (raw?.positions ?? []).map((p: RawWalletPosition) => {
     const strat = p.strategy ?? {};
-    const decimals = String(strat.asset?.decimals ?? 18);
-    const balanceRaw = p.balance ?? "0";
-    const dec = strat.asset?.decimals ?? 18;
-    const humanized = Number(balanceRaw) / 10 ** dec;
+    const spot = p.spotPosition;
+    const cur = spot?.currentPosition;
+
+    const decimals = String(strat.assetDecimals ?? 18);
+    // balance lives in spotPosition.currentPosition, already human-readable
+    const balanceRaw = cur?.value ?? p.balance ?? "0";
+    const humanized = cur?.humanized != null ? Number(cur.humanized) : Number(p.balance ?? "0");
+    const assetAddress = strat.asset ?? "";
+    const assetSymbol = strat.assetName ?? cur?.symbol ?? "";
 
     return {
-      name: strat.name ?? strat.asset?.symbol ?? "",
+      name: strat.assetName ?? strat.name ?? "",
       protocol: strat.protocol ?? "",
       asset: {
-        address: strat.asset?.contract ?? "",
+        address: assetAddress,
         decimals,
-        symbol: strat.asset?.symbol ?? "",
-        name: strat.name ?? strat.asset?.symbol ?? "",
+        symbol: assetSymbol,
+        name: strat.assetName ?? strat.name ?? "",
       },
       balance: {
         raw: balanceRaw,
         humanized: isFinite(humanized) ? humanized : 0,
         decimals,
       },
-      balanceUSD: p.balanceUSD ?? "0",
-      earnedUSD: p.earnedUSD ?? "0",
-      apy: String(strat.apy ?? 0),
-      strategyId: strat._id ?? strat.slug ?? "",
+      balanceUSD: String(spot?.underlyingBalanceUSD ?? p.balanceUSD ?? "0"),
+      earnedUSD: String(spot?.profit?.humanized ?? p.earnedUSD ?? "0"),
+      apy: String(spot?.apy ?? strat.apy ?? 0),
+      strategyId: strat._id ?? strat.id ?? strat.slug ?? "",
     };
   });
 

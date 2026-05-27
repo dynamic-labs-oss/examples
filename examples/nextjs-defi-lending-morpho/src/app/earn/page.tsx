@@ -15,31 +15,52 @@ const VAULTS_PER_PAGE = 6;
 export default function EarnPage() {
   const [page, setPage] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const { evmAccount, loggedIn, chainId } = useWallet();
+
+  useEffect(() => { setMounted(true); }, []);
   const address = evmAccount?.address;
-  const isConnected = loggedIn && !!evmAccount;
+  const isConnected = mounted && loggedIn && !!evmAccount;
   const { vaults, loading, error } = useVaultsList("tvl-desc");
-  const { positions, loading: positionsLoading } = useVaultPositions(address, vaults, refreshKey);
-  const [assetBalances, setAssetBalances] = useState<Record<string, string>>({});
+  const { positions, loading: positionsLoading } = useVaultPositions(
+    address,
+    vaults,
+    refreshKey,
+  );
+  const [assetBalances, setAssetBalances] = useState<Record<string, string>>(
+    {},
+  );
 
   useEffect(() => {
     if (!evmAccount || vaults.length === 0) return;
-    const assetAddresses = [...new Set(vaults.map((v) => v.assetAddress).filter(Boolean))];
+    const assetAddresses = [
+      ...new Set(vaults.map((v) => v.assetAddress).filter(Boolean)),
+    ];
     if (assetAddresses.length === 0) return;
     getBalances(
-      { walletAccount: evmAccount, networkId: chainId, whitelistedContracts: assetAddresses, filterSpamTokens: false },
-      dynamicClient
-    ).then((balances) => {
-      const map: Record<string, string> = {};
-      for (const b of balances) {
-        if (b.address) map[b.address.toLowerCase()] = String(b.balance);
-      }
-      setAssetBalances(map);
-    }).catch(() => {});
+      {
+        walletAccount: evmAccount,
+        networkId: chainId,
+        whitelistedContracts: assetAddresses,
+        filterSpamTokens: false,
+      },
+      dynamicClient,
+    )
+      .then((balances) => {
+        const map: Record<string, string> = {};
+        for (const b of balances) {
+          if (b.address) map[b.address.toLowerCase()] = String(b.balance);
+        }
+        setAssetBalances(map);
+      })
+      .catch(() => {});
   }, [evmAccount, chainId, vaults.length, refreshKey]);
 
   const totalPages = Math.ceil(vaults.length / VAULTS_PER_PAGE);
-  const pagedVaults = vaults.slice(page * VAULTS_PER_PAGE, (page + 1) * VAULTS_PER_PAGE);
+  const pagedVaults = vaults.slice(
+    page * VAULTS_PER_PAGE,
+    (page + 1) * VAULTS_PER_PAGE,
+  );
 
   const totalBalanceUsd = positions.reduce((sum, p) => {
     const assets = parseFloat(p.assetsFormatted);
@@ -59,18 +80,31 @@ export default function EarnPage() {
       {/* Portfolio summary */}
       {isConnected && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl p-5" style={{ border: "1px solid #DADADA" }}>
-            <p className="text-sm text-earn-text-secondary font-medium">Total balance</p>
+          <div
+            className="bg-white rounded-xl p-5"
+            style={{ border: "1px solid #DADADA" }}
+          >
+            <p className="text-sm text-earn-text-secondary font-medium">
+              Total balance
+            </p>
             <p className="text-2xl font-semibold text-earn-text-primary mt-2">
               {positionsLoading ? "—" : `$${totalBalanceUsd.toFixed(2)}`}
             </p>
             <p className="text-xs text-earn-text-secondary mt-1">
-              Across {positions.length} active vault{positions.length !== 1 ? "s" : ""}
+              Across {positions.length} active vault
+              {positions.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <div className="bg-white rounded-xl p-5" style={{ border: "1px solid #DADADA" }}>
-            <p className="text-sm text-earn-text-secondary font-medium">Wallet</p>
-            <p className="text-sm font-mono text-earn-text-primary mt-2 truncate">{address}</p>
+          <div
+            className="bg-white rounded-xl p-5"
+            style={{ border: "1px solid #DADADA" }}
+          >
+            <p className="text-sm text-earn-text-secondary font-medium">
+              Wallet
+            </p>
+            <p className="text-sm font-mono text-earn-text-primary mt-2 truncate">
+              {address}
+            </p>
             <p className="text-xs text-earn-text-secondary mt-1">
               {vaults.length} vaults available on this network
             </p>
@@ -82,7 +116,9 @@ export default function EarnPage() {
       <section>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-medium text-earn-text-primary">Vaults</h2>
+            <h2 className="text-sm font-medium text-earn-text-primary">
+              Vaults
+            </h2>
             {vaults.length > 0 && (
               <p className="text-xs text-earn-text-secondary mt-0.5">
                 {vaults.length} vaults · sorted by TVL
@@ -118,7 +154,10 @@ export default function EarnPage() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: VAULTS_PER_PAGE }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl border border-earn-border shadow-sm p-4 flex flex-col gap-3">
+              <div
+                key={i}
+                className="bg-white rounded-xl border border-earn-border shadow-sm p-4 flex flex-col gap-3"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-3/4" />
@@ -150,7 +189,9 @@ export default function EarnPage() {
               <VaultCard
                 key={vault.id}
                 vault={vault}
-                assetBalance={assetBalances[vault.assetAddress?.toLowerCase() ?? ""] ?? "0"}
+                assetBalance={
+                  assetBalances[vault.assetAddress?.toLowerCase() ?? ""] ?? "0"
+                }
                 onSuccess={() => setRefreshKey((k) => k + 1)}
               />
             ))}
@@ -161,11 +202,16 @@ export default function EarnPage() {
       {/* Your positions */}
       {isConnected && (
         <section>
-          <h2 className="text-sm font-medium text-earn-text-primary mb-4">Your Positions</h2>
+          <h2 className="text-sm font-medium text-earn-text-primary mb-4">
+            Your Positions
+          </h2>
           {positionsLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-xl border border-earn-border p-4 flex flex-col gap-3">
+                <div
+                  key={i}
+                  className="bg-white rounded-xl border border-earn-border p-4 flex flex-col gap-3"
+                >
                   <Skeleton className="h-4 w-2/3" />
                   <Skeleton className="h-3 w-1/3" />
                   <div className="grid grid-cols-2 gap-2 mt-1">
