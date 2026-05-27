@@ -12,11 +12,6 @@ const TOKEN_INFO: Record<string, { symbol: string; name: string; decimals: numbe
   So11111111111111111111111111111111111111112: { symbol: "SOL", name: "Solana", decimals: 9 },
 };
 
-// Extend TOKEN_INFO with the configured devnet/custom token mint at module init
-const configuredMint = process.env.NEXT_PUBLIC_TOKEN_MINT;
-if (configuredMint && !(configuredMint in TOKEN_INFO)) {
-  TOKEN_INFO[configuredMint] = { symbol: "USDC", name: "USD Coin (devnet)", decimals: 6 };
-}
 
 export function getTokenInfo(mint: string): { symbol: string; name: string; decimals: number } {
   return TOKEN_INFO[mint] ?? { symbol: mint.slice(0, 4) + "...", name: "Unknown Token", decimals: 6 };
@@ -45,5 +40,21 @@ export function shortenAddress(address: string, chars = 4): string {
 }
 
 export function isPlanActive(status: number): boolean {
-  return status === 0; // PlanStatus.Active
+  return status === 1; // PlanStatus.Active = 1, Sunset = 0
+}
+
+
+export interface PlanMeta {
+  n?: string;
+  d?: string;
+  i?: string;
+  w?: string;
+}
+
+export function parsePlanMeta(metadataUri: string): PlanMeta {
+  try {
+    return JSON.parse(metadataUri);
+  } catch {
+    return {};
+  }
 }

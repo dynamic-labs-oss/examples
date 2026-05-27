@@ -6,6 +6,7 @@ A Next.js demo that integrates [Dynamic's](https://dynamic.xyz) embedded Solana 
 
 - Sign in with email OTP, Google OAuth, or an injected Solana wallet via Dynamic
 - Browse subscription plans created by a configured merchant
+- **Fund your wallet from any chain/token** via Dynamic Checkout — pay with SOL, ETH, or USDC on Base; receive USDC on Solana automatically
 - Subscribe to a plan (initializes a subscription authority and creates a subscription delegation on-chain)
 - View and cancel active subscriptions
 
@@ -35,10 +36,11 @@ pnpm dev
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEXT_PUBLIC_DYNAMIC_ENV_ID` | Yes | Dynamic environment ID from [app.dynamic.xyz](https://app.dynamic.xyz) |
-| `NEXT_PUBLIC_SOLANA_RPC_URL` | Yes | Solana RPC URL (devnet or mainnet) |
+| `NEXT_PUBLIC_SOLANA_RPC_URL` | Yes | Solana mainnet RPC URL — must support `getProgramAccounts` (e.g. Helius, QuickNode) |
 | `NEXT_PUBLIC_MERCHANT_ADDRESS` | Yes | Merchant wallet address whose plans to display |
-| `NEXT_PUBLIC_TOKEN_MINT` | No | Token mint address (defaults to devnet USDC) |
-| `NEXT_PUBLIC_TOKEN_PROGRAM` | No | Token program address (defaults to SPL Token) |
+| `DYNAMIC_API_TOKEN` | Yes (for Checkout) | Server-side API token from [developer settings](https://app.dynamic.xyz/dashboard/developer/api) |
+| `NEXT_PUBLIC_TOKEN_MINT` | No | Token mint address (defaults to mainnet USDC) |
+| `NEXT_PUBLIC_CHECKOUT_SETTLEMENT_TOKEN` | No | USDC mint for checkout settlement (defaults to mainnet USDC) |
 
 ### Dynamic dashboard
 

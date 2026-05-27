@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Repeat, LayoutList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/lib/providers";
-import { useSubscriptionOperations } from "@/lib/useSubscriptionOperations";
+import { useSubscriptionOperations } from "@/lib/subscriptions";
 import { PlanCard } from "./PlanCard";
 import { SubscriptionCard } from "./SubscriptionCard";
 
@@ -28,7 +28,9 @@ export function SubscriptionsInterface() {
     subscribeMutation,
     cancelMutation,
     merchantAddress,
+    tokenDecimals,
     getSubscriptionPdaForPlan,
+    getTokenBalance,
   } = useSubscriptionOperations();
 
   const isTransacting =
@@ -48,7 +50,9 @@ export function SubscriptionsInterface() {
     <div className="max-w-4xl mx-auto px-4 py-8 pb-24">
       {/* Page header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#030303]">Solana Subscriptions</h1>
+        <h1 className="text-2xl font-bold text-[#030303]">
+          Solana Subscriptions
+        </h1>
         <p className="text-sm text-[#606060] mt-1">
           Subscribe to on-chain recurring payment plans powered by{" "}
           <a
@@ -58,6 +62,15 @@ export function SubscriptionsInterface() {
             className="text-[#4779FF] hover:underline"
           >
             the Solana Subscriptions program
+          </a>
+          . Fund your wallet from any chain via{" "}
+          <a
+            href="https://docs.dynamic.xyz/payments/checkout"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#4779FF] hover:underline"
+          >
+            Dynamic Checkout
           </a>
           .
         </p>
@@ -79,10 +92,19 @@ export function SubscriptionsInterface() {
       {/* Merchant config warning */}
       {!merchantAddress && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-6">
-          <p className="text-sm font-medium text-amber-700">Configuration required</p>
+          <p className="text-sm font-medium text-amber-700">
+            Configuration required
+          </p>
           <p className="text-xs text-amber-600 mt-0.5">
-            Set <code className="font-mono bg-amber-100 px-1 rounded">NEXT_PUBLIC_MERCHANT_ADDRESS</code> in your{" "}
-            <code className="font-mono bg-amber-100 px-1 rounded">.env.local</code> to display subscription plans.
+            Set{" "}
+            <code className="font-mono bg-amber-100 px-1 rounded">
+              NEXT_PUBLIC_MERCHANT_ADDRESS
+            </code>{" "}
+            in your{" "}
+            <code className="font-mono bg-amber-100 px-1 rounded">
+              .env.local
+            </code>{" "}
+            to display subscription plans.
           </p>
         </div>
       )}
@@ -109,7 +131,11 @@ export function SubscriptionsInterface() {
             {label}
             {key === "subscriptions" && userSubscriptions.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-[#4779FF] text-white leading-none">
-                {userSubscriptions.filter((s) => s.data.expiresAtTs === 0n).length}
+                {
+                  userSubscriptions.filter(
+                    (s) => s.data.expiresAtTs === 0n
+                  ).length
+                }
               </span>
             )}
           </button>
@@ -148,6 +174,8 @@ export function SubscriptionsInterface() {
                     onCancel={handleCancel}
                     disabled={!loggedIn || isTransacting}
                     getSubscriptionPdaForPlan={getSubscriptionPdaForPlan}
+                    getTokenBalance={getTokenBalance}
+                    tokenDecimals={tokenDecimals}
                   />
                 );
               })}
@@ -205,7 +233,9 @@ export function SubscriptionsInterface() {
       {/* Global error from mutations */}
       {(subscribeMutation.error || cancelMutation.error) && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 shadow-lg max-w-sm text-center z-40">
-          {((subscribeMutation.error || cancelMutation.error) as Error)?.message || "Transaction failed"}
+          {(
+            (subscribeMutation.error || cancelMutation.error) as Error
+          )?.message || "Transaction failed"}
         </div>
       )}
     </div>
@@ -220,6 +250,8 @@ function PlanCardWithPda({
   onCancel,
   disabled,
   getSubscriptionPdaForPlan,
+  getTokenBalance,
+  tokenDecimals,
 }: {
   plan: Parameters<typeof PlanCard>[0]["plan"];
   isSubscribed: boolean;
@@ -227,16 +259,23 @@ function PlanCardWithPda({
   onCancel: (planPda: string, subscriptionPda: string) => Promise<void>;
   disabled: boolean;
   getSubscriptionPdaForPlan: (planPda: string) => Promise<string | null>;
+  getTokenBalance: (tokenMint: string) => Promise<bigint>;
+  tokenDecimals: number;
 }) {
   const [subscriptionPda, setSubscriptionPda] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSubscribed) { setSubscriptionPda(null); return; }
+    if (!isSubscribed) {
+      setSubscriptionPda(null);
+      return;
+    }
     let cancelled = false;
     getSubscriptionPdaForPlan(plan.address as string).then((pda) => {
       if (!cancelled) setSubscriptionPda(pda);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isSubscribed, plan.address, getSubscriptionPdaForPlan]);
 
   const handleCancel = async () => {
@@ -252,6 +291,8 @@ function PlanCardWithPda({
       onSubscribe={onSubscribe}
       onCancel={handleCancel}
       disabled={disabled}
+      getTokenBalance={getTokenBalance}
+      tokenDecimals={tokenDecimals}
     />
   );
 }

@@ -3,18 +3,20 @@
 import { useState } from "react";
 import { Clock, Loader2, XCircle } from "lucide-react";
 import { formatTokenAmount, formatPeriod, getTokenInfo, shortenAddress } from "@/lib/utils";
-import type { UserSubscription } from "@/lib/useSubscriptionOperations";
+import type { UserSubscription } from "@/lib/subscriptions";
 
 interface SubscriptionCardProps {
   subscription: UserSubscription;
   onCancel: () => Promise<void>;
   disabled?: boolean;
+  planName?: string;
 }
 
 export function SubscriptionCard({
   subscription,
   onCancel,
   disabled,
+  planName,
 }: SubscriptionCardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,13 +26,12 @@ export function SubscriptionCard({
   const subscriptionPda = subscription.address;
   const isCancelling = data.expiresAtTs > 0n;
 
-  // The subscription stores a copy of the plan terms at subscription time
-  const terms = data.data?.terms;
-  const amount = terms?.amount ?? 0n;
-  const periodHours = terms?.periodHours ?? 0n;
-  const expectedMint = (data.data?.expectedMint ?? "") as string;
+  // Terms are stored in the delegation account as a snapshot of the plan at subscribe time
+  const { amount, periodHours } = data.terms;
+  // Mint is not stored on the delegation — use the configured token mint from env
+  const configuredMint = process.env.NEXT_PUBLIC_TOKEN_MINT ?? "";
 
-  const token = getTokenInfo(expectedMint);
+  const token = getTokenInfo(configuredMint);
   const amountFormatted = amount > 0n ? formatTokenAmount(amount, token.decimals) : "—";
   const periodLabel = periodHours > 0n ? formatPeriod(periodHours) : "";
 
@@ -56,8 +57,12 @@ export function SubscriptionCard({
             <Clock className="w-4 h-4 text-[#4779FF]" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-[#030303]">Active Subscription</p>
-            <p className="text-xs text-[#606060] font-mono">{shortenAddress(subscriptionPda)}</p>
+            <p className="text-sm font-semibold text-[#030303]">
+              {planName || "Active Subscription"}
+            </p>
+            <p className="text-xs text-[#606060] font-mono">
+              {shortenAddress(subscriptionPda)}
+            </p>
           </div>
         </div>
         {isCancelling ? (
@@ -86,29 +91,36 @@ export function SubscriptionCard({
           <span>Plan</span>
           <span className="font-mono">{shortenAddress(planPda)}</span>
         </div>
-        {expectedMint && (
+        {configuredMint && (
           <div className="flex justify-between">
             <span>Token</span>
-            <span className="font-mono">{shortenAddress(expectedMint)}</span>
+            <span className="font-mono">{shortenAddress(configuredMint)}</span>
           </div>
         )}
         {data.amountPulledInPeriod > 0n && (
           <div className="flex justify-between">
             <span>Pulled this period</span>
-            <span>{formatTokenAmount(data.amountPulledInPeriod, token.decimals)} {token.symbol}</span>
+            <span>
+              {formatTokenAmount(data.amountPulledInPeriod, token.decimals)}{" "}
+              {token.symbol}
+            </span>
           </div>
         )}
         {isCancelling && data.expiresAtTs > 0n && (
           <div className="flex justify-between text-amber-600">
             <span>Expires at</span>
-            <span>{new Date(Number(data.expiresAtTs) * 1000).toLocaleString()}</span>
+            <span>
+              {new Date(Number(data.expiresAtTs) * 1000).toLocaleString()}
+            </span>
           </div>
         )}
       </div>
 
       {/* Action */}
       {error && (
-        <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+        <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">
+          {error}
+        </p>
       )}
       {!isCancelling && (
         <button
