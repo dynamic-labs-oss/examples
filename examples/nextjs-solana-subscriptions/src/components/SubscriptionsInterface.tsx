@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Loader2, Repeat, LayoutList } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useWallet } from "@/lib/providers";
+import { useWallet } from "@/lib/useWallet";
 import { useSubscriptionOperations } from "@/lib/subscriptions";
 import { PlanCard } from "./PlanCard";
 import { SubscriptionCard } from "./SubscriptionCard";

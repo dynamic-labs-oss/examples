@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, RotateCcw, Clock, CheckCircle } from "lucide-react";
-import { useWallet } from "@/lib/providers";
+import { useWallet } from "@/lib/useWallet";
 import {
   useSubscriptionOperations,
   type EnrichedSubscription,

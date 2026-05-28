@@ -1,7 +1,14 @@
-import { createDynamicClient, getNetworksData } from "@dynamic-labs-sdk/client";
+import {
+  createDynamicClient,
+  getActiveNetworkData,
+  initializeClient,
+} from "@dynamic-labs-sdk/client";
 import { addSolanaExtension } from "@dynamic-labs-sdk/solana";
+import { createSolanaRpc } from "@solana/kit";
+import type { SolanaWalletAccount } from "@dynamic-labs-sdk/solana";
 
 export const dynamicClient = createDynamicClient({
+  autoInitialize: false,
   environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID!,
   metadata: {
     name: "Solana Subscriptions",
@@ -9,18 +16,11 @@ export const dynamicClient = createDynamicClient({
 });
 
 addSolanaExtension();
+void initializeClient(dynamicClient);
 
-export function getSolanaRpcUrl(): string {
-  if (process.env.NEXT_PUBLIC_SOLANA_RPC_URL) {
-    return process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-  }
-  const networks = getNetworksData(dynamicClient);
-  const solana = networks.find((n) => n.chain === "SOL");
-  const url = solana?.rpcUrls.http[0];
-  if (!url) {
-    throw new Error(
-      "No Solana RPC URL found. Set NEXT_PUBLIC_SOLANA_RPC_URL or add a Solana network in your Dynamic dashboard."
-    );
-  }
-  return url;
+// Creates a kit v2 RPC pointed at the same endpoint the WaaS provider uses.
+export async function getKitRpc(walletAccount: SolanaWalletAccount) {
+  const { networkData } = await getActiveNetworkData({ walletAccount }, dynamicClient);
+  if (!networkData) throw new Error("Could not determine active Solana network");
+  return createSolanaRpc(networkData.rpcUrls.http[0]);
 }

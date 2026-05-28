@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { address, createNoopSigner, createSolanaRpc, type Instruction } from "@solana/kit";
+import { address, createNoopSigner, type Instruction } from "@solana/kit";
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import {
   fetchMaybeSubscriptionAuthority,
@@ -18,8 +18,10 @@ import {
   type PlanWithAddress,
   type SubscriptionDelegation,
 } from "@solana/subscriptions";
-import { useWallet } from "@/lib/providers";
-import { getSolanaRpcUrl } from "@/lib/dynamic";
+import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
+import { useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
+import { useWallet } from "@/lib/useWallet";
+import { getKitRpc } from "@/lib/dynamic";
 import { sendKitInstructions } from "./tx";
 
 export const PlanStatus = { Active: 1, Sunset: 0 } as const;
@@ -30,8 +32,6 @@ export type EnrichedSubscription = { sub: UserSubscription; planData: PlanWithAd
 export function useSubscriptionOperations() {
   const { solanaAccount } = useWallet();
   const queryClient = useQueryClient();
-  const rpcUrl = useMemo(() => getSolanaRpcUrl(), []);
-  const rpc = useMemo(() => createSolanaRpc(rpcUrl), [rpcUrl]);
   const tokenMintStr = process.env.NEXT_PUBLIC_TOKEN_MINT ?? "";
 
   const invalidateSubscriptions = useCallback(() => {
@@ -40,16 +40,22 @@ export function useSubscriptionOperations() {
   }, [queryClient, solanaAccount?.address]);
 
   const { data: plans = [], isLoading: loadingPlans, error: plansError } = useQuery({
-    queryKey: ["plans", process.env.NEXT_PUBLIC_MERCHANT_ADDRESS, rpcUrl],
-    queryFn: () => fetchPlansForOwner(rpc, address(process.env.NEXT_PUBLIC_MERCHANT_ADDRESS!)),
-    enabled: !!process.env.NEXT_PUBLIC_MERCHANT_ADDRESS,
+    queryKey: ["plans", process.env.NEXT_PUBLIC_MERCHANT_ADDRESS, solanaAccount?.address],
+    queryFn: async () => {
+      const rpc = await getKitRpc(solanaAccount!);
+      return fetchPlansForOwner(rpc, address(process.env.NEXT_PUBLIC_MERCHANT_ADDRESS!));
+    },
+    enabled: !!process.env.NEXT_PUBLIC_MERCHANT_ADDRESS && !!solanaAccount,
   });
 
   const activePlans = useMemo(() => plans.filter((p) => p.data.status === PlanStatus.Active), [plans]);
 
   const { data: userSubscriptions = [], isLoading: loadingSubscriptions, error: subscriptionsError } = useQuery({
-    queryKey: ["subscriptions", solanaAccount?.address, rpcUrl],
-    queryFn: () => fetchSubscriptionsForUser(rpc, address(solanaAccount!.address)) as Promise<UserSubscription[]>,
+    queryKey: ["subscriptions", solanaAccount?.address],
+    queryFn: async () => {
+      const rpc = await getKitRpc(solanaAccount!);
+      return fetchSubscriptionsForUser(rpc, address(solanaAccount!.address)) as Promise<UserSubscription[]>;
+    },
     enabled: !!solanaAccount,
   });
 
@@ -72,14 +78,16 @@ export function useSubscriptionOperations() {
   const getTokenBalance = useCallback(async (tokenMint: string): Promise<bigint> => {
     if (!solanaAccount) return 0n;
     try {
+      const rpc = await getKitRpc(solanaAccount);
       const [ata] = await findAssociatedTokenPda({ mint: address(tokenMint), owner: address(solanaAccount.address), tokenProgram: TOKEN_PROGRAM_ADDRESS });
       return BigInt((await rpc.getTokenAccountBalance(ata).send()).value.amount);
     } catch { return 0n; }
-  }, [solanaAccount, rpc]);
+  }, [solanaAccount]);
 
   const subscribeMutation = useMutation({
     mutationFn: async (plan: PlanWithAddress) => {
       if (!solanaAccount) throw new Error("Wallet not connected");
+      const rpc = await getKitRpc(solanaAccount);
       const userAddr = address(solanaAccount.address);
       const noopSigner = createNoopSigner(userAddr);
       const tokenMint = address(tokenMintStr);
@@ -100,7 +108,7 @@ export function useSubscriptionOperations() {
         expectedCreatedAt: plan.data.data.terms.createdAt,
         expectedPeriodHours: plan.data.data.terms.periodHours,
       }));
-      return sendKitInstructions(instructions, noopSigner, rpc, solanaAccount);
+      return sendKitInstructions(instructions, noopSigner, solanaAccount);
     },
     onSuccess: invalidateSubscriptions,
     onError: (err) => {
@@ -115,7 +123,7 @@ export function useSubscriptionOperations() {
       const noopSigner = createNoopSigner(address(solanaAccount.address));
       return sendKitInstructions(
         [await getCancelSubscriptionOverlayInstructionAsync({ subscriber: noopSigner, planPda: address(planPda), subscriptionPda: address(subscriptionPda) })],
-        noopSigner, rpc, solanaAccount
+        noopSigner, solanaAccount
       );
     },
     onSuccess: invalidateSubscriptions,
@@ -127,7 +135,7 @@ export function useSubscriptionOperations() {
       const noopSigner = createNoopSigner(address(solanaAccount.address));
       return sendKitInstructions(
         [await getResumeSubscriptionOverlayInstructionAsync({ subscriber: noopSigner, planPda: address(planPda), subscriptionPda: address(subscriptionPda) })],
-        noopSigner, rpc, solanaAccount
+        noopSigner, solanaAccount
       );
     },
     onSuccess: invalidateSubscriptions,
@@ -140,8 +148,9 @@ export function useSubscriptionOperations() {
   }, [solanaAccount, subscribedPlanPdas]);
 
   const { data: enrichedSubscriptions = [] } = useQuery({
-    queryKey: ["enrichedSubscriptions", userSubscriptions.map((s) => s.address), rpcUrl],
+    queryKey: ["enrichedSubscriptions", userSubscriptions.map((s) => s.address)],
     queryFn: async () => {
+      const rpc = await getKitRpc(solanaAccount!);
       const results = await Promise.allSettled(
         userSubscriptions.map(async (sub) => {
           let planData: PlanWithAddress | null = null;
@@ -153,7 +162,7 @@ export function useSubscriptionOperations() {
         .map((r) => r.status === "fulfilled" ? r.value : { sub: null, planData: null })
         .filter((r): r is EnrichedSubscription => r.sub !== null);
     },
-    enabled: userSubscriptions.length > 0,
+    enabled: userSubscriptions.length > 0 && !!solanaAccount,
   });
 
   return {
@@ -167,11 +176,14 @@ export function useSubscriptionOperations() {
 }
 
 export function useMerchantSearchOperations() {
-  const rpcUrl = useMemo(() => getSolanaRpcUrl(), []);
-  const rpc = useMemo(() => createSolanaRpc(rpcUrl), [rpcUrl]);
-  const fetchMerchantPlans = useCallback(
-    (addr: string) => fetchPlansForOwner(rpc, address(addr)),
-    [rpc]
-  );
-  return { fetchMerchantPlans, rpc, rpcUrl };
+  const walletAccounts = useWalletAccounts();
+  const solanaAccount = walletAccounts.find(isSolanaWalletAccount) ?? null;
+
+  const fetchMerchantPlans = useCallback(async (addr: string) => {
+    if (!solanaAccount) return [];
+    const rpc = await getKitRpc(solanaAccount);
+    return fetchPlansForOwner(rpc, address(addr));
+  }, [solanaAccount]);
+
+  return { fetchMerchantPlans, networkKey: solanaAccount?.address ?? "" };
 }

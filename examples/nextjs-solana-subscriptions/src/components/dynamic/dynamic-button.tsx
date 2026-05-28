@@ -11,7 +11,7 @@ import {
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
 import { exportWaasPrivateKey } from "@dynamic-labs-sdk/client/waas";
-import { useWallet } from "@/lib/providers";
+import { useWallet } from "@/lib/useWallet";
 import { dynamicClient } from "@/lib/dynamic";
 import { shortenAddress } from "@/lib/utils";
 import { KeyRound } from "lucide-react";

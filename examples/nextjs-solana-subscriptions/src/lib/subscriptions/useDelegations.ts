@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { address, createNoopSigner, createSolanaRpc, type Address, type Instruction } from "@solana/kit";
+import { address, createNoopSigner, type Address, type Instruction } from "@solana/kit";
 import {
   findAssociatedTokenPda,
   getCreateAssociatedTokenIdempotentInstruction,
@@ -21,8 +21,8 @@ import {
   getTransferRecurringOverlayInstructionAsync,
   type Delegation,
 } from "@solana/subscriptions";
-import { useWallet } from "@/lib/providers";
-import { getSolanaRpcUrl } from "@/lib/dynamic";
+import { useWallet } from "@/lib/useWallet";
+import { getKitRpc } from "@/lib/dynamic";
 import { sendKitInstructions } from "./tx";
 
 export type DelegationWithAddress = Exclude<Delegation, { kind: "subscription" }>;
@@ -30,13 +30,12 @@ export type DelegationWithAddress = Exclude<Delegation, { kind: "subscription" }
 export function useDelegationOperations() {
   const { solanaAccount } = useWallet();
   const queryClient = useQueryClient();
-  const rpcUrl = useMemo(() => getSolanaRpcUrl(), []);
-  const rpc = useMemo(() => createSolanaRpc(rpcUrl), [rpcUrl]);
   const tokenMintStr = process.env.NEXT_PUBLIC_TOKEN_MINT ?? "";
 
   const { data: outgoingDelegations = [], isLoading: loadingOutgoing } = useQuery({
-    queryKey: ["delegations", "outgoing", solanaAccount?.address, rpcUrl],
+    queryKey: ["delegations", "outgoing", solanaAccount?.address],
     queryFn: async () => {
+      const rpc = await getKitRpc(solanaAccount!);
       const all = await fetchDelegationsByDelegator(rpc, address(solanaAccount!.address));
       return all.filter((d): d is DelegationWithAddress => d.kind !== "subscription");
     },
@@ -44,15 +43,16 @@ export function useDelegationOperations() {
   });
 
   const { data: incomingDelegations = [], isLoading: loadingIncoming } = useQuery({
-    queryKey: ["delegations", "incoming", solanaAccount?.address, rpcUrl],
+    queryKey: ["delegations", "incoming", solanaAccount?.address],
     queryFn: async () => {
+      const rpc = await getKitRpc(solanaAccount!);
       const all = await fetchDelegationsByDelegatee(rpc, address(solanaAccount!.address));
       return all.filter((d): d is DelegationWithAddress => d.kind !== "subscription");
     },
     enabled: !!solanaAccount,
   });
 
-  async function ensureAuthority(userAddr: Address, noopSigner: ReturnType<typeof createNoopSigner>): Promise<Instruction[]> {
+  async function ensureAuthority(rpc: Awaited<ReturnType<typeof getKitRpc>>, userAddr: Address, noopSigner: ReturnType<typeof createNoopSigner>): Promise<Instruction[]> {
     const tokenMint = address(tokenMintStr);
     const [authorityPda] = await findSubscriptionAuthorityPda({ tokenMint, user: userAddr });
     const maybeAuth = await fetchMaybeSubscriptionAuthority(rpc, authorityPda);
@@ -78,18 +78,19 @@ export function useDelegationOperations() {
         getCreateAssociatedTokenIdempotentInstruction({ payer: noopSigner, ata: receiverAta, owner: address(receiverAddress), mint: mintAddr, tokenProgram: TOKEN_PROGRAM_ADDRESS }) as unknown as Instruction,
         await getTransferIx(noopSigner, delegatorAta, receiverAta),
       ],
-      noopSigner, rpc, solanaAccount
+      noopSigner, solanaAccount
     );
   }
 
   const createFixedMutation = useMutation({
     mutationFn: async ({ delegateeAddress, amount, expiryTs, nonce }: { delegateeAddress: string; amount: bigint; expiryTs: bigint; nonce: bigint }) => {
       if (!solanaAccount) throw new Error("Wallet not connected");
+      const rpc = await getKitRpc(solanaAccount);
       const userAddr = address(solanaAccount.address);
       const noopSigner = createNoopSigner(userAddr);
-      const instructions = await ensureAuthority(userAddr, noopSigner);
+      const instructions = await ensureAuthority(rpc, userAddr, noopSigner);
       instructions.push(await getCreateFixedDelegationOverlayInstructionAsync({ delegator: noopSigner, tokenMint: address(tokenMintStr), delegatee: address(delegateeAddress), nonce, amount, expiryTs }));
-      return sendKitInstructions(instructions, noopSigner, rpc, solanaAccount);
+      return sendKitInstructions(instructions, noopSigner, solanaAccount);
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["delegations", "outgoing", solanaAccount?.address] }); },
   });
@@ -97,11 +98,12 @@ export function useDelegationOperations() {
   const createRecurringMutation = useMutation({
     mutationFn: async ({ delegateeAddress, amountPerPeriod, periodLengthS, startTs, expiryTs, nonce }: { delegateeAddress: string; amountPerPeriod: bigint; periodLengthS: bigint; startTs: bigint; expiryTs: bigint; nonce: bigint }) => {
       if (!solanaAccount) throw new Error("Wallet not connected");
+      const rpc = await getKitRpc(solanaAccount);
       const userAddr = address(solanaAccount.address);
       const noopSigner = createNoopSigner(userAddr);
-      const instructions = await ensureAuthority(userAddr, noopSigner);
+      const instructions = await ensureAuthority(rpc, userAddr, noopSigner);
       instructions.push(await getCreateRecurringDelegationOverlayInstructionAsync({ delegator: noopSigner, tokenMint: address(tokenMintStr), delegatee: address(delegateeAddress), nonce, amountPerPeriod, periodLengthS, startTs, expiryTs }));
-      return sendKitInstructions(instructions, noopSigner, rpc, solanaAccount);
+      return sendKitInstructions(instructions, noopSigner, solanaAccount);
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["delegations", "outgoing", solanaAccount?.address] }); },
   });
@@ -112,7 +114,7 @@ export function useDelegationOperations() {
       const noopSigner = createNoopSigner(address(solanaAccount.address));
       return sendKitInstructions(
         [getRevokeDelegationOverlayInstruction({ authority: noopSigner, delegationAccount: address(delegationAddress) })],
-        noopSigner, rpc, solanaAccount
+        noopSigner, solanaAccount
       );
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["delegations", "outgoing", solanaAccount?.address] }); },
@@ -143,13 +145,12 @@ export function useDelegationOperations() {
 
 export function useWalletBalances() {
   const { solanaAccount } = useWallet();
-  const rpcUrl = useMemo(() => getSolanaRpcUrl(), []);
-  const rpc = useMemo(() => createSolanaRpc(rpcUrl), [rpcUrl]);
   const tokenMintStr = process.env.NEXT_PUBLIC_TOKEN_MINT ?? "";
 
   const { data, isLoading: loading } = useQuery({
-    queryKey: ["balances", solanaAccount?.address, rpcUrl],
+    queryKey: ["balances", solanaAccount?.address],
     queryFn: async () => {
+      const rpc = await getKitRpc(solanaAccount!);
       const userAddr = address(solanaAccount!.address);
       const [solResult, tokenBalance] = await Promise.all([
         rpc.getBalance(userAddr).send(),

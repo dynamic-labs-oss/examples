@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Loader2, ClipboardPen, Trash2, Star } from "lucide-react";
-import { useWallet } from "@/lib/providers";
+import { useWallet } from "@/lib/useWallet";
 import { useMyPlansOperations } from "@/lib/subscriptions";
 import { CreatePlanDialog } from "@/components/CreatePlanDialog";
 import { parsePlanMeta, formatTokenAmount, formatPeriod, shortenAddress, getTokenInfo } from "@/lib/utils";

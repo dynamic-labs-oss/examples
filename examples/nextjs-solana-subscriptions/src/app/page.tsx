@@ -3,12 +3,10 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Store, Search, Loader2, X, Clock } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useWallet } from "@/lib/providers";
+import { useWallet } from "@/lib/useWallet";
 import { useQuery } from "@tanstack/react-query";
 import { cn, shortenAddress } from "@/lib/utils";
 import { useMerchantSearchOperations, useSubscriptionOperations, PlanStatus } from "@/lib/subscriptions";
-import { fetchPlansForOwner } from "@solana/subscriptions";
-import { address } from "@solana/kit";
 import { PlanCard } from "@/components/PlanCard";
 
 const STORAGE_KEY = "marketplace-recent";
@@ -57,7 +55,7 @@ function MarketplaceContent() {
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { rpc, rpcUrl } = useMerchantSearchOperations();
+  const { fetchMerchantPlans, networkKey } = useMerchantSearchOperations();
 
   const {
     subscribedPlanPdas,
@@ -75,12 +73,9 @@ function MarketplaceContent() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["merchantPlans", searchAddress, rpcUrl],
-    queryFn: async () => {
-      if (!searchAddress) return [];
-      return fetchPlansForOwner(rpc, address(searchAddress));
-    },
-    enabled: !!searchAddress,
+    queryKey: ["merchantPlans", searchAddress, networkKey],
+    queryFn: () => fetchMerchantPlans(searchAddress!),
+    enabled: !!searchAddress && !!networkKey,
   });
 
   const activePlans = useMemo(() => plans.filter((p) => p.data.status === PlanStatus.Active), [plans]);

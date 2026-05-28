@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, DollarSign, Star, Users } from "lucide-react";
-import { useWallet } from "@/lib/providers";
+import { useWallet } from "@/lib/useWallet";
 import { useCollectPaymentsOperations } from "@/lib/subscriptions";
 import { toast } from "@/lib/toast";
 import { parsePlanMeta, formatTokenAmount, formatPeriod, shortenAddress, getTokenInfo } from "@/lib/utils";
