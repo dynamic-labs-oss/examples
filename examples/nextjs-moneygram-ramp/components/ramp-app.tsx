@@ -7,7 +7,11 @@ import {
   type OTPVerification,
   type WalletAccount,
 } from "@dynamic-labs-sdk/client";
-import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
+import {
+  useUser,
+  useWalletAccounts,
+  useInitStatus,
+} from "@dynamic-labs-sdk/react-hooks";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
 import { dynamicClient } from "@/lib/dynamic";
@@ -30,6 +34,7 @@ function truncate(addr: string): string {
 }
 
 export function RampApp() {
+  const initStatus = useInitStatus();
   const loggedIn = useUser() !== null;
   const walletAccounts = useWalletAccounts();
   const [selectedChain, setSelectedChain] = useState<MgChain>("base");
@@ -87,6 +92,17 @@ export function RampApp() {
     },
     [selectedChain, address]
   );
+
+  // Gate on init so auth-dependent UI (incl. the email input) only renders
+  // client-side once the SDK is ready — avoids a hydration mismatch (the SSR
+  // HTML never contains the input that browser extensions inject into).
+  if (initStatus !== "finished") {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-[#606060]">
+        Loading…
+      </div>
+    );
+  }
 
   // ── Landing / Auth ──────────────────────────────────────────────────────────
   if (!loggedIn) {
