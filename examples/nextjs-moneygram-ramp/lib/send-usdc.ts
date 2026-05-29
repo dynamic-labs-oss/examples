@@ -1,24 +1,24 @@
 "use client";
 
-import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
-import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
+import type { WalletAccount } from "@dynamic-labs-sdk/client";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
+import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 import {
   isSolanaWalletAccount,
   signAndSendTransaction,
 } from "@dynamic-labs-sdk/solana";
+import {
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddress,
+} from "@solana/spl-token";
 import {
   Connection,
   PublicKey,
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import {
-  createAssociatedTokenAccountInstruction,
-  createTransferCheckedInstruction,
-  getAssociatedTokenAddress,
-} from "@solana/spl-token";
-import type { WalletAccount } from "@dynamic-labs-sdk/client";
+import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
 import { CHAINS, type MgChain } from "./chains";
 
 /**

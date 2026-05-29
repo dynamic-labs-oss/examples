@@ -1,7 +1,7 @@
 "use client";
 
-import clsx from "clsx";
 import { CHAINS, type MgChain } from "@/lib/chains";
+import clsx from "clsx";
 
 const CHAIN_ORDER: MgChain[] = ["base", "ethereum", "solana"];
 

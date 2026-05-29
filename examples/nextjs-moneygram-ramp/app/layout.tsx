@@ -1,8 +1,8 @@
+import Footer from "@/components/footer";
+import { Header } from "@/components/header";
+import { Providers } from "@/lib/providers";
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
-import { Providers } from "@/lib/providers";
-import { Header } from "@/components/header";
-import Footer from "@/components/footer";
 import "./globals.css";
 
 const roboto = Roboto({

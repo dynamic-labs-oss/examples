@@ -1,26 +1,34 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { fetchUsdcBalance } from "@/lib/balance";
+import { CHAINS, type MgChain } from "@/lib/chains";
+import { dynamicClient } from "@/lib/dynamic";
 import {
   sendEmailOTP,
   verifyOTP,
   type OTPVerification,
   type WalletAccount,
 } from "@dynamic-labs-sdk/client";
+import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import {
+  useInitStatus,
   useUser,
   useWalletAccounts,
-  useInitStatus,
 } from "@dynamic-labs-sdk/react-hooks";
-import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
-import { dynamicClient } from "@/lib/dynamic";
-import { ArrowRight, Banknote, Check, Copy, Globe, Wallet, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  Banknote,
+  Check,
+  Copy,
+  Globe,
+  Wallet,
+  Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChainSelector } from "./chain-selector";
 import { CashPickupWidget } from "./cash-pickup-widget";
-import { CHAINS, type MgChain } from "@/lib/chains";
-import { fetchUsdcBalance } from "@/lib/balance";
 
 function getAddressForChain(chain: MgChain, accounts: WalletAccount[]): string {
   if (chain === "solana")

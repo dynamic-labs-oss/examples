@@ -1,8 +1,8 @@
 "use client";
 
-import { createPublicClient, formatUnits, http, parseAbi } from "viem";
-import { Connection, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { createPublicClient, formatUnits, http, parseAbi } from "viem";
 import { CHAINS, type MgChain } from "./chains";
 
 const erc20BalanceAbi = parseAbi([

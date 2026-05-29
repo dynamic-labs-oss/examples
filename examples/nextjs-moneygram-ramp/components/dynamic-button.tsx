@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { dynamicClient } from "@/lib/dynamic";
 import {
-  sendEmailOTP,
-  verifyOTP,
-  signInWithSocialRedirect,
   logout,
+  sendEmailOTP,
+  signInWithSocialRedirect,
+  verifyOTP,
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
-import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
+import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
-import { dynamicClient } from "@/lib/dynamic";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function GoogleIcon() {
   return (

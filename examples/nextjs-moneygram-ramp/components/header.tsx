@@ -1,6 +1,6 @@
 import Link from "next/link";
-import DynamicLogo from "./dynamic-logo";
 import DynamicButton from "./dynamic-button";
+import DynamicLogo from "./dynamic-logo";
 
 export function Header() {
   return (

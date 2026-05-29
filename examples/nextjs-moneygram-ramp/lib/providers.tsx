@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
-import { DynamicProvider, useEvent } from "@dynamic-labs-sdk/react-hooks";
+import { dynamicClient, initDynamic } from "@/lib/dynamic";
 import {
-  detectSocialRedirectUrl,
   completeSocialRedirect,
+  detectSocialRedirectUrl,
 } from "@dynamic-labs-sdk/client";
 import {
   createWaasWalletAccounts,
   getChainsMissingWaasWalletAccounts,
 } from "@dynamic-labs-sdk/client/waas";
+import { DynamicProvider, useEvent } from "@dynamic-labs-sdk/react-hooks";
+import { useEffect } from "react";
 import { Toaster } from "sonner";
-import { dynamicClient, initDynamic } from "@/lib/dynamic";
 
 /**
  * Initializes the client, then completes the Google OAuth redirect (returns
