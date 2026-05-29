@@ -17,14 +17,14 @@
  * payload.chain in each incoming message is used for balance/signing dispatch.
  */
 
-import { useEffect, useRef } from "react";
+import { fetchUsdcBalance } from "@/lib/balance";
+import { CHAINS, type MgChain } from "@/lib/chains";
+import { env } from "@/lib/env";
+import { sendUsdc } from "@/lib/send-usdc";
 import type { WalletAccount } from "@dynamic-labs-sdk/client";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
-import { CHAINS, type MgChain } from "@/lib/chains";
-import { fetchUsdcBalance } from "@/lib/balance";
-import { sendUsdc } from "@/lib/send-usdc";
-import { env } from "@/lib/env";
+import { useEffect, useRef } from "react";
 
 const WIDGET_ORIGIN = "https://d3em1tdv304u3f.cloudfront.net";
 const API_BASE_URL = "https://zq4rdvdd9j.execute-api.us-east-2.amazonaws.com";
@@ -106,7 +106,7 @@ export function CashPickupWidget({
               apiBaseUrl: API_BASE_URL,
               apiVersion: "v2",
             },
-            theme: "dark",
+            theme: "light",
           });
           break;
         }

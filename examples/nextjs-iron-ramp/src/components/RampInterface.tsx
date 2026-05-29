@@ -1,6 +1,9 @@
 "use client";
 
-import { useDynamicContext, DynamicWidget, useUserWallets, useSwitchWallet } from "@dynamic-labs/sdk-react-core";
+import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
+import { signMessage } from "@dynamic-labs-sdk/client";
+import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
+import DynamicButton from "@/components/dynamic/dynamic-button";
 import { useState, useEffect, useCallback } from "react";
 import { config } from "@/lib/config";
 import { useKYCMetadata } from "@/lib/hooks/useKYCMetadata";
@@ -105,9 +108,8 @@ const ONBOARD_STEPS = [
 ];
 
 export function RampInterface() {
-  const { user, primaryWallet } = useDynamicContext();
-  const userWallets = useUserWallets();
-  const switchWallet = useSwitchWallet();
+  const user = useUser();
+  const userWallets = useWalletAccounts();
   const {
     customerId: metaCustomerId,
     step: onboardingStep,
@@ -241,28 +243,17 @@ export function RampInterface() {
     setError("");
     try {
       let addr = wallet.address;
-      const isSol = !addr.startsWith("0x");
+      const isSol = isSolanaWalletAccount(wallet);
       let blockchain = "Base";
       if (isSol) {
         blockchain = "Solana";
       } else {
         addr = addr.toLowerCase();
-        const chain = wallet.chain;
-        if (chain && chain !== "EVM") {
-          const n = parseInt(String(chain));
-          switch (n) {
-            case 1: blockchain = "Ethereum"; break;
-            case 137: blockchain = "Polygon"; break;
-            case 42161: blockchain = "Arbitrum"; break;
-            case 8453: blockchain = "Base"; break;
-          }
-        }
       }
-      if (wallet.id !== primaryWallet?.id) await switchWallet(wallet.id);
       const now = new Date();
       const dateStr = `${now.getUTCDate().toString().padStart(2, "0")}/${(now.getUTCMonth() + 1).toString().padStart(2, "0")}/${now.getUTCFullYear()}`;
       const msg = `I am verifying ownership of the wallet address ${addr} as customer ${customerId}. This message was signed on ${dateStr} to confirm my control over this wallet.`;
-      const sig = await wallet.signMessage(msg);
+      const { signature: sig } = await signMessage({ walletAccount: wallet, message: msg });
       if (!sig) throw new Error("Failed to sign message");
       const res = await fetch(`${config.api.baseUrl}/api/iron/wallets/self-hosted`, {
         method: "POST",
@@ -280,7 +271,7 @@ export function RampInterface() {
     } finally {
       setLinkingExtra(null);
     }
-  }, [customerId, primaryWallet, switchWallet, fetchRegisteredAccounts]);
+  }, [customerId, fetchRegisteredAccounts]);
 
   useEffect(() => {
     if (registeredWallets.length > 0 && selectedWalletIndex === null) {
@@ -315,6 +306,9 @@ export function RampInterface() {
           registeredBanks[idx].account_identifier?.iban ||
           ""
       );
+      if (registeredBanks[idx].currency) {
+        setSelectedFiatCurrency(registeredBanks[idx].currency);
+      }
     }
   }, [registeredBanks, selectedBankIndex, metaBankIban]);
 
@@ -411,7 +405,9 @@ export function RampInterface() {
               action: "quote",
               customer_id: customerId,
               source_currency: selectedToken,
-              destination_currency: selectedFiatCurrency,
+              // The recipient bank account has a fixed currency — it must match
+              // the offramp destination currency or Iron rejects the quote.
+              destination_currency: selectedBank?.currency || selectedFiatCurrency,
               source_amount: parseFloat(amount) * 1000000,
               bank_account_id: selectedIban,
               bank_id: selectedBank?.id,
@@ -486,7 +482,7 @@ export function RampInterface() {
               bank_id: selectedBank?.id,
               blockchain: selectedChain,
               source_currency: selectedToken,
-              destination_currency: selectedFiatCurrency,
+              destination_currency: selectedBank?.currency || selectedFiatCurrency,
             };
 
       const res = await fetch(endpoint, {
@@ -540,9 +536,11 @@ export function RampInterface() {
           {!user ? (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <p className="text-sm text-muted-foreground">
-                Connect your wallet to start onramping and offramping.
+                Sign in to start onramping and offramping.
               </p>
-              <DynamicWidget />
+              <div className="min-w-[160px]">
+                <DynamicButton />
+              </div>
             </div>
           ) : metadataLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -888,12 +886,6 @@ export function RampInterface() {
                               if (registeredWallets[idx]?.blockchain) {
                                 setSelectedChain(registeredWallets[idx].blockchain);
                               }
-                              // Switch the Dynamic primary wallet to match the selected registered wallet
-                              const isSol = addr && !addr.startsWith("0x");
-                              const match = userWallets.find((dw) =>
-                                isSol ? dw.address === addr : dw.address.toLowerCase() === addr.toLowerCase()
-                              );
-                              if (match) switchWallet(match.id);
                             }}
                             disabled={loadingAccounts}
                           >
@@ -935,6 +927,10 @@ export function RampInterface() {
                                     ?.iban ||
                                   ""
                               );
+                              // Match the offramp currency to the bank's currency
+                              if (registeredBanks[idx]?.currency) {
+                                setSelectedFiatCurrency(registeredBanks[idx].currency);
+                              }
                             }}
                             disabled={loadingAccounts}
                           >

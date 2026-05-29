@@ -1,7 +1,7 @@
 "use client";
 
-import clsx from "clsx";
 import { CHAINS, type MgChain } from "@/lib/chains";
+import clsx from "clsx";
 
 const CHAIN_ORDER: MgChain[] = ["base", "ethereum", "solana"];
 
@@ -20,8 +20,8 @@ export function ChainSelector({ selected, onChange }: ChainSelectorProps) {
           className={clsx(
             "px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors",
             selected === chain
-              ? "bg-teal-600/20 border border-teal-600/40 text-teal-400"
-              : "text-gray-400 hover:text-white hover:bg-gray-800/60 border border-transparent",
+              ? "bg-[#4779FF]/10 border border-[#4779FF]/30 text-[#4779FF]"
+              : "text-[#606060] hover:text-[#030303] hover:bg-[#F9F9F9] border border-transparent",
           )}
         >
           {CHAINS[chain].name}

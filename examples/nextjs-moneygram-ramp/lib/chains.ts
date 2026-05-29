@@ -1,5 +1,5 @@
-import { baseSepolia, sepolia } from "viem/chains";
 import type { Chain } from "viem";
+import { baseSepolia, sepolia } from "viem/chains";
 import { env } from "./env";
 
 /**
