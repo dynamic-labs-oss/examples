@@ -7,7 +7,7 @@ import {
   useInitStatus,
 } from "@dynamic-labs-sdk/react-hooks";
 import {
-  authenticateWithSocial,
+  signInWithSocialRedirect,
   logout,
   sendEmailOTP,
   verifyOTP,
@@ -115,11 +115,10 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
-      await authenticateWithSocial(
-        { provider: "google", redirectUrl: globalThis.location.href },
+      await signInWithSocialRedirect(
+        { provider: "google", redirectUrl: globalThis.location.origin },
         dynamicClient
       );
-      setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Google sign-in failed.");
     } finally {
@@ -175,8 +174,9 @@ export default function DynamicButton() {
     const primary = evm?.address ?? solana?.address ?? "";
     const email = user?.email ?? "";
     const label = email ? truncateEmail(email) : truncate(primary);
+    const addrStart = primary.startsWith("0x") ? 2 : 0;
     const initials = (
-      email ? email.slice(0, 2) : primary.slice(primary.startsWith("0x") ? 2 : 0, 2)
+      email ? email.slice(0, 2) : primary.slice(addrStart, 2)
     ).toUpperCase();
     return (
       <div className="relative" ref={ref}>

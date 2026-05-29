@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import {
   sendEmailOTP,
   verifyOTP,
-  getWalletAccounts,
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
-import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
+import {
+  createWaasWalletAccounts,
+  getChainsMissingWaasWalletAccounts,
+} from "@dynamic-labs-sdk/client/waas";
 import { dynamicClient } from "@/lib/dynamic";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
@@ -86,11 +88,9 @@ export function RampApp() {
     setLoading(true);
     try {
       await verifyOTP({ otpVerification, verificationToken: otp });
-      if (getWalletAccounts().length === 0) {
-        await createWaasWalletAccounts(
-          { chains: ["EVM", "SOL"] },
-          dynamicClient,
-        );
+      const missing = getChainsMissingWaasWalletAccounts(dynamicClient);
+      if (missing.length > 0) {
+        await createWaasWalletAccounts({ chains: missing }, dynamicClient);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid code");
