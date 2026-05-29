@@ -5,12 +5,12 @@ import {
   sendEmailOTP,
   verifyOTP,
   type OTPVerification,
+  type WalletAccount,
 } from "@dynamic-labs-sdk/client";
+import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
-import type { WalletAccount } from "@dynamic-labs-sdk/client";
 import { dynamicClient } from "@/lib/dynamic";
-import { useWallet } from "@/app/providers";
 import { ArrowRight, Banknote, Check, Copy, Globe, Wallet, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { ChainSelector } from "./chain-selector";
@@ -30,7 +30,8 @@ function truncate(addr: string): string {
 }
 
 export function RampApp() {
-  const { loggedIn, walletAccounts, ensureWallets } = useWallet();
+  const loggedIn = useUser() !== null;
+  const walletAccounts = useWalletAccounts();
   const [selectedChain, setSelectedChain] = useState<MgChain>("base");
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [widgetOpen, setWidgetOpen] = useState(false);
@@ -71,7 +72,6 @@ export function RampApp() {
     setLoading(true);
     try {
       await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
-      await ensureWallets();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid code");
     } finally {
@@ -81,9 +81,8 @@ export function RampApp() {
 
   const handleSuccess = useCallback(
     (amount: number) => {
-      toast.success(
-        `${amount > 0 ? `$${amount.toFixed(2)} USDC` : "Funds"} sent for cash pickup on ${CHAINS[selectedChain].name}`
-      );
+      const sent = amount > 0 ? `$${amount.toFixed(2)} USDC` : "Funds";
+      toast.success(`${sent} sent for cash pickup on ${CHAINS[selectedChain].name}`);
       if (address) fetchUsdcBalance(selectedChain, address).then(setUsdcBalance);
     },
     [selectedChain, address]
@@ -94,7 +93,7 @@ export function RampApp() {
     return (
       <div className="bg-[rgb(249,249,249)] text-[#030303]">
         <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#4779FF]/5 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-linear-to-br from-[#4779FF]/5 via-transparent to-transparent pointer-events-none" />
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[#4779FF]/5 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative container mx-auto px-4 pt-20 pb-16 text-center">
@@ -107,27 +106,7 @@ export function RampApp() {
             </p>
 
             <div className="mx-auto max-w-xs bg-white border border-[#DADADA] rounded-2xl p-6 text-left space-y-3 shadow-sm">
-              {!otpVerification ? (
-                <>
-                  <input
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    className="w-full bg-[#F9F9F9] border border-[#DADADA] rounded-xl px-4 py-2.5 text-[#030303] placeholder-[#606060] text-sm focus:outline-none focus:border-[#4779FF] transition-colors"
-                    suppressHydrationWarning
-                  />
-                  <button
-                    onClick={handleSendOtp}
-                    disabled={loading || !email}
-                    className="w-full flex items-center justify-center gap-2 bg-[#4779FF] hover:bg-[#3366ee] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
-                  >
-                    {loading ? "Sending..." : "Get started"}
-                    {!loading && <ArrowRight className="w-4 h-4" />}
-                  </button>
-                </>
-              ) : (
+              {otpVerification ? (
                 <>
                   <p className="text-xs text-[#606060] text-center">
                     Code sent to <span className="text-[#030303]">{email}</span>
@@ -158,6 +137,26 @@ export function RampApp() {
                     className="w-full text-[#606060] hover:text-[#030303] text-xs text-center transition-colors py-1"
                   >
                     ← Back
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="email"
+                    placeholder="Email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                    className="w-full bg-[#F9F9F9] border border-[#DADADA] rounded-xl px-4 py-2.5 text-[#030303] placeholder-[#606060] text-sm focus:outline-none focus:border-[#4779FF] transition-colors"
+                    suppressHydrationWarning
+                  />
+                  <button
+                    onClick={handleSendOtp}
+                    disabled={loading || !email}
+                    className="w-full flex items-center justify-center gap-2 bg-[#4779FF] hover:bg-[#3366ee] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
+                  >
+                    {loading ? "Sending..." : "Get started"}
+                    {!loading && <ArrowRight className="w-4 h-4" />}
                   </button>
                 </>
               )}
@@ -227,7 +226,7 @@ export function RampApp() {
               ].map(({ step, title, desc }, i) => (
                 <div key={step} className="flex gap-5">
                   <div className="flex flex-col items-center">
-                    <div className="w-9 h-9 rounded-full bg-[#4779FF]/10 border border-[#4779FF]/30 flex items-center justify-center flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-[#4779FF]/10 border border-[#4779FF]/30 flex items-center justify-center shrink-0">
                       <span className="text-[#4779FF] text-xs font-bold">{step}</span>
                     </div>
                     {i < 2 && <div className="w-px h-10 bg-[#DADADA] mt-1" />}
@@ -261,7 +260,7 @@ export function RampApp() {
 
           <div className="bg-white border border-[#DADADA] rounded-2xl p-6 space-y-5 hover:shadow-sm transition-shadow">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#4779FF]/10 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-[#4779FF]/10 flex items-center justify-center shrink-0">
                 <Wallet className="w-5 h-5 text-[#4779FF]" />
               </div>
               <div className="flex-1 min-w-0">

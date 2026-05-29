@@ -5,10 +5,13 @@ import {
   sendEmailOTP,
   verifyOTP,
   signInWithSocialRedirect,
+  logout,
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
+import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
+import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
+import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
 import { dynamicClient } from "@/lib/dynamic";
-import { useWallet } from "@/app/providers";
 
 function GoogleIcon() {
   return (
@@ -57,8 +60,12 @@ const outlineBtn =
   "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-[#DADADA] text-[#030303] hover:bg-[#F9F9F9] disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function DynamicButton() {
-  const { evmAccount, solanaAccount, email, loggedIn, disconnect, ensureWallets } =
-    useWallet();
+  const user = useUser();
+  const accounts = useWalletAccounts();
+  const loggedIn = user !== null;
+  const email = user?.email ?? null;
+  const evmAccount = accounts.find(isEvmWalletAccount) ?? null;
+  const solanaAccount = accounts.find(isSolanaWalletAccount) ?? null;
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "email" | "otp">("menu");
   const [emailInput, setEmailInput] = useState("");
@@ -132,7 +139,6 @@ export default function DynamicButton() {
       setError(null);
       try {
         await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
-        await ensureWallets();
         setOpen(false);
         reset();
       } catch (err) {
@@ -141,7 +147,7 @@ export default function DynamicButton() {
         setLoading(false);
       }
     },
-    [otpVerification, otp, ensureWallets]
+    [otpVerification, otp]
   );
 
   const copy = (addr: string, key: string) => {
@@ -200,7 +206,7 @@ export default function DynamicButton() {
             <div className="border-t border-[#DADADA] my-1" />
             <button
               onClick={() => {
-                disconnect();
+                logout(dynamicClient);
                 setOpen(false);
               }}
               className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -320,12 +326,12 @@ function AddressRow({
   addr,
   copied,
   onCopy,
-}: {
+}: Readonly<{
   label: string;
   addr: string;
   copied: boolean;
   onCopy: () => void;
-}) {
+}>) {
   return (
     <div className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-[#F9F9F9]">
       <div className="min-w-0">

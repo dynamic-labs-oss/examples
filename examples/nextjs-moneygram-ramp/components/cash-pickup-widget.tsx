@@ -106,7 +106,7 @@ export function CashPickupWidget({
               apiBaseUrl: API_BASE_URL,
               apiVersion: "v2",
             },
-            theme: "dark",
+            theme: "light",
           });
           break;
         }
