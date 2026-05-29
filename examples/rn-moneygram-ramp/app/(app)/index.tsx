@@ -12,7 +12,6 @@ import {
 import * as Clipboard from "expo-clipboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { dynamicClient } from "@/lib/dynamic";
-import { CHAIN_ORDER, CHAINS, type Chain } from "@/lib/chains";
 import { fetchUsdcBalance } from "@/lib/balance";
 import { MoneygramWidget } from "@/components/MoneygramWidget";
 import {
@@ -27,13 +26,8 @@ function truncate(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-function isEvmAddress(addr?: string) {
-  return !!addr?.startsWith("0x");
-}
-
 export default function HomeScreen() {
   const client = useReactiveClient(dynamicClient);
-  const [selectedChain, setSelectedChain] = useState<Chain>("base");
   const [balance, setBalance] = useState<number | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [widgetOpen, setWidgetOpen] = useState(false);
@@ -43,23 +37,10 @@ export default function HomeScreen() {
 
   const userWallets = client.wallets.userWallets ?? [];
 
-  // Dynamic 4.x embedded wallets: EVM chain is "ETH", Solana is "SOL"
-  const evmWallet =
-    userWallets.find(
-      (w) => w.chain === "ETH" || w.chain === "EVM" || isEvmAddress(w.address)
-    ) ?? null;
+  // Dynamic 4.x embedded wallets: Solana is "SOL"
+  const solanaWallet = userWallets.find((w) => w.chain === "SOL") ?? null;
 
-  const solanaWallet =
-    userWallets.find(
-      (w) => w.chain === "SOL" || (!isEvmAddress(w.address) && (w.address?.length ?? 0) > 30)
-    ) ?? null;
-
-  const getAddress = useCallback((): string => {
-    if (selectedChain === "solana") return solanaWallet?.address ?? "";
-    return evmWallet?.address ?? "";
-  }, [selectedChain, evmWallet, solanaWallet]);
-
-  const address = getAddress();
+  const address = solanaWallet?.address ?? "";
 
   const refreshBalance = useCallback(async () => {
     if (!address) {
@@ -68,13 +49,12 @@ export default function HomeScreen() {
     }
     setLoadingBalance(true);
     try {
-      const mint = selectedChain === "solana" ? USDC_MINT_BY_CHAIN[solanaChainId] : undefined;
-      const bal = await fetchUsdcBalance(selectedChain, address, mint);
+      const bal = await fetchUsdcBalance(address, USDC_MINT_BY_CHAIN[solanaChainId]);
       setBalance(bal);
     } finally {
       setLoadingBalance(false);
     }
-  }, [selectedChain, address, solanaChainId]);
+  }, [address, solanaChainId]);
 
   useEffect(() => {
     if (!solanaWallet) return;
@@ -118,19 +98,6 @@ export default function HomeScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleLogout = () => {
-    Alert.alert("Sign out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out",
-        style: "destructive",
-        onPress: () => dynamicClient.auth.logout(),
-      },
-    ]);
-  };
-
-  const solanaBalance = selectedChain === "solana" ? (balance ?? 0) : 0;
-
   const handleSuccess = useCallback(
     (amount: string) => {
       const parsed = Number.parseFloat(amount);
@@ -141,7 +108,7 @@ export default function HomeScreen() {
     [refreshBalance]
   );
 
-  const canRamp = !!solanaWallet?.address && balance !== null && balance > 0 && selectedChain === "solana";
+  const canRamp = !!address && balance !== null && balance > 0;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -174,13 +141,6 @@ export default function HomeScreen() {
               </Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={styles.logoutBtn}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.logoutText}>Sign out</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -195,33 +155,9 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Chain selector */}
-        <View style={styles.chainRow}>
-          {CHAIN_ORDER.map((chain) => {
-            const active = selectedChain === chain;
-            return (
-              <TouchableOpacity
-                key={chain}
-                onPress={() => setSelectedChain(chain)}
-                style={[styles.chainBtn, active && styles.chainBtnActive]}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.chainBtnText,
-                    active && styles.chainBtnTextActive,
-                  ]}
-                >
-                  {CHAINS[chain].name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
         {/* Wallet + Balance card */}
         <View style={styles.card}>
-          <Text style={styles.label}>Wallet address</Text>
+          <Text style={styles.label}>Solana wallet address</Text>
           <View style={styles.addressRow}>
             <Text style={[styles.addressText, !address && styles.dimText]}>
               {address ? truncate(address) : "No wallet connected"}
@@ -255,45 +191,15 @@ export default function HomeScreen() {
 
           {!address && (
             <Text style={styles.hint}>
-              Your {CHAINS[selectedChain].name} wallet is still initialising…
+              Your Solana wallet is still initialising…
             </Text>
           )}
           {!!address && balance === 0 && !loadingBalance && (
             <Text style={styles.hint}>
-              Fund your wallet with USDC on {CHAINS[selectedChain].name} to get
-              started.
+              Fund your wallet with USDC on Solana to get started.
             </Text>
           )}
         </View>
-
-        {/* Wallet addresses summary */}
-        {(evmWallet?.address || solanaWallet?.address) && (
-          <View style={styles.walletsCard}>
-            <Text style={styles.walletsSectionTitle}>Your wallets</Text>
-            {evmWallet?.address && (
-              <View style={styles.walletRow}>
-                <View style={[styles.chainDot, { backgroundColor: "#627EEA" }]} />
-                <View style={styles.walletInfo}>
-                  <Text style={styles.walletChainLabel}>EVM (Base / Ethereum)</Text>
-                  <Text style={styles.walletAddress}>
-                    {truncate(evmWallet.address)}
-                  </Text>
-                </View>
-              </View>
-            )}
-            {solanaWallet?.address && (
-              <View style={styles.walletRow}>
-                <View style={[styles.chainDot, { backgroundColor: "#9945FF" }]} />
-                <View style={styles.walletInfo}>
-                  <Text style={styles.walletChainLabel}>Solana</Text>
-                  <Text style={styles.walletAddress}>
-                    {truncate(solanaWallet.address)}
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
 
         {/* How it works */}
         <View style={styles.howCard}>
@@ -302,12 +208,12 @@ export default function HomeScreen() {
             {
               n: "1",
               t: "Sign in",
-              d: "Authenticate with email — embedded wallets on EVM and Solana are created automatically.",
+              d: "Authenticate with email — a Solana embedded wallet is created automatically.",
             },
             {
               n: "2",
-              t: "Choose your chain",
-              d: "Select Base, Ethereum, or Solana — whichever holds your USDC.",
+              t: "Fund with USDC",
+              d: "Send USDC on Solana to your wallet address above.",
             },
             {
               n: "3",
@@ -330,8 +236,8 @@ export default function HomeScreen() {
 
       <MoneygramWidget
         open={widgetOpen}
-        walletAddress={solanaWallet?.address ?? ""}
-        usdcBalance={solanaBalance}
+        walletAddress={address}
+        usdcBalance={balance ?? 0}
         usdcMint={USDC_MINT_BY_CHAIN[solanaChainId]}
         onClose={() => setWidgetOpen(false)}
         onSuccess={handleSuccess}
@@ -381,22 +287,6 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: "#9ca3af", fontSize: 13, fontWeight: "500" },
   content: { padding: 20, gap: 16, paddingBottom: 40 },
-  chainRow: { flexDirection: "row", gap: 8 },
-  chainBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    alignItems: "center",
-  },
-  chainBtnActive: {
-    backgroundColor: "rgba(20,184,166,0.12)",
-    borderColor: "rgba(20,184,166,0.4)",
-  },
-  chainBtnText: { color: "#9ca3af", fontSize: 14, fontWeight: "600" },
-  chainBtnTextActive: { color: "#14b8a6" },
   card: {
     backgroundColor: "#111827",
     borderRadius: 20,
@@ -454,30 +344,6 @@ const styles = StyleSheet.create({
   rampBtnDisabled: { opacity: 0.4 },
   rampBtnText: { color: "#030712", fontSize: 17, fontWeight: "700" },
   hint: { color: "#9ca3af", fontSize: 12, textAlign: "center", marginTop: 2 },
-  walletsCard: {
-    backgroundColor: "#111827",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    gap: 12,
-  },
-  walletsSectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#f9fafb",
-    marginBottom: 4,
-  },
-  walletRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  chainDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  walletInfo: { flex: 1 },
-  walletChainLabel: { fontSize: 11, color: "#9ca3af", fontWeight: "600" },
-  walletAddress: {
-    fontSize: 14,
-    fontFamily: "monospace",
-    color: "#f9fafb",
-    marginTop: 2,
-  },
   howCard: {
     backgroundColor: "#111827",
     borderRadius: 20,

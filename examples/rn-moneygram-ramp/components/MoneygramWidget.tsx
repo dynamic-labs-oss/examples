@@ -40,6 +40,7 @@ import {
   createTransferInstruction,
 } from '@solana/spl-token';
 import { dynamicClient } from '@/lib/dynamic';
+import { type MgiRecord, saveRecord } from '@/lib/moneygram';
 
 // Sandbox widget domain — update WIDGET_ORIGIN to the production domain for prod
 const WIDGET_ORIGIN    = 'https://playground.xramps.moneygram.com';
@@ -70,6 +71,12 @@ export interface MoneygramWidgetProps {
   usdcMint?:         string;   // override mint for the active Solana network
   onClose:           () => void;
   onSuccess?:        (amount: string) => void;
+  // View mode — reopen an existing transaction to show its current status,
+  // pickup instructions, and refund option (if eligible). When set, the widget
+  // is read-only: no balance check or signing happens.
+  viewTransactionId?: string;
+  // Fired once a completed transaction has been persisted locally.
+  onTransactionSaved?: (record: MgiRecord) => void;
 }
 
 export function MoneygramWidget({
@@ -79,10 +86,14 @@ export function MoneygramWidget({
   usdcMint,
   onClose,
   onSuccess,
+  viewTransactionId,
+  onTransactionSaved,
 }: MoneygramWidgetProps) {
   const webViewRef       = useRef<WebView>(null);
   const sessionRef       = useRef<Session | null>(null);
   const pendingAmountRef = useRef('');
+
+  const isViewMode = Boolean(viewTransactionId);
 
   const [widgetUrl, setWidgetUrl] = useState<string | null>(null);
   const [loading,   setLoading]   = useState(true);
@@ -102,6 +113,10 @@ export function MoneygramWidget({
         // Cache-bust so we always get fresh widget JS
         const url = new URL(session.widgetUrl);
         url.searchParams.set('_t', String(Date.now()));
+        // View mode: tell the widget which existing transaction to reopen.
+        if (isViewMode && viewTransactionId) {
+          url.searchParams.set('transactionId', viewTransactionId);
+        }
         setWidgetUrl(url.toString());
         console.log('[MG Widget] Session created:', session.sessionId);
         console.log('[MG Widget] Widget URL:', url.toString());
@@ -111,7 +126,7 @@ export function MoneygramWidget({
         setError(err.message);
         setLoading(false);
       });
-  }, [open]);
+  }, [open, isViewMode, viewTransactionId]);
 
   // Base64-encode payload so special characters can't break the JS context.
   function post(type: string, payload?: Record<string, unknown>) {
@@ -179,6 +194,11 @@ export function MoneygramWidget({
             apiBaseUrl: RAMPS_API_BASE,
           },
           theme: 'dark',
+          // View mode: show status + pickup instructions + refund flow for an
+          // existing transaction instead of starting a new off-ramp.
+          ...(isViewMode && viewTransactionId
+            ? { mode: 'view', transactionId: viewTransactionId }
+            : {}),
         });
         break;
       }
@@ -227,10 +247,27 @@ export function MoneygramWidget({
         break;
       }
 
-      // ── D. Transaction complete — do NOT close; widget shows its own screen ──
+      // ── D. Transaction complete — persist the record, then do NOT close ──────
+      // The widget shows its own completion screen with the reference number;
+      // RAMPS_CLOSE fires when the user dismisses it. We persist the record now
+      // so it shows up in history and can be reopened in view mode later.
       case 'RAMPS_TRANSACTION_COMPLETE': {
-        console.log('[MG Widget] Transaction complete — ref:', payload?.referenceNumber);
-        onSuccess?.(pendingAmountRef.current || '0');
+        const p = (payload ?? {}) as Record<string, unknown>;
+        console.log('[MG Widget] Transaction complete — ref:', p.referenceNumber);
+        const record: MgiRecord = {
+          id:              String(p.id ?? `mg-${Date.now()}`),
+          referenceNumber: String(p.referenceNumber ?? ''),
+          amount:          pendingAmountRef.current || '0',
+          asset:           'USDC',
+          createdAt:       Date.now(),
+        };
+        try {
+          await saveRecord(record);
+          onTransactionSaved?.(record);
+        } catch (err) {
+          console.error('[MG Widget] Failed to persist record:', err);
+        }
+        onSuccess?.(record.amount);
         // Don't close — widget shows completion screen; RAMPS_CLOSE fires on dismiss
         break;
       }
@@ -278,7 +315,9 @@ export function MoneygramWidget({
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>Cash Pickup</Text>
+            <Text style={styles.headerTitle}>
+              {isViewMode ? 'Transaction status' : 'Cash Pickup'}
+            </Text>
             <Text style={styles.headerSub}>Solana · USDC</Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
