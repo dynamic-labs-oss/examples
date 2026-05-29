@@ -306,6 +306,9 @@ export function RampInterface() {
           registeredBanks[idx].account_identifier?.iban ||
           ""
       );
+      if (registeredBanks[idx].currency) {
+        setSelectedFiatCurrency(registeredBanks[idx].currency);
+      }
     }
   }, [registeredBanks, selectedBankIndex, metaBankIban]);
 
@@ -402,7 +405,9 @@ export function RampInterface() {
               action: "quote",
               customer_id: customerId,
               source_currency: selectedToken,
-              destination_currency: selectedFiatCurrency,
+              // The recipient bank account has a fixed currency — it must match
+              // the offramp destination currency or Iron rejects the quote.
+              destination_currency: selectedBank?.currency || selectedFiatCurrency,
               source_amount: parseFloat(amount) * 1000000,
               bank_account_id: selectedIban,
               bank_id: selectedBank?.id,
@@ -477,7 +482,7 @@ export function RampInterface() {
               bank_id: selectedBank?.id,
               blockchain: selectedChain,
               source_currency: selectedToken,
-              destination_currency: selectedFiatCurrency,
+              destination_currency: selectedBank?.currency || selectedFiatCurrency,
             };
 
       const res = await fetch(endpoint, {
@@ -922,6 +927,10 @@ export function RampInterface() {
                                     ?.iban ||
                                   ""
                               );
+                              // Match the offramp currency to the bank's currency
+                              if (registeredBanks[idx]?.currency) {
+                                setSelectedFiatCurrency(registeredBanks[idx].currency);
+                              }
                             }}
                             disabled={loadingAccounts}
                           >

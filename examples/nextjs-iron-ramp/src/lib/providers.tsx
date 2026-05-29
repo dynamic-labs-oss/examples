@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
-import { DynamicProvider, useUser } from "@dynamic-labs-sdk/react-hooks";
+import { DynamicProvider, useEvent } from "@dynamic-labs-sdk/react-hooks";
 import {
   completeSocialRedirect,
   detectSocialRedirectUrl,
-  getWalletAccounts,
 } from "@dynamic-labs-sdk/client";
-import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
+import {
+  createWaasWalletAccounts,
+  getChainsMissingWaasWalletAccounts,
+} from "@dynamic-labs-sdk/client/waas";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { dynamicClient, initDynamic } from "./dynamic";
 
@@ -21,8 +23,10 @@ const queryClient = new QueryClient({
 });
 
 /**
- * Initializes the Dynamic client on mount and completes any social-login
- * redirect (Google) when the user lands back on the app.
+ * Initializes the Dynamic client on mount and completes the Google OAuth
+ * redirect. Social sign-in returns to the app with a `?dynamicOauthCode=…`
+ * param — `completeSocialRedirect` consumes it to finish authentication.
+ * Without this the token is set but the user is never hydrated.
  */
 function DynamicBootstrap() {
   useEffect(() => {
@@ -47,19 +51,22 @@ function DynamicBootstrap() {
 }
 
 /**
- * Once a user is signed in, ensure they have embedded EVM + Solana wallets.
+ * Once a user signs in, ensure they have embedded EVM + Solana wallets.
+ * Uses `getChainsMissingWaasWalletAccounts()` rather than guarding on
+ * `accounts.length === 0` — the account list can be momentarily stale right
+ * after auth, which would otherwise silently skip wallet creation.
  */
 function WalletBootstrap() {
-  const user = useUser();
-  useEffect(() => {
-    if (!user) return;
-    if (getWalletAccounts().length === 0) {
-      createWaasWalletAccounts(
-        { chains: ["EVM", "SOL"] },
-        dynamicClient
-      ).catch(() => {});
-    }
-  }, [user]);
+  useEvent({
+    event: "userChanged",
+    listener: async (user) => {
+      if (!user) return;
+      const missing = getChainsMissingWaasWalletAccounts(dynamicClient);
+      if (missing.length > 0) {
+        await createWaasWalletAccounts({ chains: missing }, dynamicClient);
+      }
+    },
+  });
   return null;
 }
 
