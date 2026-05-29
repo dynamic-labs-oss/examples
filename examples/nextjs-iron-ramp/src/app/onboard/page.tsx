@@ -1,6 +1,7 @@
 "use client";
 
-import { useDynamicContext, useUserWallets, useSwitchWallet } from "@dynamic-labs/sdk-react-core";
+import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
+import { signMessage } from "@dynamic-labs-sdk/client";
 import { useState, useEffect, useCallback } from "react";
 import { config } from "@/lib/config";
 import { ArrowRight, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
@@ -42,9 +43,8 @@ function getNetworkLabel(address: string, chain?: string | number | null): strin
 }
 
 export default function OnboardPage() {
-  const { user, primaryWallet } = useDynamicContext();
-  const userWallets = useUserWallets();
-  const switchWallet = useSwitchWallet();
+  const user = useUser();
+  const userWallets = useWalletAccounts();
   const {
     customerId,
     walletAddress: metaWalletAddress,
@@ -336,7 +336,6 @@ export default function OnboardPage() {
       let walletAddress = wallet.address;
       if (!walletAddress) throw new Error("Unable to get wallet address");
 
-      const chainId = wallet.chain;
       const isSolanaWallet = !walletAddress.startsWith("0x");
       let blockchain = "Base";
 
@@ -344,28 +343,12 @@ export default function OnboardPage() {
         blockchain = "Solana";
       } else {
         walletAddress = walletAddress.toLowerCase();
-        if (chainId && chainId !== "EVM") {
-          const n = typeof chainId === "string" ? parseInt(chainId) : chainId;
-          if (!isNaN(n)) {
-            switch (n) {
-              case 1: blockchain = "Ethereum"; break;
-              case 137: blockchain = "Polygon"; break;
-              case 42161: blockchain = "Arbitrum"; break;
-              case 8453: blockchain = "Base"; break;
-            }
-          }
-        }
-      }
-
-      // Make this wallet primary in Dynamic before signing so the prompt appears on the right wallet
-      if (wallet.id !== primaryWallet?.id) {
-        await switchWallet(wallet.id);
       }
 
       const now = new Date();
       const dateStr = `${now.getUTCDate().toString().padStart(2, "0")}/${(now.getUTCMonth() + 1).toString().padStart(2, "0")}/${now.getUTCFullYear()}`;
       const proofMessage = `I am verifying ownership of the wallet address ${walletAddress} as customer ${customerId}. This message was signed on ${dateStr} to confirm my control over this wallet.`;
-      const signature = await wallet.signMessage(proofMessage);
+      const { signature } = await signMessage({ walletAccount: wallet, message: proofMessage });
       if (!signature) throw new Error("Failed to sign message");
 
       const walletPayload = {

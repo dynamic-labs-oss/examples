@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { HamburgerMenu } from "@/components/hamburger-menu";
-import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
 import DynamicLogo from "./dynamic/logo";
 import DynamicButton from "./dynamic/dynamic-button";
 
@@ -12,8 +11,8 @@ export function Header() {
           <DynamicLogo />
         </Link>
       </div>
-      <div className="hidden md:flex gap-2 pr-4">
-        <DynamicWidget />
+      <div className="hidden md:flex gap-2 pr-4 min-w-[160px]">
+        <DynamicButton />
       </div>
       <div className="md:hidden pr-4">
         <HamburgerMenu>

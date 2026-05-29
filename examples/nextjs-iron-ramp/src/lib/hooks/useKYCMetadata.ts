@@ -1,10 +1,9 @@
 "use client";
 
-import {
-  useDynamicContext,
-  useUserUpdateRequest,
-} from "@dynamic-labs/sdk-react-core";
+import { useUser } from "@dynamic-labs-sdk/react-hooks";
+import { updateUser } from "@dynamic-labs-sdk/client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { dynamicClient } from "../dynamic";
 
 // =============================================================================
 // TYPES
@@ -69,8 +68,7 @@ const DEFAULT_STATE: KYCState = {
  * synced via updateUser(); re-run init when user/metadata changes to stay in sync.
  */
 export function useKYCMetadata() {
-  const { user } = useDynamicContext();
-  const { updateUser } = useUserUpdateRequest();
+  const user = useUser();
 
   const [state, setState] = useState<KYCState>(DEFAULT_STATE);
   const [isLoading, setIsLoading] = useState(true);
@@ -137,7 +135,7 @@ export function useKYCMetadata() {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 1000));
-          await updateUser({ metadata });
+          await updateUser({ userFields: { metadata } }, dynamicClient);
           lastSyncedState.current = stateHash;
           return true;
         } catch (e) {
@@ -148,7 +146,7 @@ export function useKYCMetadata() {
       }
       return false;
     },
-    [user, updateUser]
+    [user]
   );
 
   // ---------------------------------------------------------------------------
@@ -167,7 +165,7 @@ export function useKYCMetadata() {
     }
 
     setIsLoading(false);
-  }, [user?.userId, user?.metadata, loadFromDynamic]);
+  }, [user?.id, user?.metadata, loadFromDynamic]);
 
   // ---------------------------------------------------------------------------
   // Update state and sync to Dynamic user metadata
