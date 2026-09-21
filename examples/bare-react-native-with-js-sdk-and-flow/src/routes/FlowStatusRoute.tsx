@@ -23,6 +23,7 @@ const EXECUTION_ORDER: FlowExecutionState[] = [
   'quoted',
   'signing',
   'broadcasted',
+  'source_detected',
   'source_confirmed',
 ];
 
@@ -39,6 +40,7 @@ const EXECUTION_LABELS: Record<FlowExecutionState, string> = {
   quoted: 'Quote received',
   signing: 'Awaiting your signature',
   broadcasted: 'Broadcast to Base',
+  source_detected: 'Source transaction detected',
   source_confirmed: 'Source transaction confirmed',
   cancelled: 'Cancelled',
   expired: 'Expired',
