@@ -74,7 +74,7 @@ fine for most of the app, but MetaMask can't be installed on the Simulator
 **Release** build on an actual iPhone/iPad, which means dealing with code
 signing.
 
-`ios/BareFlowMetaMaskDemo.xcodeproj/project.pbxproj` deliberately ships
+`ios/BareFlowDemo.xcodeproj/project.pbxproj` deliberately ships
 with **no `DEVELOPMENT_TEAM` set**. It's a tracked, committed file shared
 by everyone who clones this example — baking in one person's or company's
 Apple Developer Team ID as a "default" would leak that identifier into a
@@ -119,7 +119,7 @@ If you do open the workspace in Xcode and pick a team from its Signing &
 Capabilities UI instead of using `--extra-params`, check `git status`/`git
 diff` in `ios/` before committing anything else — that UI writes
 `DEVELOPMENT_TEAM` directly into the tracked `project.pbxproj`, and
-`git checkout -- ios/BareFlowMetaMaskDemo.xcodeproj/project.pbxproj` reverts
+`git checkout -- ios/BareFlowDemo.xcodeproj/project.pbxproj` reverts
 it if you don't want it in history.
 
 ### Android

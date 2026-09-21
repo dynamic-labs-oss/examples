@@ -21,7 +21,7 @@ type HomeViewProps = {
 export function HomeView({ onDeposit, onWithdraw }: HomeViewProps) {
   return (
     <Screen>
-      <Header title="Flow + MetaMask Demo" />
+      <Header title="Flow Demo" />
 
       <View style={styles.body}>
         <Text style={styles.hint}>

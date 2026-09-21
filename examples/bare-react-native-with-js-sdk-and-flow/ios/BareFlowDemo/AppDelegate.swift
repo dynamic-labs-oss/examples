@@ -24,7 +24,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
-      withModuleName: "BareFlowMetaMaskDemo",
+      withModuleName: "BareFlowDemo",
       in: window,
       launchOptions: launchOptions
     )
@@ -32,7 +32,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     return true
   }
 
-  // Forwards incoming bareflowmetamaskdemo:// URLs (see Info.plist's
+  // Forwards incoming bareflowdemo:// URLs (see Info.plist's
   // CFBundleURLTypes and dynamicClient.ts's metadata.nativeLink) to RN's
   // Linking module, so JS-level Linking.getInitialURL()/'url' listeners
   // actually fire. The OS foregrounds the app on a registered scheme

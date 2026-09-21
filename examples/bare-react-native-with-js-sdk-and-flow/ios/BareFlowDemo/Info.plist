@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>BareFlowMetaMaskDemo</string>
+	<string>BareFlowDemo</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -34,10 +34,10 @@
 			     the user approves the connection — approval itself still
 			     resolves over the SDK's own relay session either way. -->
 			<key>CFBundleURLName</key>
-			<string>com.dynamiclabs.examples.bareflowmetamaskdemo.test</string>
+			<string>com.dynamiclabs.examples.bareflowdemo.test</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>bareflowmetamaskdemo</string>
+				<string>bareflowdemo</string>
 			</array>
 		</dict>
 	</array>

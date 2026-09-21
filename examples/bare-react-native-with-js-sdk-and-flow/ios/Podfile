@@ -65,7 +65,7 @@ if linkage != nil
   use_frameworks! :linkage => linkage.to_sym
 end
 
-target 'BareFlowMetaMaskDemo' do
+target 'BareFlowDemo' do
   config = use_native_modules!
 
   use_react_native!(
