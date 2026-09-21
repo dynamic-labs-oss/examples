@@ -1,0 +1,20 @@
+# ios/ and android/ hold native project files, not this app's JS/TS source
+# -- `eslint .` (package.json's "lint" script) should never need to walk
+# them. This became load-bearing (not just tidy) once ios/Podfile started
+# forcing Hermes to build from source: ios/Pods/hermes-engine now contains
+# Hermes's own GitHub checkout, including its full JS test suite (esprima
+# test fixtures, flow-parser tests, etc.) -- real .js/.jsx files that `eslint
+# .` will otherwise happily try to lint and can crash on (a JSX test
+# fixture in hermes-engine/external/esprima/test_fixtures previously threw
+# "node.name.name.toLowerCase is not a function" inside
+# eslint-plugin-react-native, since those fixtures aren't real React Native
+# code). Before the from-source Hermes change, ios/Pods only ever held
+# prebuilt binaries and headers, so this never came up.
+#
+# Anchored to the repo root (leading `/`) rather than bare `ios/`/`android/`
+# -- unanchored gitignore-style patterns match at any depth, so without the
+# anchor, a future source folder literally named e.g. `src/ios/` would be
+# silently skipped by ESLint too, with no warning. Root-only is what's
+# actually intended here.
+/ios/
+/android/

@@ -1,0 +1,36 @@
+diff --git a/lib/cli/combine/combine-js-to-schema.js b/lib/cli/combine/combine-js-to-schema.js
+index 9c2fb5f4248f965b8d1c30540d35ad1549b3c937..06d9deea5f74c4a7777c80a8cc59ab0ade815033 100644
+--- a/lib/cli/combine/combine-js-to-schema.js
++++ b/lib/cli/combine/combine-js-to-schema.js
+@@ -52,7 +52,30 @@ function combineSchemas(files, libraryName) {
+ function expandDirectoriesIntoFiles(fileList, platform, exclude) {
+   return fileList
+     .flatMap(file => {
+-      if (!fs.lstatSync(file).isDirectory()) {
++      // --- pnpm compatibility fix, not a machine-specific workaround ---
++      // Unlike the Hermes-from-source setting in this project's ios/Podfile
++      // (which only matters on an unusually new Xcode), THIS fix is needed
++      // by anyone using pnpm with this pinned React Native/codegen version
++      // -- it has nothing to do with what computer you're on.
++      //
++      // Upstream uses lstatSync here, which does NOT follow symlinks. Every
++      // pnpm-managed node_modules/<pkg> entry IS a symlink (into
++      // .pnpm/<pkg>@version/node_modules/<pkg>), so lstatSync reports every
++      // such package root as "not a directory" and this silently skips
++      // scanning it for Native*.ts specs entirely -- producing an empty
++      // codegen schema for every pnpm-linked TurboModule (any of them, not
++      // just @walletconnect/react-native-compat -- react-native-keychain's
++      // generated header is equally empty, it just happens not to be
++      // referenced by keychain's own native code, so nothing ever notices).
++      // The only symptom upstream gives you is a generic "No modules to
++      // process" log line during `pod install`, easy to miss. statSync
++      // follows symlinks and correctly identifies these as directories,
++      // which is all this one-line fix does.
++      //
++      // If this project ever switches off pnpm (npm/Yarn's node_modules
++      // aren't symlinked the same way), this patch becomes a no-op you can
++      // safely drop -- but with pnpm, every consumer of this repo needs it.
++      if (!fs.statSync(file).isDirectory()) {
+         return [file];
+       }
+       const filePattern = path.sep === '\\' ? file.replace(/\\/g, '/') : file;

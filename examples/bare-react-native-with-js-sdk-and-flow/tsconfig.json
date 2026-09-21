@@ -1,0 +1,11 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    // @react-native/typescript-config hardcodes ["jest"] here — this app
+    // has no tests, so the jest package (and its ambient types) aren't
+    // installed at all.
+    "types": []
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["**/node_modules", "**/Pods"]
+}

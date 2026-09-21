@@ -1,0 +1,132 @@
+# --- Why this line exists: NOT a required step for using Dynamic's SDK ---
+#
+# This works around a machine/toolchain-specific problem, not something
+# wrong with this app's code or with Dynamic's SDK. If your own project
+# builds fine with the default (prebuilt) Hermes, you almost certainly
+# don't need this — most people won't. It's kept here because this
+# example's own dev/CI environment hit it and the fix is a safe, harmless
+# default for anyone else who might.
+#
+# The problem: React Native 0.81.4's hermes-engine pod defaults to a
+# prebuilt XCFramework compiled by Meta with whatever Xcode was current
+# at RN 0.81.4's release time. Building with a *much newer* Xcode (26+,
+# here) than that prebuilt binary was compiled with is a C++ ABI mismatch
+# waiting to happen — confirmed the hard way in this repo: physical
+# Release builds crashed on every single launch with EXC_BAD_ACCESS/SIGSEGV
+# inside HermesRuntimeImpl's debugger/inspector setup
+# (ReactInstance::initializeRuntime's runtime-install callback), 100%
+# reproducible, before any app JS ever ran. Debug-on-Simulator never showed
+# it (Simulator + Debug wasn't exercising the prebuilt binary's actual ABI
+# boundary the same way). If you're on an Xcode version released closer to
+# when your pinned React Native version shipped, the prebuilt binary and
+# your compiler are ABI-compatible and this mismatch simply doesn't occur.
+#
+# The fix: forcing Hermes to build from source instead compiles it with
+# this project's own Xcode toolchain, eliminating the mismatch entirely —
+# confirmed fixed on-device after this change. The tradeoff is a one-time
+# (cached by DerivedData afterwards) extra native compile of Hermes itself
+# on the next `pod install` + build (well under 10 minutes on this
+# project's dev machine), which is why this isn't just always the React
+# Native default upstream. This also shifts a dependency onto GitHub
+# connectivity (cloning Hermes's source at a pinned tag) rather than Maven
+# Central, for every configuration -- including Debug-on-Simulator builds
+# that were never affected by the crash in the first place. We apply it
+# project-wide rather than scoping it to just Release because CocoaPods
+# resolves one Podspec graph for all configurations in a single
+# `pod install` -- there's no clean way to make this Debug/Release-
+# conditional at the Podfile level.
+#
+# Why a Podfile default and not an env var you pass by hand, or a wrapper
+# script around `pod install`: this needs to apply automatically to every
+# future `pod install`/`bundle exec pod install` — including CI, including
+# anyone else who clones this repo — for every configuration (Debug and
+# Release) and target (Simulator and device) — not just the
+# Release-on-device combination that happened to surface it here. A
+# command you have to remember to run is a command someone eventually
+# forgets to run. `||=` still allows an explicit override (e.g.
+# HERMES_ENGINE_TARBALL_PATH workflows) by whoever's running the install.
+# See hermes-utils.rb in react-native's own scripts for the full
+# source-selection logic this feeds into.
+ENV['RCT_BUILD_HERMES_FROM_SOURCE'] ||= 'true'
+
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'BareFlowMetaMaskDemo' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  post_install do |installer|
+    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+
+    # Workaround: react-native 0.81.x vendors fmt 11.0.2, which mis-detects
+    # consteval support on very recent Clang toolchains (Xcode 26.x here),
+    # producing "call to consteval function ... is not a constant
+    # expression". This is a local build-only patch (not shipped as part of
+    # the app) that disables fmt's compile-time format-string validation --
+    # a compile-time diagnostic only, with no runtime behavior change.
+    # Workaround for fmt compilation errors with Xcode 26+ (stricter consteval
+    # in Clang): fmt unconditionally sets FMT_USE_CONSTEVAL=1 when
+    # __cpp_consteval is defined, which Xcode 26's Clang rejects ("call to
+    # consteval function ... is not a constant expression"). Patches
+    # fmt/base.h to disable the consteval code path. `ios/Pods` is gitignored
+    # and regenerated by `pod install`, so this re-applies on every install.
+    fmt_base_header = File.join(__dir__, 'Pods', 'fmt', 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base_header)
+      content = File.read(fmt_base_header)
+      patched = content.gsub('define FMT_USE_CONSTEVAL 1', 'define FMT_USE_CONSTEVAL 0')
+      if patched != content
+        File.chmod(0644, fmt_base_header)
+        File.write(fmt_base_header, patched)
+      end
+    end
+
+    # Workaround: with RCT_BUILD_HERMES_FROM_SOURCE=true (see top of this
+    # Podfile), hermes-engine's CMake-based Apple framework build doesn't
+    # set MinimumOSVersion in the device-slice hermes.framework/Info.plist
+    # (the simulator slice sets it correctly; only the device slice is
+    # missing it). That fails App Store Connect validation on upload with:
+    #   "Invalid MinimumOSVersion. Apps that only support 64-bit devices
+    #   must specify a deployment target of 8.0 or later."
+    # hermes.framework is rebuilt from source on every Xcode build (not
+    # just `pod install`), so a one-time file patch here wouldn't survive
+    # the next build -- instead we add a build phase to the hermes-engine
+    # aggregate target that runs after its own build/copy script phases,
+    # patching the Info.plist just before the app target embeds it.
+    hermes_target = installer.pods_project.targets.find { |t| t.name == 'hermes-engine' }
+    if hermes_target
+      phase = hermes_target.new_shell_script_build_phase('[Workaround] Fix Hermes device-slice MinimumOSVersion')
+      phase.shell_script = <<~SCRIPT
+        PLIST="${PODS_ROOT}/hermes-engine/destroot/Library/Frameworks/ios/hermes.framework/Info.plist"
+        if [ -f "$PLIST" ]; then
+          /usr/libexec/PlistBuddy -c "Delete :MinimumOSVersion" "$PLIST" 2>/dev/null
+          /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string ${IPHONEOS_DEPLOYMENT_TARGET}" "$PLIST"
+        fi
+      SCRIPT
+    end
+  end
+end
