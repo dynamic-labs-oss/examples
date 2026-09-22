@@ -49,6 +49,28 @@ export function AlertCircleIcon({ size = 22, color }: IconProps) {
   );
 }
 
+/** Magnifier for the wallet picker's search field. */
+export function SearchIcon({ size = 16, color }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle
+        cx={10.5}
+        cy={10.5}
+        r={7}
+        stroke={color}
+        strokeWidth={2}
+        fill="none"
+      />
+      <Path
+        d="M15.8 15.8L21 21"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 /** Back-navigation chevron - Header.tsx's back button, in place of relying
  * on native-stack's own header (this app renders its own Header per screen
  * instead, for full control over the full-bleed redesign's look). */
