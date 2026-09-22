@@ -1,4 +1,4 @@
-package com.dynamiclabs.examples.bareflowmetamaskdemo
+package com.dynamiclabs.examples.bareflowdemo
 
 import android.app.Application
 import com.facebook.react.PackageList

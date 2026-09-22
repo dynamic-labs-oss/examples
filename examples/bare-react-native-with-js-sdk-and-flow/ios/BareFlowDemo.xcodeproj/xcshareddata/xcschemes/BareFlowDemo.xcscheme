@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "BareFlowMetaMaskDemo.app"
-               BlueprintName = "BareFlowMetaMaskDemo"
-               ReferencedContainer = "container:BareFlowMetaMaskDemo.xcodeproj">
+               BuildableName = "BareFlowDemo.app"
+               BlueprintName = "BareFlowDemo"
+               ReferencedContainer = "container:BareFlowDemo.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "BareFlowMetaMaskDemoTests.xctest"
-               BlueprintName = "BareFlowMetaMaskDemoTests"
-               ReferencedContainer = "container:BareFlowMetaMaskDemo.xcodeproj">
+               BuildableName = "BareFlowDemoTests.xctest"
+               BlueprintName = "BareFlowDemoTests"
+               ReferencedContainer = "container:BareFlowDemo.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "BareFlowMetaMaskDemo.app"
-            BlueprintName = "BareFlowMetaMaskDemo"
-            ReferencedContainer = "container:BareFlowMetaMaskDemo.xcodeproj">
+            BuildableName = "BareFlowDemo.app"
+            BlueprintName = "BareFlowDemo"
+            ReferencedContainer = "container:BareFlowDemo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "BareFlowMetaMaskDemo.app"
-            BlueprintName = "BareFlowMetaMaskDemo"
-            ReferencedContainer = "container:BareFlowMetaMaskDemo.xcodeproj">
+            BuildableName = "BareFlowDemo.app"
+            BlueprintName = "BareFlowDemo"
+            ReferencedContainer = "container:BareFlowDemo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

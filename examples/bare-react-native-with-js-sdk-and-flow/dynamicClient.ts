@@ -32,8 +32,8 @@ export const dynamicClient = createDynamicClient({
   logLevel: 'debug',
   metadata: {
     // Asserted non-empty by MetaMask's underlying connect SDK.
-    name: 'Bare Flow MetaMask Demo',
-    // Reduced to its scheme (bareflowmetamaskdemo://) and embedded in the
+    name: 'Bare Flow Demo',
+    // Reduced to its scheme (bareflowdemo://) and embedded in the
     // MetaMask pairing URI, so the wallet app can offer a "return to app"
     // affordance once the user approves — registered as a URL scheme in
     // ios/.../Info.plist (CFBundleURLTypes, forwarded to Linking via
@@ -41,7 +41,7 @@ export const dynamicClient = createDynamicClient({
     // forwarded via MainActivity.kt's onNewIntent). Approval itself still
     // resolves over the SDK's own relay/session either way; this only
     // affects how smoothly the user gets back to this app.
-    nativeLink: 'bareflowmetamaskdemo://',
+    nativeLink: 'bareflowdemo://',
     universalLink: APP_ORIGIN,
   },
 });
