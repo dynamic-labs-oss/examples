@@ -1,8 +1,8 @@
 # bare-react-native-with-js-sdk-and-flow
 
 A **bare React Native** (no Expo) example that connects an **external
-wallet** and moves USDC on Base between it and a destination address you type
-in, using a real
+wallet** and moves USDC between it and a destination address you type in, on
+**Base or Solana**, using a real
 [Fireblocks Flow](https://www.dynamic.xyz/docs/overview/fireblocks-flow-api):
 create → attach source → quote → submit → sign in the wallet app → display
 settlement status.
@@ -11,10 +11,12 @@ No login, no account, no embedded wallet — this is a minimal demo of
 connecting a wallet via Dynamic's JS SDK and driving a real Flow with it. The
 connect screen offers every wallet the SDK can reach on this device, and the
 wallet it returns serves both directions until you disconnect it (never
-persisted or signature-verified). Both directions settle **real USDC on Base
-mainnet** — no testnet fallback — capped at $5 per transfer
-(`src/consts/flow.ts`'s `MAX_AMOUNT_USD`) as a guardrail against a typo
-turning into an expensive mistake.
+persisted or signature-verified). The chain follows the wallet: connect on
+Base and the flow runs on Base, connect on Solana and it runs on Solana —
+see `src/consts/chains.ts` for what each chain settles in. Both directions
+settle **real USDC on mainnet** — no testnet fallback — capped at $5 per
+transfer (`src/consts/flow.ts`'s `MAX_AMOUNT_USD`) as a guardrail against a
+typo turning into an expensive mistake.
 
 ## Project structure
 
@@ -42,6 +44,7 @@ connecting a wallet — start here to see how it's wired:
 - [`src/routes/FlowStatusRoute.tsx`](./src/routes/FlowStatusRoute.tsx) — polls a flow to a terminal state and derives its step-by-step status.
 - [`src/routes/ConnectWalletRoute.tsx`](./src/routes/ConnectWalletRoute.tsx) — the wallet picker, driven by `connectWalletOption` through [`src/hooks/useConnectWalletFlow.ts`](./src/hooks/useConnectWalletFlow.ts).
 - [`src/consts/walletCatalogue.ts`](./src/consts/walletCatalogue.ts) — how this app asks for the wallet catalogue, shared by the picker and the connect call.
+- [`src/consts/chains.ts`](./src/consts/chains.ts) — chain ID, USDC and native coin per chain, which is everything a Flow's create call needs and the connected wallet cannot supply.
 
 ## Prerequisites
 
@@ -191,7 +194,7 @@ tooling.
 - **iOS build fails with `call to consteval function ... is not a constant expression` in `fmt`.** Already worked around in `ios/Podfile`'s `post_install` for Xcode 26+; if you still see it, delete `ios/Pods` and re-run `pod install`.
 - **`pod install` fails with an `Invalid \`Podfile\``error wrapping a Codegen error about`setToolbarMenuElementOptions`.** `react-native-screens` is intentionally pinned below 4.25.0 (currently `4.24.0`) in `package.json` — 4.25.0+ ships an experimental Android-only native component whose codegen this pinned React Native version (0.81.4) can't parse. This app doesn't use that experimental API, so pinning loses nothing.
 - **Metro fails to resolve `stream` from inside `ws`, or a Babel error like `Export namespace should be first transformed by...`.** Delete Metro's cache (`npx react-native start --reset-cache`) and confirm `metro.config.js`'s `resolver.resolveRequest` override and both `@babel/plugin-transform-*` plugins in `babel.config.js` are present.
-- **A withdrawal fails with an error mentioning balance, gas, or an insufficient-funds message.** The connected wallet needs enough native ETH on **Base mainnet** to cover both the withdrawal amount and gas — `submitFlowTransaction` checks this before submitting and surfaces a clear error rather than partially submitting.
+- **A withdrawal fails with an error mentioning balance, gas, or an insufficient-funds message.** The connected wallet needs enough of the chain's own coin — ETH on Base, SOL on Solana — to cover both the withdrawal amount and fees. `submitFlowTransaction` checks this before submitting and surfaces a clear error rather than partially submitting.
 - **Known limitation: no flow persistence.** `FlowStatusRoute.tsx`'s active `flowId` lives in plain React Navigation route params — there is no AsyncStorage record and no on-launch resume. If the app is killed while a deposit/withdraw is mid-flight, relaunching it loses track of that flow entirely — the underlying Flow keeps executing server-side regardless.
 - **Known limitation: an app process killed mid wallet-approval loses the in-progress Deposit/Withdraw step.** Which wallet the app is connected to is held in memory only, never persisted by design. Relaunching returns to Home; the operation must be restarted from scratch.
 

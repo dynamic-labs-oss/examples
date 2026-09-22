@@ -14,6 +14,7 @@ import type {
   FlowSettlementState,
 } from '@dynamic-labs-sdk/client';
 import { useCancelFlow, useGetFlow } from '@dynamic-labs-sdk/react-hooks';
+import { FLOW_CHAINS } from '../consts/chains';
 import { FlowStatusView, type Step } from '../views/FlowStatusView';
 import type { RouteProps } from '../navigation';
 
@@ -34,18 +35,22 @@ const PRE_BROADCAST_STATES: FlowExecutionState[] = [
   'signing',
 ];
 
-const EXECUTION_LABELS: Record<FlowExecutionState, string> = {
-  initiated: 'Initiated',
-  source_attached: 'Wallet attached',
-  quoted: 'Quote received',
-  signing: 'Awaiting your signature',
-  broadcasted: 'Broadcast to Base',
-  source_detected: 'Source transaction detected',
-  source_confirmed: 'Source transaction confirmed',
-  cancelled: 'Cancelled',
-  expired: 'Expired',
-  failed: 'Failed',
-};
+function buildExecutionLabels(
+  chainLabel: string,
+): Record<FlowExecutionState, string> {
+  return {
+    initiated: 'Initiated',
+    source_attached: 'Wallet attached',
+    quoted: 'Quote received',
+    signing: 'Awaiting your signature',
+    broadcasted: `Broadcast to ${chainLabel}`,
+    source_detected: 'Source transaction detected',
+    source_confirmed: 'Source transaction confirmed',
+    cancelled: 'Cancelled',
+    expired: 'Expired',
+    failed: 'Failed',
+  };
+}
 
 const SETTLEMENT_LABELS: Record<FlowSettlementState, string> = {
   none: 'Not started',
@@ -75,7 +80,11 @@ const SETTLEMENT_STEP_DESCRIPTIONS: Record<FlowSettlementState, string> = {
   failed: 'Settlement failed.',
 };
 
-function buildSteps(flow: Flow, direction: 'deposit' | 'withdraw'): Step[] {
+function buildSteps(
+  flow: Flow,
+  direction: 'deposit' | 'withdraw',
+  { chainLabel, settledSymbol }: { chainLabel: string; settledSymbol: string },
+): Step[] {
   const execIndex = EXECUTION_ORDER.indexOf(flow.executionState);
   const isBroadcasted = execIndex >= EXECUTION_ORDER.indexOf('broadcasted');
   const isSourceConfirmed =
@@ -86,9 +95,9 @@ function buildSteps(flow: Flow, direction: 'deposit' | 'withdraw'): Step[] {
   return [
     {
       key: 'broadcast',
-      title: 'Broadcast to Base',
+      title: `Broadcast to ${chainLabel}`,
       description: isBroadcasted
-        ? 'Sent to the Base network.'
+        ? `Sent to the ${chainLabel} network.`
         : flow.executionState === 'signing'
         ? 'Waiting for you to confirm in your wallet.'
         : 'Preparing your transaction.',
@@ -96,7 +105,7 @@ function buildSteps(flow: Flow, direction: 'deposit' | 'withdraw'): Step[] {
     },
     {
       key: 'confirm',
-      title: 'Confirm on Base',
+      title: `Confirm on ${chainLabel}`,
       description: 'Waiting for the network to confirm your transaction.',
       status: isSourceConfirmed
         ? 'completed'
@@ -118,10 +127,7 @@ function buildSteps(flow: Flow, direction: 'deposit' | 'withdraw'): Step[] {
       key: 'complete',
       title:
         direction === 'deposit' ? 'Deposit complete' : 'Withdrawal complete',
-      description:
-        direction === 'deposit'
-          ? 'USDC has landed at the destination address.'
-          : 'ETH has landed at the destination address.',
+      description: `${settledSymbol} has landed at the destination address.`,
       status: isSettled ? 'completed' : 'pending',
     },
   ];
@@ -131,8 +137,18 @@ export function FlowStatusRoute({
   navigation,
   route,
 }: RouteProps<'FlowStatus'>) {
-  const { flowId, direction } = route.params;
+  const { flowId, direction, chain } = route.params;
   const noun = direction === 'deposit' ? 'Deposit' : 'Withdrawal';
+  // Only a submitted flow reaches this screen, so the chain always has an
+  // entry — but the labels fall back to the raw chain code rather than
+  // letting a restored or hand-built route crash it.
+  const chainConfig = FLOW_CHAINS[chain];
+  const chainLabel = chainConfig?.label ?? chain;
+  const settledSymbol =
+    direction === 'deposit'
+      ? chainConfig?.usdc.symbol ?? 'USDC'
+      : chainConfig?.native.symbol ?? chain;
+  const executionLabels = buildExecutionLabels(chainLabel);
 
   const {
     data: flow,
@@ -237,13 +253,17 @@ export function FlowStatusRoute({
       failureDescription={failureDescription}
       failureHint={failureHint}
       isMutedFailure={isMutedFailure}
-      steps={isComplete || isFailure ? undefined : buildSteps(flow, direction)}
+      steps={
+        isComplete || isFailure
+          ? undefined
+          : buildSteps(flow, direction, { chainLabel, settledSymbol })
+      }
       isCancellable={isCancellable}
       isCancelling={isCancelling}
       cancelError={cancelError?.message}
       onCancel={() => cancelFlowMutate({ flowId })}
       details={{
-        executionLabel: EXECUTION_LABELS[flow.executionState],
+        executionLabel: executionLabels[flow.executionState],
         settlementLabel: SETTLEMENT_LABELS[flow.settlementState],
         screeningLabel: RISK_LABELS[flow.riskState],
         quoteLabel: flow.quote

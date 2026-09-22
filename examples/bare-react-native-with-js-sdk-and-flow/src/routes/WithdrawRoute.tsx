@@ -17,10 +17,11 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AddressAmountView } from '../views/AddressAmountView';
-import { config } from '../consts/config';
+import { FLOW_CHAINS, SUPPORTED_CHAIN_LABELS } from '../consts/chains';
 import { MAX_AMOUNT_USD } from '../consts/flow';
 import { createWithdrawFlow } from '../utils/createWithdrawFlow';
 import { normalizeAmount } from '../utils/normalizeAmount';
+import { isValidAddressForChain } from '../utils/isValidAddressForChain';
 import { isValidAmount } from '../utils/isValidAmount';
 import { useConnectedWallet } from '../state/connectedWallet';
 import type { RouteProps } from '../navigation';
@@ -51,11 +52,23 @@ export function WithdrawRoute({ navigation }: RouteProps<'Withdraw'>) {
   const [address, setAddress] = useState('');
   const [amount, setAmount] = useState('');
   const { connectedWallet, disconnect } = useConnectedWallet();
+  const chain = connectedWallet?.account.chain;
+  const chainConfig = chain && FLOW_CHAINS[chain];
   const [step, setStep] = useState<Step>('idle');
   const [submitStepLabel, setSubmitStepLabel] = useState<string | null>(null);
   const isBusy = BUSY_STEPS.has(step);
+  // A destination typed for the previous wallet's chain survives a
+  // reconnect, so the shape is checked against the chain in play now.
+  const isAddressWrongForChain =
+    !!chain &&
+    address.trim().length > 0 &&
+    !isValidAddressForChain(address, chain);
   const canSubmit =
-    !isBusy && address.trim().length > 0 && isValidAmount(amount, MAX_AMOUNT_USD);
+    !isBusy &&
+    !!chainConfig &&
+    address.trim().length > 0 &&
+    !isAddressWrongForChain &&
+    isValidAmount(amount, MAX_AMOUNT_USD);
 
   const {
     mutate: handleSubmit,
@@ -63,9 +76,9 @@ export function WithdrawRoute({ navigation }: RouteProps<'Withdraw'>) {
     error,
   } = useMutation({
     mutationFn: async ({ amount: submittedAmount }: { amount: string }) => {
-      if (!connectedWallet) {
+      if (!connectedWallet || !chain || !chainConfig) {
         // Unreachable in practice — canSubmit/the view only render the
-        // submit action once a wallet is connected.
+        // submit action once a wallet on a supported chain is connected.
         throw new Error('Connect a wallet first.');
       }
 
@@ -76,6 +89,8 @@ export function WithdrawRoute({ navigation }: RouteProps<'Withdraw'>) {
 
       const flowId = await createWithdrawFlow({
         amount: normalizedAmount,
+        chain,
+        chainConfig,
         destinationAddress: address.trim(),
       });
 
@@ -85,8 +100,8 @@ export function WithdrawRoute({ navigation }: RouteProps<'Withdraw'>) {
         flowId,
         sourceType: 'wallet',
         fromAddress: connectedWallet.account.address,
-        fromChainId: config.chainId,
-        fromChainName: 'EVM',
+        fromChainId: chainConfig.chainId,
+        fromChainName: chain,
       });
 
       setStep('quoting');
@@ -99,7 +114,10 @@ export function WithdrawRoute({ navigation }: RouteProps<'Withdraw'>) {
       // USDC instead of its ETH gas — confirmed against Dynamic's own
       // demo-dashboard reference (github.com/dynamic-labs-oss/demo-dashboard),
       // whose withdraw flow passes this same param for exactly this reason.
-      await getFlowQuote({ flowId, fromTokenAddress: config.usdcAddress });
+      await getFlowQuote({
+        flowId,
+        fromTokenAddress: chainConfig.usdc.address,
+      });
 
       setStep('awaiting-approval');
 
@@ -115,7 +133,11 @@ export function WithdrawRoute({ navigation }: RouteProps<'Withdraw'>) {
         },
       });
 
-      navigation.replace('FlowStatus', { flowId, direction: 'withdraw' });
+      navigation.replace('FlowStatus', {
+        chain,
+        direction: 'withdraw',
+        flowId,
+      });
     },
     onError: () => {
       setStep('error');
@@ -126,7 +148,17 @@ export function WithdrawRoute({ navigation }: RouteProps<'Withdraw'>) {
   return (
     <AddressAmountView
       title="Withdraw"
-      hint={`Paid in USDC from your connected wallet on Base mainnet, settled as ETH to the address above. Capped at $${MAX_AMOUNT_USD} for this demo.`}
+      hint={
+        chainConfig
+          ? `Paid in USDC from your connected wallet on ${chainConfig.label}, settled as ${chainConfig.native.symbol} to the address above. Capped at $${MAX_AMOUNT_USD} for this demo.`
+          : `Connect a wallet on ${SUPPORTED_CHAIN_LABELS} to withdraw. Capped at $${MAX_AMOUNT_USD} for this demo.`
+      }
+      addressPlaceholder={chainConfig?.addressPlaceholder ?? '0x…'}
+      addressErrorText={
+        isAddressWrongForChain && chainConfig
+          ? `That does not look like a ${chainConfig.label} address.`
+          : undefined
+      }
       address={address}
       onChangeAddress={setAddress}
       amount={amount}

@@ -14,8 +14,6 @@
  * app's actual domain in production.
  */
 export const APP_ORIGIN = 'https://example.com';
-const BASE_CHAIN_ID = '8453';
-const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
 export const config = {
   dynamic: {
@@ -30,15 +28,4 @@ export const config = {
      */
     apiKey: process.env.DYNAMIC_API_KEY,
   },
-  /** String form — what Flow's own params (fromChainId/chainId) expect. */
-  chainId: BASE_CHAIN_ID,
-  /**
-   * Numeric form of the same chain ID — what `getTokenBalances`'s
-   * `networkId` param expects (see VaultBalanceCard.tsx/WithdrawForm.tsx).
-   * Kept as a single derived constant rather than each call site writing
-   * its own `Number(config.chainId)`, so there's one place to get this
-   * right instead of two-plus copies that can drift out of sync.
-   */
-  chainIdNumber: Number(BASE_CHAIN_ID),
-  usdcAddress: BASE_USDC_ADDRESS,
 } as const;

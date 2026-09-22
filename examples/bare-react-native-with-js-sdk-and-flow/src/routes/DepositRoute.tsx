@@ -15,10 +15,11 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AddressAmountView } from '../views/AddressAmountView';
-import { config } from '../consts/config';
+import { FLOW_CHAINS, SUPPORTED_CHAIN_LABELS } from '../consts/chains';
 import { MAX_AMOUNT_USD } from '../consts/flow';
 import { createDepositFlow } from '../utils/createDepositFlow';
 import { normalizeAmount } from '../utils/normalizeAmount';
+import { isValidAddressForChain } from '../utils/isValidAddressForChain';
 import { isValidAmount } from '../utils/isValidAmount';
 import { useConnectedWallet } from '../state/connectedWallet';
 import type { RouteProps } from '../navigation';
@@ -49,11 +50,23 @@ export function DepositRoute({ navigation }: RouteProps<'Deposit'>) {
   const [address, setAddress] = useState('');
   const [amount, setAmount] = useState('');
   const { connectedWallet, disconnect } = useConnectedWallet();
+  const chain = connectedWallet?.account.chain;
+  const chainConfig = chain && FLOW_CHAINS[chain];
   const [step, setStep] = useState<Step>('idle');
   const [submitStepLabel, setSubmitStepLabel] = useState<string | null>(null);
   const isBusy = BUSY_STEPS.has(step);
+  // A destination typed for the previous wallet's chain survives a
+  // reconnect, so the shape is checked against the chain in play now.
+  const isAddressWrongForChain =
+    !!chain &&
+    address.trim().length > 0 &&
+    !isValidAddressForChain(address, chain);
   const canSubmit =
-    !isBusy && address.trim().length > 0 && isValidAmount(amount, MAX_AMOUNT_USD);
+    !isBusy &&
+    !!chainConfig &&
+    address.trim().length > 0 &&
+    !isAddressWrongForChain &&
+    isValidAmount(amount, MAX_AMOUNT_USD);
 
   const {
     mutate: handleSubmit,
@@ -61,9 +74,9 @@ export function DepositRoute({ navigation }: RouteProps<'Deposit'>) {
     error,
   } = useMutation({
     mutationFn: async ({ amount: submittedAmount }: { amount: string }) => {
-      if (!connectedWallet) {
+      if (!connectedWallet || !chain || !chainConfig) {
         // Unreachable in practice — canSubmit/the view only render the
-        // submit action once a wallet is connected.
+        // submit action once a wallet on a supported chain is connected.
         throw new Error('Connect a wallet first.');
       }
 
@@ -74,6 +87,8 @@ export function DepositRoute({ navigation }: RouteProps<'Deposit'>) {
 
       const flowId = await createDepositFlow({
         amount: normalizedAmount,
+        chain,
+        chainConfig,
         destinationAddress: address.trim(),
       });
 
@@ -83,8 +98,8 @@ export function DepositRoute({ navigation }: RouteProps<'Deposit'>) {
         flowId,
         sourceType: 'wallet',
         fromAddress: connectedWallet.account.address,
-        fromChainId: config.chainId,
-        fromChainName: 'EVM',
+        fromChainId: chainConfig.chainId,
+        fromChainName: chain,
       });
 
       setStep('quoting');
@@ -105,7 +120,7 @@ export function DepositRoute({ navigation }: RouteProps<'Deposit'>) {
         },
       });
 
-      navigation.replace('FlowStatus', { flowId, direction: 'deposit' });
+      navigation.replace('FlowStatus', { chain, direction: 'deposit', flowId });
     },
     onError: () => {
       setStep('error');
@@ -116,7 +131,17 @@ export function DepositRoute({ navigation }: RouteProps<'Deposit'>) {
   return (
     <AddressAmountView
       title="Deposit"
-      hint={`Paid in ETH on Base mainnet from your connected wallet, settled as USDC to the address above. Capped at $${MAX_AMOUNT_USD} for this demo.`}
+      hint={
+        chainConfig
+          ? `Paid in ${chainConfig.native.symbol} on ${chainConfig.label} from your connected wallet, settled as USDC to the address above. Capped at $${MAX_AMOUNT_USD} for this demo.`
+          : `Connect a wallet on ${SUPPORTED_CHAIN_LABELS} to deposit. Capped at $${MAX_AMOUNT_USD} for this demo.`
+      }
+      addressPlaceholder={chainConfig?.addressPlaceholder ?? '0x…'}
+      addressErrorText={
+        isAddressWrongForChain && chainConfig
+          ? `That does not look like a ${chainConfig.label} address.`
+          : undefined
+      }
       address={address}
       onChangeAddress={setAddress}
       amount={amount}
