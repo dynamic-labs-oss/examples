@@ -45,6 +45,7 @@ connecting a wallet — start here to see how it's wired:
 - [`src/routes/ConnectWalletRoute.tsx`](./src/routes/ConnectWalletRoute.tsx) — the wallet picker, driven by `connectWalletOption` through [`src/hooks/useConnectWalletFlow.ts`](./src/hooks/useConnectWalletFlow.ts).
 - [`src/consts/walletCatalogue.ts`](./src/consts/walletCatalogue.ts) — how this app asks for the wallet catalogue, shared by the picker and the connect call.
 - [`src/consts/chains.ts`](./src/consts/chains.ts) — chain ID, USDC and native coin per chain, which is everything a Flow's create call needs and the connected wallet cannot supply.
+- [`src/hooks/usePhantomRedirectBridge.ts`](./src/hooks/usePhantomRedirectBridge.ts) — forwards Phantom's callback URL to the SDK, since Phantom answers by opening a URL rather than over a relay.
 
 ## Prerequisites
 

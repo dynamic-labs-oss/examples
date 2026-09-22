@@ -15,6 +15,20 @@
  */
 export const APP_ORIGIN = 'https://example.com';
 
+/**
+ * The URL scheme this app is registered under, in ios/…/Info.plist and
+ * android/…/AndroidManifest.xml. Shared so the wallet metadata's native link
+ * and Phantom's redirect target cannot drift apart from what the native
+ * projects actually register.
+ */
+export const APP_SCHEME = 'bareflowdemo://';
+
+/**
+ * Where Phantom sends the user back to. A path under the app's own scheme,
+ * because Phantom answers a request by opening a URL rather than over a relay.
+ */
+export const PHANTOM_REDIRECT_URL = `${APP_SCHEME}phantom`;
+
 export const config = {
   dynamic: {
     /** Required. https://app.dynamic.xyz/dashboard/developer/api */

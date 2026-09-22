@@ -13,6 +13,7 @@
 import type { Chain } from '@dynamic-labs-sdk/client';
 import { useInitStatus } from '@dynamic-labs-sdk/react-hooks';
 import { useForegroundWalletForApproval } from './hooks/useForegroundWalletForApproval';
+import { usePhantomRedirectBridge } from './hooks/usePhantomRedirectBridge';
 import { NavigationContainer } from '@react-navigation/native';
 import {
   createNativeStackNavigator,
@@ -46,6 +47,7 @@ export function Navigation() {
   const { data: initStatus, error: initError } = useInitStatus();
 
   useForegroundWalletForApproval();
+  usePhantomRedirectBridge();
 
   // A distinct, unrecoverable-from-here state, checked before the loading
   // check below — without this, a failed init (bad/unreachable environment
