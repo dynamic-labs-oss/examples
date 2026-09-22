@@ -49,6 +49,10 @@ connecting MetaMask — start here to see how it's wired:
 - A [Dynamic](https://app.dynamic.xyz) account with a **Sandbox** environment
   ID (Settings → Developers → API Keys) — never use a Live/production key
   for local development
+- On that environment: a **WalletConnect project ID**, **Solana enabled**,
+  and the wallets you want to connect switched on. Without the project ID
+  the app throws on the first connect; without Solana enabled only EVM
+  wallets appear in the list
 
 ## Setup
 

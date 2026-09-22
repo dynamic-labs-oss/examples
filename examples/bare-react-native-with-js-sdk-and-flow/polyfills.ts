@@ -10,26 +10,22 @@
  */
 
 /**
- * Random values polyfill (crypto.getRandomValues). Provides the secure
- * native RNG the SDK relies on. Must load before anything that generates
- * random values.
+ * WalletConnect's own React Native compatibility layer. Must be the first
+ * import in the app: it installs crypto.getRandomValues, Buffer, TextEncoder,
+ * URL and btoa/atob, and it tells WalletConnect it is on React Native so the
+ * relay session persists through AsyncStorage instead of reaching for browser
+ * storage that does not exist here.
+ *
+ * @see https://docs.walletconnect.network/advanced/providers/react-native
  */
-import 'react-native-get-random-values';
+import '@walletconnect/react-native-compat';
 
 import { APP_ORIGIN } from './src/consts/config';
 
 /**
- * Buffer polyfill for various cryptographic operations in this dependency
- * tree (viem, wallet connectors).
- */
-import { Buffer as BufferPolyfill } from 'buffer';
-
-(globalThis as typeof globalThis & { Buffer: typeof BufferPolyfill }).Buffer =
-  BufferPolyfill;
-
-/**
- * crypto.randomUUID polyfill. Hermes doesn't implement crypto.randomUUID,
- * so we generate a v4 UUID from crypto.getRandomValues (polyfilled above).
+ * crypto.randomUUID polyfill. Hermes doesn't implement crypto.randomUUID and
+ * the compat layer above doesn't add it, so we generate a v4 UUID from
+ * crypto.getRandomValues, which it does add.
  */
 type CryptoLike = {
   getRandomValues?: (array: Uint8Array) => Uint8Array;
@@ -49,8 +45,7 @@ const cryptoRef = globalWithCrypto.crypto;
 if (typeof cryptoRef.randomUUID !== 'function') {
   cryptoRef.randomUUID = () => {
     const bytes = new Uint8Array(16);
-    // getRandomValues is guaranteed by the react-native-get-random-values
-    // import above.
+    // getRandomValues is guaranteed by the compat import above.
     cryptoRef.getRandomValues!(bytes);
     // Set the version (4) and variant bits required by RFC 4122.
     /* eslint-disable no-bitwise */
@@ -66,15 +61,12 @@ if (typeof cryptoRef.randomUUID !== 'function') {
 
 /**
  * window.location polyfill for Dynamic's embedded wallet support.
- * React Native has no window.location; addEvmExtension() (see
- * dynamicClient.ts) wires up Dynamic's embedded/WaaS wallet extension too
- * (it's bundled into the same call as standard wallet support), and that
- * client reads window.location.origin when loading the embedded wallet's
- * page inside the SDK's native WebView — it throws without this shim, even
- * though this demo only ever connects an external wallet (MetaMask). Uses
- * config.ts's APP_ORIGIN — the same value passed as metadata.universalLink
- * (see dynamicClient.ts) — so the embedded wallet loads with a consistent
- * origin.
+ * React Native has no window.location, and the embedded wallet client reads
+ * window.location.origin when loading its page inside the SDK's native
+ * WebView — it throws without this shim, even though this demo only ever
+ * connects external wallets. Uses config.ts's APP_ORIGIN — the same value
+ * passed as metadata.universalLink (see dynamicClient.ts) — so the embedded
+ * wallet loads with a consistent origin.
  */
 type MinimalLocation = {
   origin: string;

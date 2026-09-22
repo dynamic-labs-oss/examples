@@ -9,6 +9,9 @@
 import { createDynamicClient } from '@dynamic-labs-sdk/client';
 import { APP_ORIGIN, config } from './src/consts/config';
 import { addMetaMaskEvmExtension } from '@dynamic-labs-sdk/evm/metamask';
+import { addWalletConnectEvmExtension } from '@dynamic-labs-sdk/evm/wallet-connect';
+import { addMetaMaskSolanaExtension } from '@dynamic-labs-sdk/solana/metamask';
+import { addWalletConnectSolanaExtension } from '@dynamic-labs-sdk/solana/wallet-connect';
 
 if (!config.dynamic.environmentId) {
   throw new Error(
@@ -31,19 +34,34 @@ export const dynamicClient = createDynamicClient({
     : {}),
   logLevel: 'debug',
   metadata: {
-    // Asserted non-empty by MetaMask's underlying connect SDK.
+    // Shown to the user by every wallet during pairing, and required
+    // non-empty by both pairing SDKs.
     name: 'Bare Flow Demo',
-    // Reduced to its scheme (bareflowdemo://) and embedded in the
-    // MetaMask pairing URI, so the wallet app can offer a "return to app"
-    // affordance once the user approves — registered as a URL scheme in
-    // ios/.../Info.plist (CFBundleURLTypes, forwarded to Linking via
-    // AppDelegate.swift) and android/.../AndroidManifest.xml (intent-filter,
-    // forwarded via MainActivity.kt's onNewIntent). Approval itself still
-    // resolves over the SDK's own relay/session either way; this only
-    // affects how smoothly the user gets back to this app.
+    // Reduced to its scheme (bareflowdemo://) and embedded in the pairing
+    // URI, so the wallet app can offer a "return to app" affordance once the
+    // user approves — registered as a URL scheme in ios/.../Info.plist
+    // (CFBundleURLTypes, forwarded to Linking via AppDelegate.swift) and
+    // android/.../AndroidManifest.xml (intent-filter, forwarded via
+    // MainActivity.kt's onNewIntent). Approval itself still resolves over the
+    // relay either way; this only affects how smoothly the user gets back to
+    // this app.
     nativeLink: 'bareflowdemo://',
     universalLink: APP_ORIGIN,
   },
 });
 
+/**
+ * Registers the four ways this app can reach an external wallet. Each pairing
+ * path has to be added for its chain separately, and a chain only appears in
+ * the wallet catalogue once at least one of its extensions is registered —
+ * so these four calls are what make EVM and Solana wallets offerable at all.
+ *
+ * The WalletConnect ones return a promise only because they also restore
+ * sessions from a previous run. Nothing waits on it: the wallets they offer
+ * are registered before the promise is returned, and a restored session shows
+ * up on its own once it lands.
+ */
 addMetaMaskEvmExtension(dynamicClient);
+addMetaMaskSolanaExtension(dynamicClient);
+addWalletConnectEvmExtension(dynamicClient);
+addWalletConnectSolanaExtension(dynamicClient);
