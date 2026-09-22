@@ -10,6 +10,7 @@
  * `'finished'`, SplashView is rendered directly (not as a registered
  * screen — there's nothing to navigate to yet).
  */
+import type { Chain } from '@dynamic-labs-sdk/client';
 import { useInitStatus } from '@dynamic-labs-sdk/react-hooks';
 import { useForegroundWalletForApproval } from './hooks/useForegroundWalletForApproval';
 import { NavigationContainer } from '@react-navigation/native';
@@ -29,7 +30,11 @@ export type RootStackParamList = {
   ConnectWallet: undefined;
   Deposit: undefined;
   Withdraw: undefined;
-  FlowStatus: { flowId: string; direction: 'deposit' | 'withdraw' };
+  FlowStatus: {
+    chain: Chain;
+    direction: 'deposit' | 'withdraw';
+    flowId: string;
+  };
 };
 
 export type RouteProps<Name extends keyof RootStackParamList> =

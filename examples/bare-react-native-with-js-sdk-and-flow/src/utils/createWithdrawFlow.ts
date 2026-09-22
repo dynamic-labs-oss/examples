@@ -1,17 +1,21 @@
+import type { Chain } from '@dynamic-labs-sdk/client';
 import { config } from '../consts/config';
+import type { FlowChain } from '../consts/chains';
 
 type CreateWithdrawFlowParams = {
   /** Settlement amount in USD, e.g. "0.10". */
   amount: string;
-  /** The destination wallet's address — receives native ETH. */
+  /** The destination wallet's address — receives the chain's own coin. */
   destinationAddress: string;
+  /** The chain to settle on — the same one the paying wallet is connected on. */
+  chain: Chain;
+  chainConfig: FlowChain;
 };
 
 /**
  * Creates a Flow withdrawal: the connected external wallet pays in USDC,
- * settled as native ETH on Base mainnet to the destination address
- * (`destinationAddress`) — the reverse of createDepositFlow's
- * ETH-in/USDC-out.
+ * settled as the chain's own coin to the destination address
+ * (`destinationAddress`) — the reverse of createDepositFlow.
  *
  * The process of creating your flow should be done from the backend so the
  * Dynamic API token is not exposed to the client. This is just an example of
@@ -20,6 +24,8 @@ type CreateWithdrawFlowParams = {
 export const createWithdrawFlow = async ({
   amount,
   destinationAddress,
+  chain,
+  chainConfig,
 }: CreateWithdrawFlowParams) => {
   const res = await fetch(
     `${config.dynamic.apiBaseUrl}/server/${config.dynamic.environmentId}/flow/withdraw`,
@@ -36,11 +42,11 @@ export const createWithdrawFlow = async ({
           strategy: 'cheapest',
           settlements: [
             {
-              chainName: 'EVM',
-              chainId: config.chainId,
-              symbol: 'ETH',
-              tokenAddress: '0x0000000000000000000000000000000000000000',
-              tokenDecimals: 18,
+              chainName: chain,
+              chainId: chainConfig.chainId,
+              symbol: chainConfig.native.symbol,
+              tokenAddress: chainConfig.native.address,
+              tokenDecimals: chainConfig.native.decimals,
               isNative: true,
             },
           ],
@@ -48,7 +54,7 @@ export const createWithdrawFlow = async ({
         destinationConfig: {
           destinations: [
             {
-              chainName: 'EVM',
+              chainName: chain,
               type: 'address',
               identifier: destinationAddress,
             },
