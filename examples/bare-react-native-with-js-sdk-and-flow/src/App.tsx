@@ -4,6 +4,7 @@ import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { dynamicClient } from '../dynamicClient';
 import { colors } from './consts/theme';
+import { ConnectedWalletProvider } from './state/connectedWallet';
 import { Navigation } from './navigation';
 
 const queryClient = new QueryClient();
@@ -17,7 +18,9 @@ export default function App() {
             barStyle="dark-content"
             backgroundColor={colors.pageBackground}
           />
-          <Navigation />
+          <ConnectedWalletProvider>
+            <Navigation />
+          </ConnectedWalletProvider>
         </DynamicProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

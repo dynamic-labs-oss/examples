@@ -18,6 +18,7 @@ import {
   type NativeStackScreenProps,
 } from '@react-navigation/native-stack';
 import { SplashView } from './views/SplashView';
+import { ConnectWalletRoute } from './routes/ConnectWalletRoute';
 import { HomeRoute } from './routes/HomeRoute';
 import { DepositRoute } from './routes/DepositRoute';
 import { FlowStatusRoute } from './routes/FlowStatusRoute';
@@ -25,6 +26,7 @@ import { WithdrawRoute } from './routes/WithdrawRoute';
 
 export type RootStackParamList = {
   Home: undefined;
+  ConnectWallet: undefined;
   Deposit: undefined;
   Withdraw: undefined;
   FlowStatus: { flowId: string; direction: 'deposit' | 'withdraw' };
@@ -64,6 +66,7 @@ export function Navigation() {
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Home" component={HomeRoute} />
+        <Stack.Screen name="ConnectWallet" component={ConnectWalletRoute} />
         <Stack.Screen name="Deposit" component={DepositRoute} />
         <Stack.Screen name="Withdraw" component={WithdrawRoute} />
         <Stack.Screen name="FlowStatus" component={FlowStatusRoute} />

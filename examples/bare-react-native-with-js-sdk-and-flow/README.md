@@ -1,17 +1,17 @@
 # bare-react-native-with-js-sdk-and-flow
 
-A **bare React Native** (no Expo) example that connects **MetaMask** and
-moves USDC on Base between it and a destination address you type in, using a
-real
+A **bare React Native** (no Expo) example that connects an **external
+wallet** and moves USDC on Base between it and a destination address you type
+in, using a real
 [Fireblocks Flow](https://www.dynamic.xyz/docs/overview/fireblocks-flow-api):
-create → attach source → quote → submit → sign in the MetaMask app → display
+create → attach source → quote → submit → sign in the wallet app → display
 settlement status.
 
 No login, no account, no embedded wallet — this is a minimal demo of
-connecting MetaMask via Dynamic's JS SDK and driving a real Flow with it.
-Deposit and Withdraw each connect MetaMask ad hoc, inline on the same screen
-as the destination-address/amount inputs, fresh every time (never persisted
-or signature-verified). Both directions settle **real USDC on Base
+connecting a wallet via Dynamic's JS SDK and driving a real Flow with it. The
+connect screen offers every wallet the SDK can reach on this device, and the
+wallet it returns serves both directions until you disconnect it (never
+persisted or signature-verified). Both directions settle **real USDC on Base
 mainnet** — no testnet fallback — capped at $5 per transfer
 (`src/consts/flow.ts`'s `MAX_AMOUNT_USD`) as a guardrail against a typo
 turning into an expensive mistake.
@@ -23,7 +23,9 @@ turning into an expensive mistake.
 | `src/components/`    | Small, dumb presentational pieces (buttons, headers, icons) with no SDK/business logic.                             |
 | `src/views/`         | Dumb, prop-driven screens composed from components — no SDK or navigation calls, just render what they're given.    |
 | `src/routes/`        | The smart layer: one file per screen, owns SDK/react-query hooks and navigation, feeds a view's props.              |
-| `src/utils/`         | Standalone helper functions (Flow API calls, wallet connect, small pure helpers) — one top-level function per file. |
+| `src/utils/`         | Standalone helper functions (Flow API calls, small pure helpers) — one top-level function per file.                 |
+| `src/hooks/`         | Hooks owning behaviour a route needs but a view cannot express (the connect state machine, wallet foregrounding).    |
+| `src/state/`         | The connected wallet, shared across screens.                                                                        |
 | `src/consts/`        | Fixed config and constants (chain/token addresses, theme tokens, demo amount caps).                                 |
 | `src/navigation.tsx` | The React Navigation stack + the one-time cold-boot check that waits for the Dynamic client to finish initializing. |
 | `src/App.tsx`        | Top-level providers only (safe area, react-query, Dynamic) wrapping `<Navigation />`.                               |
@@ -31,14 +33,15 @@ turning into an expensive mistake.
 ## Flow & wallet connections
 
 The files below do the actual work of talking to the Flow API and
-connecting MetaMask — start here to see how it's wired:
+connecting a wallet — start here to see how it's wired:
 
 - [`src/utils/createDepositFlow.ts`](./src/utils/createDepositFlow.ts) — hand-rolled REST call creating a deposit flow: the connected wallet pays ETH, the typed destination address settles in USDC (Flow's create step is server-only, no client SDK function exists for it).
 - [`src/utils/createWithdrawFlow.ts`](./src/utils/createWithdrawFlow.ts) — same, but for a withdrawal: the connected wallet pays USDC, the destination address settles in native ETH.
-- [`src/routes/DepositRoute.tsx`](./src/routes/DepositRoute.tsx) — connect MetaMask, then create → attach → quote → submit, MetaMask → destination address, MetaMask signs.
-- [`src/routes/WithdrawRoute.tsx`](./src/routes/WithdrawRoute.tsx) — same sequence in reverse: destination address → MetaMask's USDC, MetaMask signs.
+- [`src/routes/DepositRoute.tsx`](./src/routes/DepositRoute.tsx) — create → attach → quote → submit, connected wallet → destination address, the wallet signs.
+- [`src/routes/WithdrawRoute.tsx`](./src/routes/WithdrawRoute.tsx) — same sequence in reverse: destination address → the wallet's USDC, the wallet signs.
 - [`src/routes/FlowStatusRoute.tsx`](./src/routes/FlowStatusRoute.tsx) — polls a flow to a terminal state and derives its step-by-step status.
-- [`src/utils/connectMetaMask.ts`](./src/utils/connectMetaMask.ts) — ephemeral MetaMask connect via Dynamic's own MetaMask SDK wrapper.
+- [`src/routes/ConnectWalletRoute.tsx`](./src/routes/ConnectWalletRoute.tsx) — the wallet picker, driven by `connectWalletOption` through [`src/hooks/useConnectWalletFlow.ts`](./src/hooks/useConnectWalletFlow.ts).
+- [`src/consts/walletCatalogue.ts`](./src/consts/walletCatalogue.ts) — how this app asks for the wallet catalogue, shared by the picker and the connect call.
 
 ## Prerequisites
 
@@ -73,7 +76,7 @@ cd ios && bundle install && bundle exec pod install && cd ..
 ## Running a Release build on a physical device
 
 `pnpm ios` (step 4 above) launches a **Debug** build on the Simulator —
-fine for most of the app, but MetaMask can't be installed on the Simulator
+fine for most of the app, but wallet apps can't be installed on the Simulator
 (see Troubleshooting), so exercising the connect button for real means a
 **Release** build on an actual iPhone/iPad, which means dealing with code
 signing.
@@ -129,7 +132,7 @@ it if you don't want it in history.
 ### Android
 
 Same reasoning applies on Android: `pnpm android` runs a **Debug** build,
-but MetaMask's connect flow needs a **Release** build on a physical device.
+but the wallet connect flow needs a **Release** build on a physical device.
 Unlike iOS, this needs no code-signing setup — a debug keystore is enough to
 install locally — so it's just:
 
@@ -167,7 +170,7 @@ of failing silently.
 > debug mode. Don't screen-record or screenshot that tooling while your key
 > is loaded, and treat a sandbox key as "rotate if you suspect it leaked."
 
-## Why MetaMask connection needs no Expo
+## Why wallet connection needs no Expo
 
 Dynamic's [bare React Native setup guide](https://www.dynamic.xyz/docs/javascript/react-native/bare-react-native)
 covers exactly this: a handful of manual polyfills (`react-native-get-random-values`,
@@ -190,7 +193,7 @@ tooling.
 - **Metro fails to resolve `stream` from inside `ws`, or a Babel error like `Export namespace should be first transformed by...`.** Delete Metro's cache (`npx react-native start --reset-cache`) and confirm `metro.config.js`'s `resolver.resolveRequest` override and both `@babel/plugin-transform-*` plugins in `babel.config.js` are present.
 - **A withdrawal fails with an error mentioning balance, gas, or an insufficient-funds message.** The connected wallet needs enough native ETH on **Base mainnet** to cover both the withdrawal amount and gas — `submitFlowTransaction` checks this before submitting and surfaces a clear error rather than partially submitting.
 - **Known limitation: no flow persistence.** `FlowStatusRoute.tsx`'s active `flowId` lives in plain React Navigation route params — there is no AsyncStorage record and no on-launch resume. If the app is killed while a deposit/withdraw is mid-flight, relaunching it loses track of that flow entirely — the underlying Flow keeps executing server-side regardless.
-- **Known limitation: an app process killed mid wallet-approval loses the in-progress Deposit/Withdraw step.** The connected MetaMask wallet for that operation is held in-memory only, never persisted by design. Relaunching returns to Home; the operation must be restarted from scratch.
+- **Known limitation: an app process killed mid wallet-approval loses the in-progress Deposit/Withdraw step.** Which wallet the app is connected to is held in memory only, never persisted by design. Relaunching returns to Home; the operation must be restarted from scratch.
 
 ## Learn more
 

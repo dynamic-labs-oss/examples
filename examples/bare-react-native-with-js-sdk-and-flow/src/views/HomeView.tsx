@@ -1,7 +1,7 @@
 /**
  * Home screen: a title and two buttons, Deposit and Withdraw. This app has
  * no account/vault to show a balance or address for anymore — it's a pure
- * "connect MetaMask and move USDC on Base" demo, so Home is just the two
+ * "connect a wallet and move USDC on Base" demo, so Home is just the two
  * entry points. Purely prop-driven, no hooks — HomeRoute wires the two
  * callbacks straight to navigation.
  */
@@ -25,7 +25,7 @@ export function HomeView({ onDeposit, onWithdraw }: HomeViewProps) {
 
       <View style={styles.body}>
         <Text style={styles.hint}>
-          Connect MetaMask to deposit or withdraw USDC on Base.
+          Connect a wallet to deposit or withdraw USDC on Base.
         </Text>
 
         <PrimaryButton
