@@ -60,6 +60,30 @@ export const typography = {
 } as const;
 
 /**
+ * Metrics for the wallet-picker rows, copied from the layout Dynamic's own
+ * wallet picker uses on the web. Kept in one place because the wallet rows,
+ * the chain rows and the "+N more" footer all have to sit on the same pitch
+ * for the list to read as one surface.
+ */
+export const pickerRow = {
+  height: 43,
+  radius: 10,
+  gap: 12,
+  paddingLeft: 12,
+  paddingRight: 10,
+  iconSize: 28,
+} as const;
+
+/**
+ * Row fills, separate from `colors` because they are a three-state set (rest,
+ * hover, pressed) rather than single-purpose tokens.
+ */
+export const pickerRowColors = {
+  surface: '#F6F8F8',
+  surfacePressed: '#E7EBEB',
+} as const;
+
+/**
  * iOS shadow + Android elevation for surfaces that need to visually lift off
  * pageBackground on the new full-bleed screens (e.g. a card floating over the
  * page rather than being the entire page, as it was pre-redesign). RN doesn't
