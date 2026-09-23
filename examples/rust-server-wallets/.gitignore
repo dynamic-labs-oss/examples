@@ -1,0 +1,16 @@
+.env
+.env.local
+.wallets.json
+src/bin/delegated-sign-message.wallet.json
+wallet.json
+
+# Cargo build artefacts
+/target/
+**/*.rs.bk
+
+# OS junk
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
