@@ -11,6 +11,7 @@
  * screen — there's nothing to navigate to yet).
  */
 import { useInitStatus } from '@dynamic-labs-sdk/react-hooks';
+import { useForegroundWalletForApproval } from './hooks/useForegroundWalletForApproval';
 import { NavigationContainer } from '@react-navigation/native';
 import {
   createNativeStackNavigator,
@@ -36,6 +37,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function Navigation() {
   const { data: initStatus, error: initError } = useInitStatus();
+
+  useForegroundWalletForApproval();
 
   // A distinct, unrecoverable-from-here state, checked before the loading
   // check below — without this, a failed init (bad/unreachable environment
