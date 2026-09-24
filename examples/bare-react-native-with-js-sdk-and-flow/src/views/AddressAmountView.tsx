@@ -1,17 +1,15 @@
 /**
  * Dumb, prop-driven address + amount entry view — shared shape for Deposit
- * and Withdraw, which differ only in copy (title/hint) and in which side of
- * the flow the connected MetaMask wallet plays (source for both, but paying
- * a different asset). Replaces the old vault-era AmountView.tsx: this app no
- * longer has a pre-known destination (the vault), so the destination address
- * is now a plain text field on this same screen instead of something chosen
- * on a separate ConnectWallet/picker screen.
+ * and Withdraw, which differ only in copy (title/hint) and in which asset
+ * the connected wallet pays. Replaces the old vault-era AmountView.tsx: this
+ * app no longer has a pre-known destination (the vault), so the destination
+ * address is now a plain text field on this same screen.
  *
- * All flow mechanics (connect MetaMask, create -> attach source -> quote ->
- * submit, validation, busy state) stay in the route that renders this — this
- * component only knows about the two TextInputs, the hint/error text, and
- * the action button, which reads "Connect with MetaMask" until a wallet is
- * connected and then becomes the submit button in the same slot.
+ * All flow mechanics (create -> attach source -> quote -> submit, validation,
+ * busy state) stay in the route that renders this — this component only knows
+ * about the two TextInputs, the hint/error text, and the action button, which
+ * sends the user to the wallet picker until a wallet is connected and then
+ * becomes the submit button in the same slot.
  */
 import React from 'react';
 import {
@@ -29,6 +27,7 @@ import { LinkButton } from '../components/LinkButton';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../consts/theme';
+import { shortAddress } from '../utils/shortAddress';
 
 type Props = {
   title: string;
@@ -37,11 +36,11 @@ type Props = {
   onChangeAddress: (value: string) => void;
   amount: string;
   onChangeAmount: (value: string) => void;
-  /** True once MetaMask is connected — swaps the action button from
-   * "Connect with MetaMask" to the submit action. */
-  isWalletConnected: boolean;
-  isConnectingWallet: boolean;
+  /** Name and address of the connected wallet, or undefined when there is
+   * none — which swaps the action button to "Connect a wallet". */
+  connectedWallet?: { name: string; address: string };
   onConnectWallet: () => void;
+  onDisconnectWallet: () => void;
   onSubmit: () => void;
   submitLabel: string;
   isSubmitting: boolean;
@@ -66,9 +65,9 @@ export function AddressAmountView({
   onChangeAddress,
   amount,
   onChangeAmount,
-  isWalletConnected,
-  isConnectingWallet,
+  connectedWallet,
   onConnectWallet,
+  onDisconnectWallet,
   onSubmit,
   submitLabel,
   isSubmitting,
@@ -78,7 +77,7 @@ export function AddressAmountView({
   amountErrorText,
   onBack,
 }: Props) {
-  const isBusy = isConnectingWallet || isSubmitting;
+  const isBusy = isSubmitting;
 
   return (
     <Screen scrollsWithKeyboard={true}>
@@ -135,20 +134,29 @@ export function AddressAmountView({
         </ErrorText>
       ) : null}
 
-      {isWalletConnected ? (
-        <PrimaryButton
-          title={submitLabel}
-          loading={isSubmitting}
-          disabled={!canSubmit}
-          onPress={onSubmit}
-        />
+      {connectedWallet ? (
+        <>
+          <View style={styles.walletRow}>
+            <Text style={styles.walletText} numberOfLines={1}>
+              {connectedWallet.name} · {shortAddress(connectedWallet.address)}
+            </Text>
+            <LinkButton
+              title="Disconnect"
+              tone="danger"
+              onPress={onDisconnectWallet}
+              disabled={isBusy}
+              hitSlop={8}
+            />
+          </View>
+          <PrimaryButton
+            title={submitLabel}
+            loading={isSubmitting}
+            disabled={!canSubmit}
+            onPress={onSubmit}
+          />
+        </>
       ) : (
-        <PrimaryButton
-          title="Connect with MetaMask"
-          loading={isConnectingWallet}
-          disabled={isConnectingWallet}
-          onPress={onConnectWallet}
-        />
+        <PrimaryButton title="Connect a wallet" onPress={onConnectWallet} />
       )}
 
       {isSubmitting && stepLabel ? (
@@ -184,6 +192,18 @@ const styles = StyleSheet.create({
   amountErrorSpaced: {
     marginTop: -spacing.sm,
     marginBottom: spacing.md,
+  },
+  walletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  walletText: {
+    ...typography.label,
+    color: colors.foregroundSecondary,
+    flexShrink: 1,
   },
   stepLabel: {
     ...typography.caption,
