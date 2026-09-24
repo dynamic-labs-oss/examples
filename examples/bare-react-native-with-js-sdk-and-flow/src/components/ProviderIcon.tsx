@@ -25,6 +25,22 @@ function isSvgUrl(url: string): boolean {
   return url.split(/[?#]/)[0]!.toLowerCase().endsWith('.svg');
 }
 
+/**
+ * Whether the mark is one icon inside a shared sprite sheet, addressed by the
+ * fragment (`sprite.svg#metamask`).
+ *
+ * React Native cannot follow that fragment — it renders the whole sheet, which
+ * is megabytes of artwork laid out for a canvas thousands of times this size,
+ * and the geometry collapses to NaN. The monogram is the honest fallback until
+ * a single-icon URL is available.
+ *
+ * Leans on `isSvgUrl` for the extension so a query between the extension and
+ * the fragment cannot slip past (`sprite.svg?v=2#metamask`).
+ */
+function isSpriteFragment(url: string): boolean {
+  return isSvgUrl(url) && url.includes('#');
+}
+
 export function ProviderIcon({
   name,
   url,
@@ -33,7 +49,7 @@ export function ProviderIcon({
   // Tracks which URL failed rather than whether one did, so a row that
   // re-renders with a different icon gets a fresh attempt.
   const [failedUrl, setFailedUrl] = useState<string>();
-  const hasIcon = !!url && url !== failedUrl;
+  const hasIcon = !!url && url !== failedUrl && !isSpriteFragment(url);
 
   // Proportional squircle, so the corner follows the icon size.
   const plate = { width: size, height: size, borderRadius: size * 0.225 };
