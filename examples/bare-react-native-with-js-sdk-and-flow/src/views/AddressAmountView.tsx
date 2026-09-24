@@ -32,6 +32,8 @@ import { shortAddress } from '../utils/shortAddress';
 type Props = {
   title: string;
   hint: string;
+  /** Example address for the chain the connected wallet is on. */
+  addressPlaceholder: string;
   address: string;
   onChangeAddress: (value: string) => void;
   amount: string;
@@ -47,6 +49,7 @@ type Props = {
   canSubmit: boolean;
   stepLabel?: string;
   error?: string;
+  addressErrorText?: string;
   amountErrorText?: string;
   onBack: () => void;
 };
@@ -61,6 +64,7 @@ const AMOUNT_INPUT_ACCESSORY_ID = 'address-amount-view-done';
 export function AddressAmountView({
   title,
   hint,
+  addressPlaceholder,
   address,
   onChangeAddress,
   amount,
@@ -74,6 +78,7 @@ export function AddressAmountView({
   canSubmit,
   stepLabel,
   error,
+  addressErrorText,
   amountErrorText,
   onBack,
 }: Props) {
@@ -89,7 +94,7 @@ export function AddressAmountView({
       <Text style={styles.label}>Destination address</Text>
       <TextInput
         style={styles.input}
-        placeholder="0x…"
+        placeholder={addressPlaceholder}
         placeholderTextColor={colors.muted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -97,6 +102,11 @@ export function AddressAmountView({
         onChangeText={onChangeAddress}
         editable={!isBusy}
       />
+      {addressErrorText ? (
+        <ErrorText style={styles.fieldErrorSpaced}>
+          {addressErrorText}
+        </ErrorText>
+      ) : null}
 
       <Text style={styles.label}>Amount (USD)</Text>
       <TextInput
@@ -129,9 +139,7 @@ export function AddressAmountView({
       <Text style={styles.hint}>{hint}</Text>
 
       {amountErrorText ? (
-        <ErrorText style={styles.amountErrorSpaced}>
-          {amountErrorText}
-        </ErrorText>
+        <ErrorText style={styles.fieldErrorSpaced}>{amountErrorText}</ErrorText>
       ) : null}
 
       {connectedWallet ? (
@@ -189,7 +197,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginBottom: spacing.md,
   },
-  amountErrorSpaced: {
+  fieldErrorSpaced: {
     marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
