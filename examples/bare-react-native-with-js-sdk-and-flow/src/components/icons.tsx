@@ -49,6 +49,36 @@ export function AlertCircleIcon({ size = 22, color }: IconProps) {
   );
 }
 
+/**
+ * Chain marks for the chain picker, in each chain's own brand colour rather
+ * than `currentColor` — a wallet picker that greyed them out would lose the
+ * only thing that makes a chain recognisable at a glance.
+ */
+export function EthereumIcon({ size = 28 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={12} fill="#627EEA" />
+      <Path d="M12 4v5.9l5 2.2L12 4z" fill="#FFFFFF" fillOpacity={0.6} />
+      <Path d="M12 4L7 12.1l5-2.2V4z" fill="#FFFFFF" />
+      <Path d="M12 16.1V20l5-6.9-5 3z" fill="#FFFFFF" fillOpacity={0.6} />
+      <Path d="M12 20v-3.9l-5-3L12 20z" fill="#FFFFFF" />
+      <Path d="M12 15.2l5-3-5-2.2v5.2z" fill="#FFFFFF" fillOpacity={0.2} />
+      <Path d="M7 12.2l5 3V10l-5 2.2z" fill="#FFFFFF" fillOpacity={0.6} />
+    </Svg>
+  );
+}
+
+export function SolanaIcon({ size = 28 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={12} fill="#000000" />
+      <Path d="M8.1 7.4h11.2l-2.9 2.9H5.2l2.9-2.9z" fill="#9945FF" />
+      <Path d="M5.2 13.7h11.2l2.9 2.9H8.1l-2.9-2.9z" fill="#14F195" />
+      <Path d="M8.1 10.6h11.2l-2.9 2.8H5.2l2.9-2.8z" fill="#19D3F3" />
+    </Svg>
+  );
+}
+
 /** Magnifier for the wallet picker's search field. */
 export function SearchIcon({ size = 16, color }: IconProps) {
   return (
