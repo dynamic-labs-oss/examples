@@ -10,6 +10,7 @@ import { Header } from '../components/Header';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ProviderIcon } from '../components/ProviderIcon';
 import { Screen } from '../components/Screen';
+import { SecondaryButton } from '../components/SecondaryButton';
 import { spacing } from '../consts/theme';
 import type { ConnectWalletStep } from '../hooks/useConnectWalletFlow';
 import { ProviderListView, type ProviderListItem } from './ProviderListView';
@@ -29,17 +30,28 @@ type ConnectWalletViewProps = {
   onSelectWallet: (option: WalletOption) => void;
   onSelectChain: (chain: Chain) => void;
   onTryAgain: () => void;
+  /** Reopens the wallet on the pairing in flight. */
+  onOpenWalletAgain: () => void;
+  onInstallWallet: () => void;
   onBack: () => void;
 };
 
-const STATUS_MESSAGES: Record<
-  'connecting' | 'connected' | 'error',
-  (walletName: string) => string
-> = {
+type StatusStep = Exclude<ConnectWalletStep, 'list' | 'chain-picker'>;
+
+const STATUS_MESSAGES: Record<StatusStep, (walletName: string) => string> = {
   connected: name => `${name} connected.`,
   connecting: name => `Approve the connection in ${name} to continue.`,
   error: name => `${name} didn’t connect. Please try again.`,
+  'not-installed': name => `${name} isn’t installed on this device.`,
 };
+
+function indicatorFor(step: StatusStep): 'pending' | 'success' | 'error' {
+  if (step === 'connecting') {
+    return 'pending';
+  }
+
+  return step === 'connected' ? 'success' : 'error';
+}
 
 export function ConnectWalletView({
   step,
@@ -49,6 +61,8 @@ export function ConnectWalletView({
   onSelectWallet,
   onSelectChain,
   onTryAgain,
+  onOpenWalletAgain,
+  onInstallWallet,
   onBack,
 }: ConnectWalletViewProps) {
   const [searchText, setSearchText] = useState('');
@@ -62,6 +76,32 @@ export function ConnectWalletView({
     name: option.name,
     onPress: () => onSelectWallet(option),
   }));
+
+  function renderActions(statusStep: StatusStep, walletName: string) {
+    switch (statusStep) {
+      case 'connecting':
+        return (
+          <SecondaryButton
+            title={`Open ${walletName} again`}
+            onPress={onOpenWalletAgain}
+          />
+        );
+      case 'not-installed':
+        return (
+          <>
+            <PrimaryButton
+              title={`Get ${walletName}`}
+              onPress={onInstallWallet}
+            />
+            <SecondaryButton title="Try again" onPress={onTryAgain} />
+          </>
+        );
+      case 'error':
+        return <PrimaryButton title="Try again" onPress={onTryAgain} />;
+      default:
+        return undefined;
+    }
+  }
 
   return (
     <Screen>
@@ -97,13 +137,9 @@ export function ConnectWalletView({
           <WalletConnectionStatusView
             walletName={wallet.name}
             walletIconUrl={wallet.iconUrl}
-            indicator={step === 'connecting' ? 'pending' : step === 'connected' ? 'success' : 'error'}
+            indicator={indicatorFor(step)}
             message={STATUS_MESSAGES[step](wallet.name)}
-            actions={
-              step === 'error' ? (
-                <PrimaryButton title="Try again" onPress={onTryAgain} />
-              ) : undefined
-            }
+            actions={renderActions(step, wallet.name)}
           />
         ) : null}
       </View>

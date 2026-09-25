@@ -24,7 +24,15 @@ export type ConnectWalletStep =
   | 'chain-picker'
   | 'connecting'
   | 'connected'
+  | 'not-installed'
   | 'error';
+
+/**
+ * How long a pairing URI can be reopened. WalletConnect expires a pairing
+ * proposal after five minutes, so this leaves a minute of margin before the
+ * wallet would be handed a URI it can no longer answer.
+ */
+const PAIRING_URI_REUSE_MS = 4 * 60 * 1000;
 
 type UseConnectWalletFlowParams = {
   onConnected: (wallet: ConnectedWallet) => void;
@@ -40,15 +48,38 @@ export function useConnectWalletFlow({
   const [step, setStep] = useState<ConnectWalletStep>('list');
   const [wallet, setWallet] = useState<WalletOption>();
   const generationRef = useRef(0);
+  // Counts every pairing minted, renewals included, so only the newest one's
+  // link and failure reach the screen.
+  const attemptRef = useRef(0);
   const chainRef = useRef<Chain | undefined>(undefined);
+  // The pairing link of the attempt in flight, kept so the user can reopen
+  // the wallet after leaving it without approving — the pairing is still
+  // waiting on the relay.
+  const pairingRef = useRef<{ openedAt: number; uri: string } | undefined>(
+    undefined,
+  );
 
-  function startConnection(option: WalletOption, chain: Chain) {
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
+  function startConnection(
+    option: WalletOption,
+    chain: Chain,
+    { renewing = false }: { renewing?: boolean } = {},
+  ) {
+    // Renewing keeps the attempt the user started: the earlier pairing stays
+    // live until it expires, so approving it still has to count.
+    if (!renewing) {
+      generationRef.current += 1;
+    }
+
+    attemptRef.current += 1;
+    const generation = generationRef.current;
+    const attempt = attemptRef.current;
     chainRef.current = chain;
+    pairingRef.current = undefined;
     setStep('connecting');
 
     const isCurrentAttempt = () => generationRef.current === generation;
+    const isLatestPairing = () =>
+      isCurrentAttempt() && attemptRef.current === attempt;
 
     connectWalletOption(
       {
@@ -57,9 +88,16 @@ export function useConnectWalletFlow({
         // the pairing straight to the wallet app. There is no QR step: the
         // code would be on the same screen as the wallet meant to scan it.
         onConnectionUri: ({ uri }) => {
+          if (!isLatestPairing()) {
+            return;
+          }
+
+          pairingRef.current = { openedAt: Date.now(), uri };
+          // Failing to open the link means the wallet app is not on this
+          // device, so the user is offered its store page instead.
           Linking.openURL(uri).catch(() => {
-            if (isCurrentAttempt()) {
-              setStep('error');
+            if (isLatestPairing()) {
+              setStep('not-installed');
             }
           });
         },
@@ -68,7 +106,7 @@ export function useConnectWalletFlow({
       },
       {
         onError: () => {
-          if (isCurrentAttempt()) {
+          if (isLatestPairing()) {
             setStep('error');
           }
         },
@@ -77,6 +115,9 @@ export function useConnectWalletFlow({
             return;
           }
 
+          // Ends the attempt, so the other pairing's late settle can no
+          // longer move the screen.
+          generationRef.current += 1;
           setStep('connected');
           onConnected({ account, option });
         },
@@ -84,19 +125,23 @@ export function useConnectWalletFlow({
     );
   }
 
+  function openInstallationPage(option: WalletOption) {
+    const installationUrl =
+      option.installationUrls &&
+      getInstallationLinkForCurrentPlatform({
+        installationUrls: option.installationUrls,
+      });
+
+    if (installationUrl) {
+      Linking.openURL(installationUrl).catch(() => undefined);
+    }
+  }
+
   function selectWallet(option: WalletOption) {
     // A wallet with no connection option is offered as an install link —
     // the user does not have it on this device.
     if (option.connectionOptions.length === 0) {
-      const installationUrl =
-        option.installationUrls &&
-        getInstallationLinkForCurrentPlatform({
-          installationUrls: option.installationUrls,
-        });
-
-      if (installationUrl) {
-        Linking.openURL(installationUrl).catch(() => undefined);
-      }
+      openInstallationPage(option);
 
       return;
     }
@@ -124,6 +169,34 @@ export function useConnectWalletFlow({
     }
   }
 
+  function openWalletAgain() {
+    const pairing = pairingRef.current;
+
+    // Past its window the pairing is about to expire, so a fresh one is
+    // minted rather than handing the wallet a link it cannot answer.
+    if (!pairing || Date.now() - pairing.openedAt > PAIRING_URI_REUSE_MS) {
+      if (wallet && chainRef.current) {
+        startConnection(wallet, chainRef.current, { renewing: true });
+      }
+
+      return;
+    }
+
+    const generation = generationRef.current;
+
+    Linking.openURL(pairing.uri).catch(() => {
+      if (generationRef.current === generation) {
+        setStep('not-installed');
+      }
+    });
+  }
+
+  function installWallet() {
+    if (wallet) {
+      openInstallationPage(wallet);
+    }
+  }
+
   function goBackToList() {
     // Abandons the attempt in flight, so its settle can no longer move the
     // screen.
@@ -135,7 +208,9 @@ export function useConnectWalletFlow({
   return {
     catalogue,
     goBackToList,
+    installWallet,
     isCatalogueLoading,
+    openWalletAgain,
     selectChain,
     selectWallet,
     step,

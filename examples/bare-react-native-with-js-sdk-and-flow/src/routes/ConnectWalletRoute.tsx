@@ -8,13 +8,17 @@ import { useConnectedWallet } from '../state/connectedWallet';
 import { ConnectWalletView } from '../views/ConnectWalletView';
 import type { RouteProps } from '../navigation';
 
-export function ConnectWalletRoute({ navigation }: RouteProps<'ConnectWallet'>) {
+export function ConnectWalletRoute({
+  navigation,
+}: RouteProps<'ConnectWallet'>) {
   const { setConnectedWallet } = useConnectedWallet();
 
   const {
     catalogue,
     goBackToList,
+    installWallet,
     isCatalogueLoading,
+    openWalletAgain,
     selectChain,
     selectWallet,
     step,
@@ -36,6 +40,8 @@ export function ConnectWalletRoute({ navigation }: RouteProps<'ConnectWallet'>) 
       onSelectWallet={selectWallet}
       onSelectChain={selectChain}
       onTryAgain={tryAgain}
+      onOpenWalletAgain={openWalletAgain}
+      onInstallWallet={installWallet}
       // From the list there is nothing left to step back through, so Back
       // leaves the screen entirely.
       onBack={step === 'list' ? () => navigation.goBack() : goBackToList}
