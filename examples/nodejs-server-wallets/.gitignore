@@ -17,3 +17,6 @@ Thumbs.db
 # Wallet storage
 **/wallet.json
 .wallets.json
+
+# Local idempotency bookkeeping (dev only)
+.transfers.json

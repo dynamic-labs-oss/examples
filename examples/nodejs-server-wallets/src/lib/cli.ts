@@ -32,7 +32,7 @@ export async function runScript(fn: () => Promise<void>): Promise<never> {
  * const { positional, getFlag, hasFlag } = parseArgs(process.argv);
  *
  * // Get positional args (non-flag arguments)
- * const command = positional[0]; // e.g., "zerodev" from "pnpm send-txn zerodev"
+ * const command = positional[0]; // e.g., "gasless" from "pnpm evm:send-txn gasless"
  *
  * // Get flag values
  * const address = getFlag("address"); // e.g., "0x123..." from "--address 0x123..."
@@ -47,10 +47,20 @@ export function parseArgs(argv: string[]) {
     /** Non-flag arguments in order */
     positional: args.filter((a) => !a.startsWith("--")),
 
-    /** Get the value following a --flag */
+    /**
+     * Get the value following a --flag.
+     *
+     * Returns undefined when the flag is absent *or* its value was omitted, so
+     * `--order-id --force` yields no order id rather than the literal "--force".
+     * Swallowing the next flag as a value produces confusing downstream failures
+     * (a garbage idempotency key, or `NaN` from a numeric flag).
+     */
     getFlag: (name: string): string | undefined => {
       const idx = args.indexOf(`--${name}`);
-      return idx !== -1 ? args[idx + 1] : undefined;
+      if (idx === -1) return undefined;
+
+      const value = args[idx + 1];
+      return value === undefined || value.startsWith("--") ? undefined : value;
     },
 
     /** Check if a --flag is present */

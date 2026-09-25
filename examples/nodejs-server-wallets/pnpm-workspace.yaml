@@ -1,0 +1,17 @@
+# pnpm 10+ requires dependency build scripts to be explicitly approved. Without
+# this file `pnpm <script>` fails on pnpm 11: the pre-script dependency check
+# shells out to `pnpm install`, which exits non-zero on ERR_PNPM_IGNORED_BUILDS.
+#
+# None of these postinstall scripts are needed here:
+#   esbuild        - tsx uses the prebuilt platform binary
+#   bufferutil     - optional native perf accelerator for `ws`
+#   utf-8-validate - optional native perf accelerator for `ws`
+#   protobufjs     - postinstall only generates code for its own CLI
+#   bigint-buffer  - optional native accelerator for @solana/spl-token; falls
+#                    back to pure JS (may log a one-line bindings warning)
+allowBuilds:
+  bigint-buffer: false
+  bufferutil: false
+  esbuild: false
+  protobufjs: false
+  utf-8-validate: false

@@ -1,7 +1,8 @@
 {
   "address": "0x0000000000000000000000000000000000000000",
   "walletId": "00000000-0000-0000-0000-000000000000",
+  "userId": "00000000-0000-0000-0000-000000000000",
   "walletApiKey": "your-wallet-api-key-here",
-  "delegatedShare": "your-encrypted-delegated-share-here"
+  "delegatedShare": "your-delegated-key-share-here",
+  "shareSetId": "00000000-0000-0000-0000-000000000000"
 }
-
