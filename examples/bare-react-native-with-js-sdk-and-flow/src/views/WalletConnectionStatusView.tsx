@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     alignSelf: 'stretch',
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
 });
