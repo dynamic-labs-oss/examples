@@ -1,0 +1,28 @@
+{
+  "name": "nodejs-langgraph-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bare-bones LangGraph ReAct agent backed by a Dynamic server-side MPC wallet",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dynamic-labs-wallet/node": "1.0.25",
+    "@dynamic-labs-wallet/node-evm": "1.0.25",
+    "@langchain/anthropic": "1.4.0",
+    "@langchain/core": "1.1.47",
+    "@langchain/langgraph": "1.3.2",
+    "dotenv": "17.4.2",
+    "langchain": "1.4.1",
+    "viem": "2.50.4",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "tsx": "4.22.3",
+    "typescript": "6.0.3"
+  }
+}
