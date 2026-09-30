@@ -23,24 +23,41 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { ServerKeyShare, WalletMetadata } from "@dynamic-labs-wallet/node";
+
 // Local file storage - FOR TESTING ONLY
 const WALLET_FILE = join(process.cwd(), ".wallets.json");
 
+/** One persisted wallet: identity, metadata, and (optionally) its key shares. */
 export interface StoredWallet {
   address: string;
-  externalServerKeyShares: string[];
+  /**
+   * The full `walletMetadata` returned at creation. The SDK is stateless, so
+   * every sign / export / backup call needs this back — and it must be the
+   * object from `createWalletAccount`, not one re-fetched later.
+   * `fetchWalletMetadata` omits `externalServerKeySharesBackupInfo`, which
+   * signing with caller-held shares requires, so it is not a recovery path.
+   *
+   * Store and pass it whole. Trimming to the type-required fields fails at
+   * runtime — the type is inaccurate both ways (README, "Persisting Wallets").
+   *
+   * Non-sensitive: safe alongside normal application data.
+   */
+  walletMetadata: WalletMetadata;
+  /**
+   * Sensitive MPC key shares. Empty when backed up to Dynamic instead.
+   * In production these belong in a vault (KMS, Vault), never on disk.
+   */
+  externalServerKeyShares: ServerKeyShare[];
   createdAt: string;
 }
 
-export interface WalletStorage {
+interface WalletStorage {
   [address: string]: StoredWallet;
 }
 
-/**
- * Load all saved wallets from local storage
- * ⚠️ FOR TESTING ONLY - Use secure storage in production
- */
-export function loadWallets(): WalletStorage {
+/** Read the whole store. Internal — callers use the accessors below. */
+function loadWallets(): WalletStorage {
   if (!existsSync(WALLET_FILE)) return {};
 
   try {
@@ -74,12 +91,18 @@ export function getWallet(address: string): StoredWallet | undefined {
 }
 
 /**
- * List all saved wallets
+ * List saved wallets, optionally narrowed to one chain.
+ *
+ * EVM and SVM wallets share this store, so each chain's wallet script filters
+ * on `walletMetadata.chainName` to avoid listing the other chain's addresses.
+ *
  * ⚠️ FOR TESTING ONLY - Use secure storage in production
  */
-export function listWallets(): StoredWallet[] {
-  const wallets = loadWallets();
-  return Object.values(wallets);
+export function listWallets(chainName?: string): StoredWallet[] {
+  const wallets = Object.values(loadWallets());
+
+  if (!chainName) return wallets;
+  return wallets.filter((w) => w.walletMetadata?.chainName === chainName);
 }
 
 /**

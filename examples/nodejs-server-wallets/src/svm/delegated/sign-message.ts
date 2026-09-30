@@ -1,33 +1,30 @@
 #!/usr/bin/env tsx
 
 /**
- * Delegated Wallet Message Signing Demo
+ * Delegated Solana Wallet Message Signing Demo
  *
- * Sign messages using a delegated wallet for authentication and verification.
+ * Sign messages using a delegated Solana wallet for authentication and
+ * verification. No gas sponsorship involved — this is entirely off-chain.
  *
  * ## Prerequisites
  *
- * This script requires a wallet.json file with delegated access credentials.
- * See wallet.json.example for the required format.
- *
- * The delegated share is obtained through a separate process where the user
- * grants your application permission to sign on their behalf.
+ * Requires src/svm/delegated/wallet.json with delegated credentials for a
+ * **Solana** wallet. See wallet.json.example for the format.
  *
  * ## Usage
  *
- *   pnpm delegated:sign-msg "Hello, World!"
+ *   pnpm svm:delegated:sign-msg "Hello, World!"
  *
  * ## Use Cases
  *
  * - Authenticate users by proving wallet ownership
  * - Sign authorization tokens or session data
  * - Verify identity without on-chain transactions
- * - Create off-chain signatures for gasless flows
  */
 
-import { parseArgs, runScript } from "../lib/cli";
-import { delegatedEvmClient, delegatedSignMessage } from "../lib/dynamic";
-import wallet from "./wallet.json";
+import { parseArgs, runScript } from "../../lib/cli";
+import { delegatedSvmClient, delegatedSignMessage } from "../../lib/clients/svm";
+import { loadSvmDelegatedCredentials } from "./credentials";
 
 /**
  * Step 1: Sign a message with delegated credentials
@@ -36,17 +33,18 @@ import wallet from "./wallet.json";
  * delegated wallets use credentials provided by the wallet owner.
  */
 async function signMessage(message: string) {
-  // Create delegated client
-  const client = delegatedEvmClient();
+  const client = delegatedSvmClient();
+  const credentials = loadSvmDelegatedCredentials();
 
   console.info(`\nSigning message...`);
   const start = Date.now();
 
   // Sign using the wallet owner's delegated share
   const signature = await delegatedSignMessage(client, {
-    walletId: wallet.walletId,
-    walletApiKey: wallet.walletApiKey,
-    keyShare: wallet.delegatedShare,
+    walletId: credentials.walletId,
+    walletApiKey: credentials.walletApiKey,
+    keyShare: credentials.keyShare,
+    ...(credentials.shareSetId && { shareSetId: credentials.shareSetId }),
     message,
   });
 
@@ -54,7 +52,8 @@ async function signMessage(message: string) {
   const duration = ((Date.now() - start) / 1000).toFixed(2);
   console.info(`\nMessage signed in ${duration}s`);
   console.info(`Message: "${message}"`);
-  console.info(`Signature: ${signature}`);
+  console.info(`Signature (base58): ${signature}`);
+  console.info(`Signer: ${credentials.address}`);
 
   return signature;
 }
@@ -66,7 +65,7 @@ runScript(async () => {
   if (!message) {
     console.error("Please provide a message to sign");
     console.error("\nUsage:");
-    console.error('  pnpm delegated:sign-msg "Hello, World!"');
+    console.error('  pnpm svm:delegated:sign-msg "Hello, World!"');
     process.exit(1);
   }
 

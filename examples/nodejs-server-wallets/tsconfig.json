@@ -2,7 +2,10 @@
   "compilerOptions": {
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
-    "target": "es2020",
+    "target": "es2022",
+    // viem's `ox` dependency ships TypeScript sources that reference DOM types
+    // (WebAuthn), so the DOM lib is required even though this runs on Node.
+    "lib": ["es2022", "dom"],
     "module": "commonjs",
     "moduleResolution": "node",
     "declaration": false,
