@@ -12,9 +12,9 @@
     "example:omnibus": "tsx src/examples/omnibus-sweep.ts"
   },
   "dependencies": {
-    "@dynamic-labs-wallet/node": "0.0.225",
-    "@dynamic-labs-wallet/node-evm": "0.0.225",
-    "@dynamic-labs-wallet/node-svm": "0.0.225",
+    "@dynamic-labs-wallet/node": "1.1.47",
+    "@dynamic-labs-wallet/node-evm": "1.1.47",
+    "@dynamic-labs-wallet/node-svm": "1.1.47",
     "@dynamic-labs/sdk-api": "0.0.831",
     "dotenv": "17.2.3",
     "p-limit": "7.1.1",
