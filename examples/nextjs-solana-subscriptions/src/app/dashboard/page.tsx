@@ -51,7 +51,7 @@ export default function DashboardPage() {
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState("5");
   const { loggedIn, solanaAccount } = useWallet();
-  const user = useUser();
+  const { data: user } = useUser();
 
   const { solBalance, tokenBalance, loading: loadingBalances } = useWalletBalances();
   const { userSubscriptions, loadingSubscriptions } = useSubscriptionOperations();

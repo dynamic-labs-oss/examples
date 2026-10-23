@@ -1,0 +1,9 @@
+overrides:
+  '@solana/web3.js': 1.98.4
+  '@dynamic-labs-sdk/client': 1.43.1
+allowBuilds:
+  bigint-buffer: false
+  bufferutil: false
+  protobufjs: false
+  unrs-resolver: false
+  utf-8-validate: false

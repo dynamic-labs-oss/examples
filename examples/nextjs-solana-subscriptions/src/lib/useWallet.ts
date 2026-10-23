@@ -8,13 +8,14 @@ import {
 } from "@dynamic-labs-sdk/client";
 import { createWaasWalletAccounts } from "@dynamic-labs-sdk/client/waas";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
-import { useUser, useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
+import { useGetWalletAccounts, useUser } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
 
 export function useWallet() {
-  const loggedIn = useUser() !== null;
-  const solanaAccount =
-    useWalletAccounts().find(isSolanaWalletAccount) ?? null;
+  const { data: user } = useUser();
+  const { data: walletAccounts = [] } = useGetWalletAccounts();
+  const loggedIn = (user ?? null) !== null;
+  const solanaAccount = walletAccounts.find(isSolanaWalletAccount) ?? null;
 
   const disconnect = useCallback(async () => {
     await logout(dynamicClient);

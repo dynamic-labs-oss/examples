@@ -8,6 +8,7 @@ import {
   fetchMaybeSubscriptionAuthority,
   fetchPlan,
   fetchPlansForOwner,
+  fetchSubscriptionDelegation,
   fetchSubscriptionsForUser,
   findSubscriptionAuthorityPda,
   findSubscriptionDelegationPda,
@@ -19,7 +20,7 @@ import {
   type SubscriptionDelegation,
 } from "@solana/subscriptions";
 import { isSolanaWalletAccount } from "@dynamic-labs-sdk/solana";
-import { useWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
+import { useGetWalletAccounts } from "@dynamic-labs-sdk/react-hooks";
 import { useWallet } from "@/lib/useWallet";
 import { getKitRpc } from "@/lib/dynamic";
 import { sendKitInstructions } from "./tx";
@@ -133,8 +134,16 @@ export function useSubscriptionOperations() {
     mutationFn: async ({ planPda, subscriptionPda }: { planPda: string; subscriptionPda: string }) => {
       if (!solanaAccount) throw new Error("Wallet not connected");
       const noopSigner = createNoopSigner(address(solanaAccount.address));
+      const rpc = await getKitRpc(solanaAccount);
+      const subscription = await fetchSubscriptionDelegation(rpc, address(subscriptionPda));
       return sendKitInstructions(
-        [await getResumeSubscriptionOverlayInstructionAsync({ subscriber: noopSigner, planPda: address(planPda), subscriptionPda: address(subscriptionPda) })],
+        [await getResumeSubscriptionOverlayInstructionAsync({
+          subscriber: noopSigner,
+          planPda: address(planPda),
+          subscriptionPda: address(subscriptionPda),
+          tokenMint: address(tokenMintStr),
+          expectedExpiresAtTs: subscription.data.expiresAtTs,
+        })],
         noopSigner, solanaAccount
       );
     },
@@ -176,7 +185,7 @@ export function useSubscriptionOperations() {
 }
 
 export function useMerchantSearchOperations() {
-  const walletAccounts = useWalletAccounts();
+  const { data: walletAccounts = [] } = useGetWalletAccounts();
   const solanaAccount = walletAccounts.find(isSolanaWalletAccount) ?? null;
 
   const fetchMerchantPlans = useCallback(async (addr: string) => {

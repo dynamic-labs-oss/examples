@@ -20,7 +20,7 @@ The Solana Subscriptions program lets merchants create on-chain plans with a fix
 2. **subscribe**: Creates a `SubscriptionDelegation` PDA recording the plan terms. The merchant can pull up to `amount` per `periodHours` until the subscription is cancelled.
 3. **cancelSubscription**: Sets an `expiresAtTs` on the delegation — future pulls are blocked once that timestamp is reached.
 
-Dynamic's embedded wallet handles all signing. The app uses `@solana/kit` v6 to build the subscription instructions and bridges them to `@solana/web3.js` v1 `VersionedTransaction` for Dynamic to sign.
+Dynamic's embedded wallet handles all signing. The app uses `@solana/kit` v7 to build the subscription instructions and bridges them to `@solana/web3.js` v1 `VersionedTransaction` for Dynamic to sign.
 
 ## Setup
 
