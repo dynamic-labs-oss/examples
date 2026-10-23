@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #4779FF;
+  --color-dark: #282828;
+  --color-light: #F9F9F9;
+  --color-border: #DADADA;
+  --color-text-primary: #030303;
+  --color-text-secondary: #606060;
+  --color-active-bg: #E8F0FE;
+  --color-active-text: #1967D2;
+}
+
+@layer base {
+  :root {
+    --background: 249 249 249;
+    --foreground: 3 3 3;
+    --border: 218 218 218;
+    --radius: 0.75rem;
+  }
+
+  html {
+    color-scheme: light;
+    background-color: #F9F9F9;
+  }
+
+  body {
+    background-color: #F9F9F9;
+    color: #030303;
+    font-family: "Roboto", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
