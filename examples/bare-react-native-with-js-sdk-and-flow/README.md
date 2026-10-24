@@ -48,7 +48,7 @@ connecting a wallet — start here to see how it's wired:
 
 ## Prerequisites
 
-- Node 20+
+- Node 22.23.4, 24.22.1, or 26.12.1 (or later within the same major)
 - Xcode + CocoaPods (iOS) and/or Android Studio (Android)
 - pnpm (`npm i -g pnpm`) — this repo prefers pnpm, though the RN CLI itself
   defaults to npm
