@@ -39,3 +39,7 @@ yarn-error.log*
 dump.rdb
 
 local/
+tsconfig.tsbuildinfo
+
+# Claude Code
+.claude/
