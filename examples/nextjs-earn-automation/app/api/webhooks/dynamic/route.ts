@@ -33,7 +33,7 @@ export const POST = async (req: NextRequest) => {
 
   if (event.eventName === "wallet.delegation.created") {
     const { data } = event;
-    const { delegatedShare, walletApiKey } = decryptMaterials(
+    const { delegatedShare, delegatedKey } = decryptMaterials(
       data.encryptedDelegatedShare,
       data.encryptedWalletApiKey
     );
@@ -44,7 +44,7 @@ export const POST = async (req: NextRequest) => {
       address: data.publicKey,
       shareSetId: data.shareSetId,
       delegatedShareEnc: encryptSecret(JSON.stringify(delegatedShare)),
-      walletApiKeyEnc: encryptSecret(walletApiKey),
+      walletApiKeyEnc: encryptSecret(delegatedKey),
       createdAt: new Date().toISOString(),
     });
     return NextResponse.json({ ok: true });
