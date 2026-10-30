@@ -46,18 +46,18 @@ function rsaOaepDecryptEk(privateKeyPem: string, ekB64: string) {
  */
 export function decryptMaterials(
   share: EncryptedDelegatedShare,
-  apiKeyEnc: EncryptedDelegatedShare
+  keyEnvelope: EncryptedDelegatedShare
 ): { delegatedShare: unknown; walletApiKey: string } {
   const privateKeyPem = getPrivateKey();
   const shareKey = rsaOaepDecryptEk(privateKeyPem, share.ek);
-  const walletApiKeyKey = rsaOaepDecryptEk(privateKeyPem, apiKeyEnc.ek);
+  const walletApiKeyKey = rsaOaepDecryptEk(privateKeyPem, keyEnvelope.ek);
 
   const delegatedShare = decryptAesGcm(shareKey, share.iv, share.ct, share.tag);
   const walletApiKey = decryptAesGcm(
     walletApiKeyKey,
-    apiKeyEnc.iv,
-    apiKeyEnc.ct,
-    apiKeyEnc.tag
+    keyEnvelope.iv,
+    keyEnvelope.ct,
+    keyEnvelope.tag
   );
 
   return {
