@@ -22,7 +22,9 @@ function decryptAesGcm(
   const iv = Buffer.from(ivB64, "base64url");
   const ciphertext = Buffer.from(ctB64, "base64url");
   const tag = Buffer.from(tagB64, "base64url");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", symmetricKey, iv);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", symmetricKey, iv, {
+    authTagLength: 16,
+  });
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }

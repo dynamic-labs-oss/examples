@@ -26,7 +26,8 @@ export function decryptSecret(payload: string): string {
   const decipher = crypto.createDecipheriv(
     "aes-256-gcm",
     key,
-    Buffer.from(ivB64, "base64url")
+    Buffer.from(ivB64, "base64url"),
+    { authTagLength: 16 }
   );
   decipher.setAuthTag(Buffer.from(tagB64, "base64url"));
   return Buffer.concat([
