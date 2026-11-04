@@ -37,9 +37,9 @@ The app never holds the user's keys. `initDelegationProcess()` creates a **deleg
 ## Running locally
 
 ```bash
-pnpm install
+npm install
 cp .env.example .env.local   # fill in values below
-pnpm dev                     # http://localhost:3000
+npm run dev                  # http://localhost:3000
 ```
 
 Required env vars:
