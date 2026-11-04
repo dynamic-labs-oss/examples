@@ -19,6 +19,7 @@ import {
   type Hex,
   type TransactionSerializable,
 } from "viem";
+import * as viemChains from "viem/chains";
 import { env } from "@/env";
 import { decryptSecret } from "@/lib/crypto";
 import { getStore, type AutomationRule } from "@/lib/store";
@@ -55,13 +56,26 @@ const ERC20_ABI = [
 
 const NATIVE_ASSET = "0x0000000000000000000000000000000000000000";
 
+/** The chain's public default RPC, as bundled with viem. */
+function defaultRpcFor(chainId: number): string | undefined {
+  return Object.values(viemChains).find((c) => c.id === chainId)?.rpcUrls
+    .default.http[0];
+}
+
+/**
+ * Per-chain override (RPC_URL_<chainId>) → the chain's public default RPC →
+ * RPC_URL_DEFAULT as a last resort. Public RPCs are rate-limited; set
+ * RPC_URL_<chainId> to a provider endpoint for anything beyond a demo. The
+ * single RPC_URL_DEFAULT can't be right for several chains, so it ranks last.
+ */
 export function rpcUrlFor(chainId: number): string {
   const specific = process.env[`RPC_URL_${chainId}`];
   if (specific) return specific;
-  if (env.RPC_URL_DEFAULT) return env.RPC_URL_DEFAULT;
-  if (chainId === 8453) return "https://mainnet.base.org";
-  if (chainId === 11155111) return "https://ethereum-sepolia-rpc.publicnode.com";
-  throw new Error(`No RPC URL configured for chain ${chainId} (set RPC_URL_${chainId})`);
+  const fallback = defaultRpcFor(chainId) ?? env.RPC_URL_DEFAULT;
+  if (fallback) return fallback;
+  throw new Error(
+    `No RPC URL for chain ${chainId} (set RPC_URL_${chainId})`
+  );
 }
 
 export function publicClientFor(chainId: number, rpcUrl: string) {

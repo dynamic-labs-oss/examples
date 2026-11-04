@@ -15,8 +15,17 @@ export type JwtVerifiedCredential = {
 export interface DynamicJwtPayload extends JwtPayload {
   sub: string;
   environment_id: string;
-  verified_credentials: JwtVerifiedCredential[];
+  // Absent until the user has a credential on the token (the JS SDK creates the
+  // embedded wallet after sign-in, so the first JWT can predate the wallet).
+  verified_credentials?: JwtVerifiedCredential[];
   email: string;
+}
+
+/** Lowercased wallet addresses the token vouches for (email creds have none). */
+export function ownedAddresses(user: AuthenticatedUser): string[] {
+  return (user.verified_credentials ?? [])
+    .map((c) => c.address?.toLowerCase())
+    .filter((a): a is string => Boolean(a));
 }
 
 const JWKS_URL = `${env.NEXT_PUBLIC_DYNAMIC_API_BASE}/sdk/${env.NEXT_PUBLIC_DYNAMIC_ENV_ID}/.well-known/jwks`;
@@ -50,9 +59,7 @@ export function userOwnsAddress(
   user: AuthenticatedUser,
   address: string
 ): boolean {
-  return user.verified_credentials.some(
-    (cred) => cred.address.toLowerCase() === address.toLowerCase()
-  );
+  return ownedAddresses(user).includes(address.toLowerCase());
 }
 
 type AuthenticatedRequestHandler = (

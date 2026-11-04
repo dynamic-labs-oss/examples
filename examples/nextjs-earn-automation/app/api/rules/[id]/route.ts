@@ -2,11 +2,19 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/dynamic/dynamic-auth";
+import { FREQUENCY_KEYS } from "@/lib/schedule";
 import { getStore } from "@/lib/store";
 
-const PatchSchema = z.object({ enabled: z.boolean() });
+const PatchSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    frequency: z.enum(FREQUENCY_KEYS).optional(),
+  })
+  .refine((b) => b.enabled !== undefined || b.frequency !== undefined, {
+    message: "nothing to update",
+  });
 
-/** PATCH /api/rules/:id — pause or resume a rule. */
+/** PATCH /api/rules/:id — pause/resume a rule or change how often it runs. */
 export const PATCH = withAuth(
   async (
     req: NextRequest,
@@ -21,7 +29,11 @@ export const PATCH = withAuth(
     if (!parsed.success) {
       return NextResponse.json({ error: "invalid body" }, { status: 400 });
     }
-    const updated = { ...rule, enabled: parsed.data.enabled };
+    const updated = {
+      ...rule,
+      ...(parsed.data.enabled !== undefined && { enabled: parsed.data.enabled }),
+      ...(parsed.data.frequency && { frequency: parsed.data.frequency }),
+    };
     await getStore().putRule(updated);
     return NextResponse.json({ rule: updated });
   }

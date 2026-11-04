@@ -1,0 +1,3 @@
+allowBuilds:
+  protobufjs: false
+  sharp: false

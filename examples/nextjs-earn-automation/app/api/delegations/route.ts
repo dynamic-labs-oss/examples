@@ -1,18 +1,37 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { userOwnsAddress, withAuth } from "@/lib/dynamic/dynamic-auth";
+import {
+  ownedAddresses,
+  userOwnsAddress,
+  withAuth,
+} from "@/lib/dynamic/dynamic-auth";
 import { encryptSecret } from "@/lib/crypto";
 import { getStore } from "@/lib/store";
 
-/** GET /api/delegations — which of the caller's wallets have delegation grants. */
-export const GET = withAuth(async (_req, { user }) => {
-  const owned = new Set(
-    user.verified_credentials.map((c) => c.address.toLowerCase())
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
+
+/**
+ * GET /api/delegations?addresses=0x..,0x.. — which of the caller's wallets have
+ * delegation grants.
+ *
+ * Ownership is proven by the stored grant itself: it was written from a signed
+ * wallet.delegation.created webhook whose userId is Dynamic's, so a candidate
+ * address only counts when grant.userId === the caller's token subject. (The
+ * JS SDK creates the embedded wallet after sign-in, so the JWT's
+ * verified_credentials can lag behind and can't be the only source.)
+ */
+export const GET = withAuth(async (req, { user }) => {
+  const requested = (req.nextUrl.searchParams.get("addresses") ?? "")
+    .split(",")
+    .filter((a) => ADDRESS_RE.test(a))
+    .slice(0, 20);
+  const candidates = new Set(
+    [...ownedAddresses(user), ...requested.map((a) => a.toLowerCase())]
   );
-  const delegations = (await Promise.all(
-    [...owned].map((a) => getStore().getDelegation(a))
-  )).filter(Boolean);
+  const delegations = (
+    await Promise.all([...candidates].map((a) => getStore().getDelegation(a)))
+  ).filter((d) => d && d.userId === user.sub);
   return NextResponse.json({
     delegations: delegations.map((d) => ({
       address: d!.address,

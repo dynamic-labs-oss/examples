@@ -19,7 +19,8 @@ const BaseWebhookSchema = z.object({
   webhookId: z.string(),
   environmentId: z.string(),
   environmentName: z.string().optional(),
-  userId: z.string().nullable(),
+  // Absent on system events such as the endpoint-verification ping.
+  userId: z.string().nullable().optional(),
   redelivery: z.boolean().optional(),
 });
 
