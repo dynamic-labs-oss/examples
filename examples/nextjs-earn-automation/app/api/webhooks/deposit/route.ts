@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { env } from "@/env";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { executeRule } from "@/lib/earn";
 import { getStore, type AutomationRule } from "@/lib/store";
 
@@ -14,7 +14,7 @@ import { getStore, type AutomationRule } from "@/lib/store";
  * Body: { "address": "0x...", "assetAddress"?: "0x..." }
  */
 export const POST = async (req: NextRequest) => {
-  if (req.headers.get("authorization") !== `Bearer ${env.CRON_SECRET}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { address, assetAddress } = (await req.json().catch(() => ({}))) as {

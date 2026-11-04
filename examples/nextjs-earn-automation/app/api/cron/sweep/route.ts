@@ -1,13 +1,10 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { env } from "@/env";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { executeRule } from "@/lib/earn";
+import { isDue } from "@/lib/schedule";
 import { getStore, type AutomationRule } from "@/lib/store";
-
-function authorized(req: NextRequest): boolean {
-  return req.headers.get("authorization") === `Bearer ${env.CRON_SECRET}`;
-}
 
 async function runSweep(rules: AutomationRule[]) {
   const store = getStore();
@@ -41,18 +38,35 @@ async function runSweep(rules: AutomationRule[]) {
 }
 
 /**
- * POST /api/cron/sweep — the automation executor. Point a cron (Vercel Cron,
- * system cron, or a manual `curl`) at it with `Authorization: Bearer
- * $CRON_SECRET`. Pass {"ruleId": "..."} to run a single rule.
+ * The automation executor. Call it on a fixed tick (vercel.json runs it
+ * hourly); each rule only runs once its own `frequency` has elapsed.
+ * Pass {"ruleId": "..."} to force a single rule regardless of its schedule.
  */
-export const POST = async (req: NextRequest) => {
-  if (!authorized(req)) {
+async function handle(req: NextRequest, ruleId?: string) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const store = getStore();
+  const now = Date.now();
+  let rules: AutomationRule[];
+  let notDue = 0;
+  if (ruleId) {
+    rules = [await store.getRule(ruleId)].filter(
+      (r): r is AutomationRule => !!r
+    );
+  } else {
+    const enabled = (await store.listRules()).filter((r) => r.enabled);
+    rules = enabled.filter((r) => isDue(r, now));
+    notDue = enabled.length - rules.length;
+  }
+  return NextResponse.json({ results: await runSweep(rules), notDue });
+}
+
+/** POST /api/cron/sweep — `Authorization: Bearer $CRON_SECRET`. */
+export const POST = async (req: NextRequest) => {
   const body = (await req.json().catch(() => ({}))) as { ruleId?: string };
-  const rules = body.ruleId
-    ? [await store.getRule(body.ruleId)].filter((r): r is AutomationRule => !!r)
-    : await store.listRules();
-  return NextResponse.json({ results: await runSweep(rules) });
+  return handle(req, body.ruleId);
 };
+
+/** GET /api/cron/sweep — Vercel Cron issues GET and sends the same bearer. */
+export const GET = (req: NextRequest) => handle(req);

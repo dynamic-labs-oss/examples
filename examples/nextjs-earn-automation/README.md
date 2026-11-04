@@ -2,7 +2,7 @@
 
 Auto-deposit a wallet's assets into a Dynamic Earn yield vault — **sweep everything** or a **fixed amount** — on a schedule, using only existing Dynamic tools:
 
-- **Frontend (Next.js):** Dynamic login → pick wallet → pick vault → sweep-all or fixed amount → delegate signing once → manage rules.
+- **Frontend (Next.js):** built on the [Dynamic JavaScript SDK](https://www.dynamic.xyz/docs/javascript/reference/nextjs-app-router) (`@dynamic-labs-sdk/*`, headless). Dynamic login → pick wallet → pick vault → sweep-all or fixed amount → delegate signing once → manage rules.
 - **Backend (serverless API routes):** user-scoped rule CRUD, a cron sweep executor, and Dynamic webhook receivers.
 - **Persistence:** Supabase (optional) or a local `.data/db.json` file — no external services needed to run locally.
 
@@ -15,7 +15,7 @@ User (browser)                      App server                         Dynamic /
 ──────────────                      ──────────                         ────────────────
 login ────────────────────────────▶ verify JWT (JWKS)
 pick wallet+vault+mode
-initDelegationProcess() ──────────▶                                  one-time delegation consent
+delegateWaasKeyShares() ──────────▶                                  one-time delegation consent
                                     ◀── wallet.delegation.created webhook (HMAC-verified,
                                         encrypted share + walletApiKey) → AES-256-GCM at rest
 POST /api/rules ──────────────────▶ rules row
@@ -30,16 +30,16 @@ revoke in Dynamic dashboard ──────▶ wallet.delegation.revoked → 
 
 ### Why delegation, not custody?
 
-The app never holds the user's keys. `initDelegationProcess()` creates a **delegated share set** scoped to that wallet; the server can only sign via `delegated*` APIs, and the user can revoke the share set at any time — revocation webhook immediately deletes the stored material and pauses the wallet's rules. Delegation material is additionally AES-256-GCM encrypted at rest (`ENCRYPTION_KEY`).
+The app never holds the user's keys. `delegateWaasKeyShares()` creates a **delegated share set** scoped to that wallet; the server can only sign via `delegated*` APIs, and the user can revoke the share set at any time — revocation webhook immediately deletes the stored material and pauses the wallet's rules. Delegation material is additionally AES-256-GCM encrypted at rest (`ENCRYPTION_KEY`).
 
 > Production hardening note: server-side delegation can sign *any* transaction the delegated path supports. A production version should add a signer **policy layer** (allowlist chain, vault contract, deposit/approve calldata, amount cap) enforced in the enclave — that piece lives in redcoast.
 
 ## Running locally
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env.local   # fill in values below
-npm run dev                  # http://localhost:3000
+pnpm dev                  # http://localhost:3000
 ```
 
 Required env vars:
@@ -50,26 +50,33 @@ Required env vars:
 | `DYNAMIC_API_TOKEN` | Server-side API token (yield quote calls) |
 | `ENCRYPTION_KEY` | AES-256 key for stored delegation material |
 | `CRON_SECRET` | Bearer secret for `/api/cron/sweep` + `/api/webhooks/deposit` |
-| `RPC_URL_<chainId>` / `RPC_URL_DEFAULT` | Optional RPC overrides (Base defaults to `mainnet.base.org`) |
+| `RPC_URL_<chainId>` / `RPC_URL_DEFAULT` | Optional RPC overrides. Each chain falls back to its public default RPC (bundled with viem); public RPCs are rate-limited, so set `RPC_URL_<chainId>` for anything beyond a demo |
 | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Optional; run `supabase/schema.sql` first. Unset = local JSON store |
 
 ### Delegation without a tunnel
 
 The `wallet.delegation.created` webhook needs Dynamic to reach your server. For pure local dev, `POST /api/delegations` lets the client seed a delegation grant directly (same storage, minus webhook transport encryption). Point a webhook at `/api/webhooks/dynamic` (set `DYNAMIC_WEBHOOK_SECRET` and `DYNAMIC_DELEGATION_PRIVATE_KEY`) when running behind a tunnel/deploy.
 
-### Triggering sweeps
+### Scheduling
+
+Each rule has its own **frequency** — hourly, every 6 hours, daily or weekly (one hour is the minimum) — chosen in the UI when you create it and changeable later from the rule card (`PATCH /api/rules/:id` with `{"frequency": "hourly"}`).
+
+The sweep endpoint is a fixed-tick cron: `vercel.json` calls `/api/cron/sweep` hourly (Vercel Cron sends `Authorization: Bearer $CRON_SECRET` automatically), and on each tick only the rules whose frequency has elapsed since their last run actually execute. A rule that has never run is due on the next tick. The smallest frequency is therefore bounded by the tick (hourly). Note that Vercel's Hobby plan limits cron jobs to once per day.
+
+Cron only runs on production deployments. Locally (or on any other host) call the endpoint yourself on whatever tick you like:
 
 ```bash
 # Everything due
 curl -X POST localhost:3000/api/cron/sweep \
   -H "Authorization: Bearer $CRON_SECRET" -H 'Content-Type: application/json' -d '{}'
 
-# One rule
+# One rule, regardless of its schedule
 curl -X POST localhost:3000/api/cron/sweep \
   -H "Authorization: Bearer $CRON_SECRET" -H 'Content-Type: application/json' \
   -d '{"ruleId":"<id>"}'
 
-# Webhook-style: sweep rules matching a wallet (e.g. fed by a balance-change notifier)
+# Webhook-style (event-driven, ignores frequency): sweep rules matching a wallet,
+# e.g. fed by a balance-change notifier
 curl -X POST localhost:3000/api/webhooks/deposit \
   -H "Authorization: Bearer $CRON_SECRET" -H 'Content-Type: application/json' \
   -d '{"address":"0x…","assetAddress":"0x…"}'
