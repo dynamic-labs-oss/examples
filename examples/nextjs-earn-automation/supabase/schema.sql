@@ -29,9 +29,14 @@ create table if not exists rules (
   "sponsored"     boolean not null default true,
   "gasReserve"    text not null default '0.005',
   "enabled"       boolean not null default true,
+  "frequency"     text not null default 'daily'
+                  check ("frequency" in ('hourly','6h','daily','weekly')),
   "createdAt"     timestamptz not null default now(),
   "lastRunAt"     timestamptz
 );
+-- For databases created before per-rule frequency existed:
+alter table rules add column if not exists "frequency" text not null default 'daily'
+  check ("frequency" in ('hourly','6h','daily','weekly'));
 create index if not exists rules_user_idx on rules ("userId");
 create index if not exists rules_wallet_idx on rules ("walletAddress");
 

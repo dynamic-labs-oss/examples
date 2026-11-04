@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "@/env";
+import type { Frequency } from "@/lib/schedule";
 
 /** A user's delegation grant, delivered by the wallet.delegation.created webhook. */
 export type DelegationRecord = {
@@ -34,6 +35,8 @@ export type AutomationRule = {
   /** Native units a native-asset sweep leaves behind for gas. */
   gasReserve: string;
   enabled: boolean;
+  /** How often the cron sweep runs this rule. Absent on legacy rows = daily. */
+  frequency?: Frequency;
   createdAt: string;
   lastRunAt?: string;
 };
