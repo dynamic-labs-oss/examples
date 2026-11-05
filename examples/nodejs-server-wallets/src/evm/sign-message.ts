@@ -8,9 +8,9 @@
  *
  * ## Usage
  *
- *   pnpm sign-msg "Hello, World!"                                    # Sign with new ephemeral wallet
- *   pnpm sign-msg "Hello, World!" --address 0x123...                 # Sign with saved wallet
- *   pnpm sign-msg "Hello, World!" --address 0x123... --password xyz  # Sign with password-protected wallet
+ *   pnpm evm:sign-msg "Hello, World!"                                    # Sign with new ephemeral wallet
+ *   pnpm evm:sign-msg "Hello, World!" --address 0x123...                 # Sign with saved wallet
+ *   pnpm evm:sign-msg "Hello, World!" --address 0x123... --password xyz  # Sign with password-protected wallet
  *
  * ## Use Cases
  *
@@ -21,28 +21,26 @@
  */
 
 import { parseArgs, runScript } from "../lib/cli";
-import { authenticatedEvmClient } from "../lib/dynamic";
+import { authenticatedEvmClient, type EvmClient } from "../lib/clients/evm";
 import { getOrCreateWallet, type WalletInfo } from "../lib/wallet-helpers";
 
 /**
  * Step 2: Sign a message with the wallet
  */
 async function signMessage(
+  dynamicEvmClient: EvmClient,
   message: string,
   wallet: WalletInfo,
   password?: string,
 ) {
-  // Get authenticated Dynamic client
-  const dynamicEvmClient = await authenticatedEvmClient();
-
   console.info(`\nSigning message...`);
   const start = Date.now();
 
-  // Sign the message using the wallet's key shares
-  // If key shares are available locally, pass them directly.
-  // If empty (backed up to Dynamic), omit them so the SDK recovers from backup using the password.
+  // Pass walletMetadata whole — trimming it to the type-required fields fails at
+  // runtime (see README, "Persisting Wallets"). Shares: pass when you hold them,
+  // omit when backed up to Dynamic so the SDK recovers them with the password.
   const signature = await dynamicEvmClient.signMessage({
-    accountAddress: wallet.address,
+    walletMetadata: wallet.walletMetadata,
     ...(wallet.externalServerKeyShares.length > 0 && {
       externalServerKeyShares: wallet.externalServerKeyShares,
     }),
@@ -64,10 +62,10 @@ async function signMessage(
 function showUsage(): never {
   console.error("Please provide a message to sign");
   console.error("\nUsage:");
-  console.error('  pnpm sign-msg "Hello, World!"');
-  console.error('  pnpm sign-msg "Hello, World!" --address 0x123...');
+  console.error('  pnpm evm:sign-msg "Hello, World!"');
+  console.error('  pnpm evm:sign-msg "Hello, World!" --address 0x123...');
   console.error(
-    '  pnpm sign-msg "Hello, World!" --address 0x123... --password xyz',
+    '  pnpm evm:sign-msg "Hello, World!" --address 0x123... --password xyz',
   );
   process.exit(1);
 }
@@ -89,5 +87,5 @@ runScript(async () => {
   const wallet = await getOrCreateWallet(dynamicEvmClient, address, password);
 
   // Step 2: Sign the message
-  await signMessage(message, wallet, password);
+  await signMessage(dynamicEvmClient, message, wallet, password);
 });

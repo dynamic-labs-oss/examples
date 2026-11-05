@@ -10,9 +10,9 @@
  *
  * ## Usage
  *
- *   pnpm sign-typed-data                                    # Sign with new ephemeral wallet
- *   pnpm sign-typed-data --address 0x123...                 # Sign with saved wallet
- *   pnpm sign-typed-data --address 0x123... --password xyz  # Sign with password-protected wallet
+ *   pnpm evm:sign-typed-data                                    # Sign with new ephemeral wallet
+ *   pnpm evm:sign-typed-data --address 0x123...                 # Sign with saved wallet
+ *   pnpm evm:sign-typed-data --address 0x123... --password xyz  # Sign with password-protected wallet
  *
  * ## Use Cases
  *
@@ -25,7 +25,7 @@
 import type { TypedData } from "viem";
 
 import { parseArgs, runScript } from "../lib/cli";
-import { authenticatedEvmClient } from "../lib/dynamic";
+import { authenticatedEvmClient, type EvmClient } from "../lib/clients/evm";
 import { getOrCreateWallet, type WalletInfo } from "../lib/wallet-helpers";
 
 // Example EIP-712 typed data for demonstration
@@ -59,14 +59,16 @@ const EXAMPLE_TYPED_DATA = {
 /**
  * Step 2: Sign typed data with the wallet
  */
-async function signTypedData(wallet: WalletInfo, password?: string) {
-  const dynamicEvmClient = await authenticatedEvmClient();
-
+async function signTypedData(
+  dynamicEvmClient: EvmClient,
+  wallet: WalletInfo,
+  password?: string,
+) {
   console.info(`\nSigning EIP-712 typed data...`);
   const start = Date.now();
 
   const signature = await dynamicEvmClient.signTypedData({
-    accountAddress: wallet.address,
+    walletMetadata: wallet.walletMetadata,
     ...(wallet.externalServerKeyShares.length > 0 && {
       externalServerKeyShares: wallet.externalServerKeyShares,
     }),
@@ -97,5 +99,5 @@ runScript(async () => {
   const wallet = await getOrCreateWallet(dynamicEvmClient, address, password);
 
   // Step 2: Sign the typed data
-  await signTypedData(wallet, password);
+  await signTypedData(dynamicEvmClient, wallet, password);
 });

@@ -14,6 +14,9 @@
  * 4. Sweeps all funds to the omnibus wallet using gasless transactions
  * 5. Processes transactions concurrently for scalability
  *
+ * Gas is sponsored by Dynamic, so customer wallets never need a native token
+ * balance — which is what makes a per-customer wallet model practical at all.
+ *
  * ## Usage
  *
  * Run with default settings (10 wallets):
@@ -29,44 +32,39 @@
  * - Aggregate funds to centralized omnibus accounts
  * - Execute transactions without customers holding ETH for gas
  * - Process operations at scale with concurrent transactions
+ *
+ * ## Requirements
+ *
+ * EVM Gas Sponsorship is an enterprise feature and must be enabled under
+ * Settings -> Embedded Wallets in the Dynamic dashboard. Set RPC_URL to a
+ * dedicated provider before running this — the public endpoint will rate limit
+ * the concurrent delegation checks.
  */
 
-import { ThresholdSignatureScheme } from "@dynamic-labs-wallet/node";
-import {
-  createAccountAdapter,
-  type DynamicEvmWalletClient,
-} from "@dynamic-labs-wallet/node-evm";
-import pLimit from "p-limit";
-import { encodeFunctionData, type Hex, type LocalAccount } from "viem";
+import { randomInt } from "node:crypto";
 
-import { CONTRACTS, TOKEN_ABI } from "../../constants";
+import {
+  type ServerKeyShare,
+  ThresholdSignatureScheme,
+  type WalletMetadata,
+} from "@dynamic-labs-wallet/node";
+import type { DynamicEvmWalletClient } from "@dynamic-labs-wallet/node-evm";
+import pLimit from "p-limit";
+import { encodeFunctionData, type Hex, parseUnits } from "viem";
+
+import { CONTRACTS, DEFAULT_CHAIN, TOKEN_ABI, USDC_DECIMALS } from "../../constants";
 import { parseArgs, runScript } from "../lib/cli";
+import { authenticatedEvmClient } from "../lib/clients/evm";
+import { sendSponsoredTransaction } from "../lib/gasless/evm";
 import {
-  DEFAULT_CHAIN,
-  MAX_USDC_AMOUNT,
-  TRANSACTION_CONFIRMATIONS,
-  TRANSACTION_LIMIT as TRANSACTION_CONCURRENCY,
-  USDC_DECIMALS,
-  WALLET_CREATION_LIMIT as WALLET_CREATION_CONCURRENCY,
-} from "../lib/config";
-import { authenticatedEvmClient } from "../lib/dynamic";
-import { getAuthorization, getSmartAccountClient } from "../lib/pimlico";
-import {
-  dollarsToTokenUnits,
   formatAddress,
   getAddressLink,
   getTransactionLink,
 } from "../lib/utils";
 
-interface SendTransactionParams {
-  walletClient: LocalAccount;
-  to: `0x${string}`;
-  data: Hex;
-}
-
 interface DynamicWalletAccount {
-  accountAddress: string;
-  externalServerKeyShares: string[];
+  walletMetadata: WalletMetadata;
+  externalServerKeyShares: ServerKeyShare[];
 }
 
 interface CustomerWallet {
@@ -77,12 +75,16 @@ interface CustomerWallet {
 
 const USDC_ADDRESS = CONTRACTS[DEFAULT_CHAIN.id].USDC;
 
-// Concurrency limits for API rate limiting
-const WALLET_CREATION_LIMIT = pLimit(WALLET_CREATION_CONCURRENCY);
-const TRANSACTION_LIMIT = pLimit(TRANSACTION_CONCURRENCY);
+// ---- Demo tuning. Only this demo uses these, so they live here. -------------
 
-// Demo configuration
 const DEFAULT_NUM_WALLETS = 10;
+
+/** Max test USDC minted per customer wallet. */
+const MAX_USDC_AMOUNT = 1000;
+
+/** Concurrency caps, to stay inside Dynamic's API rate limits. */
+const WALLET_CREATION_LIMIT = pLimit(5);
+const TRANSACTION_LIMIT = pLimit(25);
 
 let dynamicEvmClient: DynamicEvmWalletClient;
 
@@ -91,7 +93,7 @@ let dynamicEvmClient: DynamicEvmWalletClient;
  * Uses 2-of-2 threshold signatures for enhanced security.
  *
  * Note: This function includes retry logic specific to the omnibus demo.
- * For simpler wallet creation, see wallet.ts or wallet-helpers.ts
+ * For simpler wallet creation, see src/evm/wallet.ts or lib/wallet-helpers.ts
  */
 async function createWalletAccount(
   walletNumber: number,
@@ -111,10 +113,14 @@ async function createWalletAccount(
   const createWallet = async (): Promise<DynamicWalletAccount | null> => {
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        return await dynamicEvmClient?.createWalletAccount({
-          thresholdSignatureScheme: ThresholdSignatureScheme.TWO_OF_TWO,
-          backUpToClientShareService: false,
-        });
+        const { walletMetadata, externalServerKeyShares } =
+          await dynamicEvmClient.createWalletAccount({
+            thresholdSignatureScheme: ThresholdSignatureScheme.TWO_OF_TWO,
+            backUpToDynamic: false,
+          });
+
+        // The SDK is stateless — hold onto both of these or the wallet cannot sign
+        return { walletMetadata, externalServerKeyShares };
       } catch (_error) {
         if (attempt === 5) break; // Don't delay after last attempt
 
@@ -144,48 +150,31 @@ async function createWalletAccount(
 }
 
 /**
- * Creates a wallet account for signing transactions from a customer wallet.
- * Uses the SDK's createAccountAdapter for viem-compatible accounts.
+ * Sends a gasless transaction from a customer wallet and returns its hash.
+ *
+ * Dynamic sponsors the gas and its relayer submits the transaction. Note this
+ * resolves at relay status `submitted` — *before* mining — so the hash means
+ * "delivered", not "executed". This demo never reads post-transaction state, so it
+ * skips the receipt wait; anything that does must confirm the receipt first
+ * (see IDEMPOTENCY.md).
  */
-function createWalletClientForCustomer(
-  customerWallet: CustomerWallet,
-): LocalAccount {
-  if (!dynamicEvmClient) {
-    throw new Error("dynamicEvmClient not initialized");
-  }
-
-  // Cast to LocalAccount since the SDK adapter implements all required signing methods
-  return createAccountAdapter({
-    evmClient: dynamicEvmClient,
-    accountAddress: customerWallet.wallet.accountAddress as `0x${string}`,
-    externalServerKeyShares: customerWallet.wallet.externalServerKeyShares,
-  }) as LocalAccount;
-}
-
-/**
- * Sends a gasless transaction using Pimlico and waits for confirmation.
- * The paymaster sponsors gas so customers don't need ETH.
- */
-async function sendTransactionAndWait({
-  walletClient,
+async function sendSponsoredCall({
+  wallet,
   to,
   data,
-}: SendTransactionParams): Promise<string> {
-  const publicClient = dynamicEvmClient.createViemPublicClient({
-    chain: DEFAULT_CHAIN,
-    rpcUrl: DEFAULT_CHAIN.rpcUrls.default.http[0],
+}: {
+  wallet: DynamicWalletAccount;
+  to: Hex;
+  data: Hex;
+}): Promise<Hex> {
+  const { transactionHash } = await sendSponsoredTransaction({
+    evmClient: dynamicEvmClient,
+    walletMetadata: wallet.walletMetadata,
+    externalServerKeyShares: wallet.externalServerKeyShares,
+    calls: [{ target: to, data, value: 0n }],
   });
-  const [smartAccount, authorization] = await Promise.all([
-    getSmartAccountClient(publicClient, walletClient),
-    getAuthorization(publicClient, walletClient),
-  ]);
 
-  const hash = await smartAccount.sendTransaction({ to, data, authorization });
-  await publicClient.waitForTransactionReceipt({
-    hash,
-    confirmations: TRANSACTION_CONFIRMATIONS,
-  });
-  return hash;
+  return transactionHash;
 }
 
 /**
@@ -199,11 +188,11 @@ async function createCustomerWallet(
   if (!customerWallet) return null;
 
   console.info(
-    `Customer wallet ${walletNumber} created: ${customerWallet.accountAddress}`,
+    `Customer wallet ${walletNumber} created: ${customerWallet.walletMetadata.accountAddress}`,
   );
 
   // Generate random USDC amount up to MAX_USDC_AMOUNT
-  const usdcAmount = BigInt(Math.floor(Math.random() * MAX_USDC_AMOUNT) + 1);
+  const usdcAmount = BigInt(randomInt(1, MAX_USDC_AMOUNT + 1));
 
   return {
     index: walletNumber,
@@ -219,11 +208,9 @@ async function createCustomerWallet(
 async function fundCustomerWallet(
   customerWallet: CustomerWallet,
 ): Promise<void> {
-  const walletClient = await createWalletClientForCustomer(customerWallet);
-
   // Mint USDC to customer wallet
-  const txHash = await sendTransactionAndWait({
-    walletClient,
+  const txHash = await sendSponsoredCall({
+    wallet: customerWallet.wallet,
     to: USDC_ADDRESS,
     data: encodeFunctionData({
       abi: TOKEN_ABI,
@@ -233,7 +220,7 @@ async function fundCustomerWallet(
   });
   console.info(
     `Funded customer wallet ${customerWallet.index} (${formatAddress(
-      customerWallet.wallet.accountAddress,
+      customerWallet.wallet.walletMetadata.accountAddress,
     )}): ${customerWallet.usdcAmount} USDC - ${getTransactionLink(txHash)}`,
   );
 }
@@ -244,17 +231,13 @@ async function fundCustomerWallet(
  */
 async function sweepToOmnibus(
   customerWallet: CustomerWallet,
-  omnibus: `0x${string}`,
+  omnibus: Hex,
 ): Promise<bigint> {
-  const walletClient = await createWalletClientForCustomer(customerWallet);
-  const tokenUnits = dollarsToTokenUnits(
-    customerWallet.usdcAmount,
-    USDC_DECIMALS,
-  );
+  const tokenUnits = parseUnits(String(customerWallet.usdcAmount), USDC_DECIMALS);
 
   // Transfer USDC from customer wallet to omnibus account
-  const txHash = await sendTransactionAndWait({
-    walletClient,
+  const txHash = await sendSponsoredCall({
+    wallet: customerWallet.wallet,
     to: USDC_ADDRESS,
     data: encodeFunctionData({
       abi: TOKEN_ABI,
@@ -264,7 +247,7 @@ async function sweepToOmnibus(
   });
   console.info(
     `Swept customer wallet ${customerWallet.index} (${formatAddress(
-      customerWallet.wallet.accountAddress,
+      customerWallet.wallet.walletMetadata.accountAddress,
     )}): ${customerWallet.usdcAmount} USDC to omnibus - ${getTransactionLink(
       txHash,
     )}`,
@@ -309,7 +292,7 @@ runScript(async () => {
   const omnibusWallet = await createWalletAccount(0);
   if (!omnibusWallet) process.exit(1);
 
-  const omnibusAddress = omnibusWallet.accountAddress;
+  const omnibusAddress = omnibusWallet.walletMetadata.accountAddress as Hex;
   const omnibusAddressFormatted = formatAddress(omnibusAddress);
   console.info(`Omnibus wallet created: ${omnibusAddressFormatted}`);
   console.info("");
@@ -346,9 +329,7 @@ runScript(async () => {
     `Sweeping funds from ${createdWallets.length} customer wallets to omnibus account...`,
   );
   const sweepPromises = createdWallets.map((customerWallet) =>
-    TRANSACTION_LIMIT(() =>
-      sweepToOmnibus(customerWallet, omnibusAddress as `0x${string}`),
-    ),
+    TRANSACTION_LIMIT(() => sweepToOmnibus(customerWallet, omnibusAddress)),
   );
 
   const usdcAmounts = await Promise.all(sweepPromises);

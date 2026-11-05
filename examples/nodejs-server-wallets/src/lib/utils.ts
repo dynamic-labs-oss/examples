@@ -1,3 +1,13 @@
+/**
+ * Formatting and Explorer Links
+ *
+ * Display helpers shared by every example. Chain-agnostic by virtue of exposing
+ * one function per chain rather than switching internally.
+ */
+
+import { SOLANA_CLUSTER } from "../../constants";
+
+/** Abbreviate an address for log output. */
 export const formatAddress = (address: string) => {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 };
@@ -17,11 +27,15 @@ export function getAddressLink(address: string): string {
 }
 
 /**
- * Converts dollar amount to token units (with 6 decimals for USDC)
+ * Generates a Solana explorer link for a transaction signature
  */
-export function dollarsToTokenUnits(
-  dollars: bigint,
-  decimals: number = 6
-): bigint {
-  return dollars * BigInt(10 ** decimals);
+export function getSolanaTransactionLink(signature: string): string {
+  return `https://explorer.solana.com/tx/${signature}?cluster=${SOLANA_CLUSTER}`;
+}
+
+/**
+ * Generates a Solana explorer link for an address
+ */
+export function getSolanaAddressLink(address: string): string {
+  return `https://explorer.solana.com/address/${address}?cluster=${SOLANA_CLUSTER}`;
 }

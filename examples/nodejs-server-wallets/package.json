@@ -3,26 +3,36 @@
   "version": "1.0.0",
   "description": "Dynamic SDK server-side wallet management examples",
   "scripts": {
-    "wallet": "tsx src/server-wallet/wallet.ts",
-    "send-txn": "tsx src/server-wallet/send-transaction.ts",
-    "sign-msg": "tsx src/server-wallet/sign-message.ts",
-    "sign-typed-data": "tsx src/server-wallet/sign-typed-data.ts",
-    "delegated:send-txn": "tsx src/delegated/send-transaction.ts",
-    "delegated:sign-msg": "tsx src/delegated/sign-message.ts",
-    "example:omnibus": "tsx src/examples/omnibus-sweep.ts"
+    "evm:wallet": "tsx src/evm/wallet.ts",
+    "evm:send-txn": "tsx src/evm/send-transaction.ts",
+    "evm:transfer-token": "tsx src/evm/transfer-token.ts",
+    "evm:sign-msg": "tsx src/evm/sign-message.ts",
+    "evm:sign-typed-data": "tsx src/evm/sign-typed-data.ts",
+    "evm:delegated:send-txn": "tsx src/evm/delegated/send-transaction.ts",
+    "evm:delegated:sign-msg": "tsx src/evm/delegated/sign-message.ts",
+    "svm:wallet": "tsx src/svm/wallet.ts",
+    "svm:send-txn": "tsx src/svm/send-transaction.ts",
+    "svm:transfer-token": "tsx src/svm/transfer-token.ts",
+    "svm:sign-msg": "tsx src/svm/sign-message.ts",
+    "svm:delegated:send-txn": "tsx src/svm/delegated/send-transaction.ts",
+    "svm:delegated:sign-msg": "tsx src/svm/delegated/sign-message.ts",
+    "example:omnibus": "tsx src/examples/omnibus-sweep.ts",
+    "example:idempotency": "tsx src/examples/idempotency/index.ts",
+    "example:transfer": "tsx src/examples/unified-transfer.ts",
+    "smoke": "tsx src/smoke.ts"
   },
   "dependencies": {
-    "@dynamic-labs-wallet/node": "0.0.225",
-    "@dynamic-labs-wallet/node-evm": "0.0.225",
-    "@dynamic-labs-wallet/node-svm": "0.0.225",
-    "@dynamic-labs/sdk-api": "0.0.831",
-    "dotenv": "17.2.3",
-    "p-limit": "7.1.1",
-    "permissionless": "0.2.57",
-    "viem": "2.38.2"
+    "@dynamic-labs-wallet/node": "1.0.114",
+    "@dynamic-labs-wallet/node-evm": "1.0.114",
+    "@dynamic-labs-wallet/node-svm": "1.0.114",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.98.4",
+    "dotenv": "17.4.2",
+    "p-limit": "7.3.1",
+    "viem": "2.55.13"
   },
   "devDependencies": {
-    "@types/node": "24.7.2",
-    "tsx": "4.20.6"
+    "@types/node": "26.2.0",
+    "tsx": "4.23.12"
   }
 }

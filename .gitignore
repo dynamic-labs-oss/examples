@@ -39,3 +39,6 @@ yarn-error.log*
 dump.rdb
 
 local/
+
+# Local agent config
+.claude/
