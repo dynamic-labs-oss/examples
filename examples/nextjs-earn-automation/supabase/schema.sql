@@ -50,3 +50,9 @@ create table if not exists runs (
   "createdAt" timestamptz not null default now()
 );
 create index if not exists runs_rule_idx on runs ("ruleId", "createdAt" desc);
+
+-- Lock the tables down: only the server's secret key (which bypasses RLS) may
+-- touch them. With RLS on and no policies, the publishable/anon key sees nothing.
+alter table delegations enable row level security;
+alter table rules       enable row level security;
+alter table runs        enable row level security;

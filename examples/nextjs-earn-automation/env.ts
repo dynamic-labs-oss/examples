@@ -16,9 +16,9 @@ export const env = createEnv({
     ENCRYPTION_KEY: z.string(),
     /** Shared secret gating the cron + webhook automation endpoints. */
     CRON_SECRET: z.string(),
-    /** Optional Supabase backend. Falls back to a local JSON store when unset. */
+    /** Optional Supabase backend (use the new `sb_secret_...` key, server-side only). Falls back to a local JSON store when unset. */
     SUPABASE_URL: z.string().optional(),
-    SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+    SUPABASE_SECRET_KEY: z.string().optional(),
     /** RPC URL overrides per chain, e.g. RPC_URL_8453=https://mainnet.base.org */
     RPC_URL_DEFAULT: z.string().optional(),
     /** Native-token amount a native sweep leaves behind for gas. */
@@ -40,7 +40,7 @@ export const env = createEnv({
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
     CRON_SECRET: process.env.CRON_SECRET,
     SUPABASE_URL: process.env.SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
     RPC_URL_DEFAULT: process.env.RPC_URL_DEFAULT,
     DEFAULT_GAS_RESERVE: process.env.DEFAULT_GAS_RESERVE,
   },

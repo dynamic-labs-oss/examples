@@ -156,7 +156,7 @@ const fileStore: Store = {
 function supabaseStore(): Store {
   const sb: SupabaseClient = createClient(
     env.SUPABASE_URL as string,
-    env.SUPABASE_SERVICE_ROLE_KEY as string
+    env.SUPABASE_SECRET_KEY as string
   );
   const must = <T>(p: PromiseLike<{ data: T; error: { message: string } | null }>) =>
     p.then(({ data, error }) => {
@@ -229,7 +229,7 @@ let cached: Store | undefined;
 export function getStore(): Store {
   if (!cached) {
     cached =
-      env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+      env.SUPABASE_URL && env.SUPABASE_SECRET_KEY
         ? supabaseStore()
         : fileStore;
   }

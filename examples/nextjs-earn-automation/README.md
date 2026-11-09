@@ -51,7 +51,7 @@ Required env vars:
 | `ENCRYPTION_KEY` | AES-256 key for stored delegation material |
 | `CRON_SECRET` | Bearer secret for `/api/cron/sweep` + `/api/webhooks/deposit` |
 | `RPC_URL_<chainId>` / `RPC_URL_DEFAULT` | Optional RPC overrides. Each chain falls back to its public default RPC (bundled with viem); public RPCs are rate-limited, so set `RPC_URL_<chainId>` for anything beyond a demo |
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Optional; run `supabase/schema.sql` first. Unset = local JSON store |
+| `SUPABASE_URL` + `SUPABASE_SECRET_KEY` | Optional; run `supabase/schema.sql` first. Unset = local JSON store |
 
 ### Delegation without a tunnel
 
