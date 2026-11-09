@@ -214,11 +214,13 @@ function supabaseStore(): Store {
       await must(sb.from("runs").insert(run));
     },
     async listRuns(ruleIds) {
+      // `runs.ruleId` is a uuid column, so a placeholder like "-" is rejected.
+      if (!ruleIds.length) return [];
       return (await must(
         sb
           .from("runs")
           .select("*")
-          .in("ruleId", ruleIds.length ? ruleIds : ["-"])
+          .in("ruleId", ruleIds)
           .order("createdAt", { ascending: false })
       )) as AutomationRun[];
     },
