@@ -9,14 +9,18 @@ import {
 } from "@dynamic-labs-sdk/client/waas";
 import { dynamicClient } from "@/lib/dynamic/client";
 
-// The JS SDK does not create the embedded wallet automatically. Create any
-// missing WaaS wallets as soon as the user signs in.
+// The JS SDK does not create the embedded wallet automatically. Create the
+// missing EVM WaaS wallet as soon as the user signs in. Only EVM is requested:
+// this app registers just the EVM extension, so creating a wallet for any other
+// chain the environment has enabled (e.g. Solana) throws NoWalletProviderFoundError.
 function WaasBootstrap() {
   useOnEvent({
     event: "userChanged",
     listener: async ({ user }) => {
       if (!user) return;
-      const missingChains = getChainsMissingWaasWalletAccounts();
+      const missingChains = getChainsMissingWaasWalletAccounts().filter(
+        (chain) => chain === "EVM"
+      );
       if (missingChains.length === 0) return;
       await createWaasWalletAccounts({ chains: missingChains });
     },
