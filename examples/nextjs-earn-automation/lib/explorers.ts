@@ -15,3 +15,17 @@ export function txUrl(chainId: number, txHash: string): string | undefined {
   const base = EXPLORERS[chainId];
   return base ? `${base}/tx/${txHash}` : undefined;
 }
+
+const CHAIN_NAMES: Record<number, string> = {
+  1: "Ethereum",
+  137: "Polygon",
+  8453: "Base",
+  42161: "Arbitrum",
+  143: "Monad",
+  988: "Stable",
+};
+
+/** Human-readable network name, falling back to the chain id. */
+export function chainName(chainId: number): string {
+  return CHAIN_NAMES[chainId] ?? `Chain ${chainId}`;
+}

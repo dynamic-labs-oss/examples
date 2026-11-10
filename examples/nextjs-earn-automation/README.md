@@ -3,6 +3,7 @@
 Auto-deposit a wallet's assets into a Dynamic Earn yield vault — **sweep everything** or a **fixed amount** — on a schedule, using only existing Dynamic tools:
 
 - **Frontend (Next.js):** built on the [Dynamic JavaScript SDK](https://www.dynamic.xyz/docs/javascript/reference/nextjs-app-router) (`@dynamic-labs-sdk/*`, headless). Dynamic login → pick wallet → pick vault → sweep-all or fixed amount → delegate signing once → manage rules.
+- **Portfolio (client-side, no server involved):** wallet token balances (`getTokenBalances`), vault positions with USD value and earnings (`getYieldEarnings`), and manual deposit / withdraw (`depositToYieldVault` / `withdrawFromYieldVault`) signed by the user's embedded wallet. Position amounts are raw token units scaled by `getYieldDetails().assetDecimals`; positions are indexed, so the UI re-reads a few times after a write.
 - **Backend (serverless API routes):** user-scoped rule CRUD, a cron sweep executor, and Dynamic webhook receivers.
 - **Persistence:** Supabase (optional) or a local `.data/db.json` file — no external services needed to run locally.
 
