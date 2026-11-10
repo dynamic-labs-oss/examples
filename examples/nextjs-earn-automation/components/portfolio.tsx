@@ -12,6 +12,7 @@ import {
   getTokenBalances,
   getYieldDetails,
   getYieldEarnings,
+  getYieldPosition,
   listYieldVaults,
   withdrawFromYieldVault,
   type YieldVaultSummary,
@@ -63,6 +64,15 @@ const isEvmVault = (v: YieldVaultSummary) =>
   !v.chainName || String(v.chainName).toUpperCase() === "EVM";
 
 const vaultLabel = (v: YieldVaultSummary) => `${v.curator} · ${v.assetSymbol}`;
+
+/** SDK errors often carry the useful part (the contract revert) in details/cause. */
+function errorText(e: unknown, fallback: string): string {
+  if (!(e instanceof Error)) return fallback;
+  const x = e as Error & { details?: unknown; cause?: unknown };
+  const extra = [x.details, x.cause instanceof Error ? x.cause.message : x.cause]
+    .filter((v): v is string => typeof v === "string" && !!v && !x.message.includes(v));
+  return [x.message, ...extra].join(" — ");
+}
 
 const DEFAULT_CHAIN = 8453; // Base
 const VISIBLE_VAULTS = 5;
@@ -238,6 +248,7 @@ export default function Portfolio() {
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["yield", "earnings"] });
     void qc.invalidateQueries({ queryKey: ["balances"] });
+    void qc.invalidateQueries({ queryKey: ["yield", "position"] });
   };
 
   // Positions are indexed and can trail a mined transaction, so re-read a
@@ -246,17 +257,28 @@ export default function Portfolio() {
     for (const ms of [3000, 12000]) setTimeout(refresh, ms);
   };
 
+  // Earnings are indexed and can lag the chain, so withdrawals are limited by
+  // the live on-chain position (read once when the panel opens).
+  const positionQ = useQuery({
+    queryKey: ["yield", "position", wallet?.address, action?.vaultId],
+    queryFn: () =>
+      getYieldPosition({ vaultId: action!.vaultId, walletAccount: wallet! }),
+    enabled: ready && action?.kind === "withdraw",
+    ...queryOpts,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
   const actionVault = action ? vaultById.get(action.vaultId) : undefined;
   const actionDecimals = action ? decimalsById.get(action.vaultId) : undefined;
-  const actionPosition = positions.find(
-    (p) => p.vault.vaultId === action?.vaultId
-  );
   const actionHolding = actionVault ? balanceOf(actionVault) : undefined;
 
   const max = !action
     ? "0"
     : action.kind === "withdraw"
-      ? fromRaw(actionPosition?.assets ?? 0n, actionDecimals)
+      ? positionQ.data
+        ? fromRaw(positionQ.data.assets, actionDecimals)
+        : "—"
       : actionHolding
         ? fromRaw(actionHolding.rawBalanceString, actionHolding.decimals)
         : "0";
@@ -298,11 +320,13 @@ export default function Portfolio() {
       setAmount("");
       refreshSoon();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : `${action.kind} failed`;
+      const msg = errorText(e, `${action.kind} failed`);
       setError(
-        /build|429|too many|rate/i.test(msg)
-          ? `${msg}. If this keeps happening Dynamic may be rate-limiting this environment — wait a minute and retry.`
-          : msg
+        /47bc4b2c|NotEnoughAvailableUserBalance/i.test(msg)
+          ? "That's more than your available balance in this vault. Press Max (it reads your live on-chain balance) and try again."
+          : /\b429\b|too many|rate/i.test(msg)
+            ? `${msg}. Dynamic may be rate-limiting this environment — wait a minute and retry.`
+            : msg
       );
     } finally {
       setBusy(false);
