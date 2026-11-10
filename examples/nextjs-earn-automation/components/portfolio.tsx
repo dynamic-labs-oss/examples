@@ -64,6 +64,9 @@ const isEvmVault = (v: YieldVaultSummary) =>
 
 const vaultLabel = (v: YieldVaultSummary) => `${v.curator} · ${v.assetSymbol}`;
 
+const DEFAULT_CHAIN = 8453; // Base
+const VISIBLE_VAULTS = 5;
+
 type Action = { kind: "deposit" | "withdraw"; vaultId: string };
 
 const card = "rounded-xl border border-earn-border bg-white p-4";
@@ -88,6 +91,8 @@ export default function Portfolio() {
     wallets[0];
   const ready = initStatus === "finished" && !!user && !!wallet;
 
+  const [chainPick, setChainPick] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [action, setAction] = useState<Action | null>(null);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -98,56 +103,72 @@ export default function Portfolio() {
   );
 
   // --- data ----------------------------------------------------------------
+  // Every query hits Dynamic's API, which rate-limits (429) — and a 429 also
+  // breaks deposit/withdraw. So: one chain at a time, no forced refresh, no
+  // retries, no refetch-on-focus.
+  const queryOpts = {
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  } as const;
 
   const vaultsQ = useQuery({
     queryKey: ["yield", "vaults"],
     queryFn: () => listYieldVaults(),
     enabled: ready,
-    staleTime: 60_000,
+    ...queryOpts,
+    staleTime: 5 * 60_000,
   });
-  const vaults = useMemo(
+  const allVaults = useMemo(
     () => (vaultsQ.data ?? []).filter(isEvmVault),
     [vaultsQ.data]
+  );
+  const chainOptions = useMemo(
+    () => [...new Set(allVaults.map((v) => v.chainId))].sort((a, b) => a - b),
+    [allVaults]
+  );
+  const chainId =
+    chainPick != null && chainOptions.includes(chainPick)
+      ? chainPick
+      : chainOptions.includes(DEFAULT_CHAIN)
+        ? DEFAULT_CHAIN
+        : chainOptions[0];
+  const vaults = useMemo(
+    () => allVaults.filter((v) => v.chainId === chainId),
+    [allVaults, chainId]
   );
   const vaultById = useMemo(
     () => new Map(vaults.map((v) => [v.vaultId, v])),
     [vaults]
   );
-  const chainIds = useMemo(
-    () => [...new Set(vaults.map((v) => v.chainId))].sort((a, b) => a - b),
-    [vaults]
-  );
 
-  // Earnings = every vault position the wallet holds on a chain, with USD
+  // Earnings = every vault position the wallet holds on the chain, with USD
   // value and PnL. Indexed, so it can trail a confirmed transaction.
-  const earningsQs = useQueries({
-    queries: chainIds.map((chainId) => ({
-      queryKey: ["yield", "earnings", wallet?.address, chainId],
-      queryFn: () => getYieldEarnings({ chainId, walletAccount: wallet! }),
-      enabled: ready,
-    })),
+  const earningsQ = useQuery({
+    queryKey: ["yield", "earnings", wallet?.address, chainId],
+    queryFn: () => getYieldEarnings({ chainId: chainId!, walletAccount: wallet! }),
+    enabled: ready && chainId != null,
+    ...queryOpts,
   });
 
-  // Everything the wallet holds on the vault chains, with prices.
-  const holdingsQs = useQueries({
-    queries: chainIds.map((chainId) => ({
-      queryKey: ["balances", wallet?.address, chainId],
-      queryFn: () =>
-        getTokenBalances({
-          walletAccount: wallet!,
-          networkId: chainId,
-          includePrices: true,
-          includeNative: true,
-          filterSpamTokens: true,
-          forceRefresh: true,
-        }),
-      enabled: ready,
-    })),
+  // Everything the wallet holds on the chain, with prices.
+  const holdingsQ = useQuery({
+    queryKey: ["balances", wallet?.address, chainId],
+    queryFn: () =>
+      getTokenBalances({
+        walletAccount: wallet!,
+        networkId: chainId!,
+        includePrices: true,
+        includeNative: true,
+        filterSpamTokens: true,
+      }),
+    enabled: ready && chainId != null,
+    ...queryOpts,
   });
 
-  const heldVaults = earningsQs
-    .flatMap((q) => q.data?.vaults ?? [])
-    .filter((e) => e.vaultId && big(e.assets) > 0n);
+  const heldVaults = (earningsQ.data?.vaults ?? []).filter(
+    (e) => e.vaultId && big(e.assets) > 0n
+  );
 
   // Position amounts are raw units; vault details carry the asset decimals.
   const detailIds = [
@@ -161,6 +182,7 @@ export default function Portfolio() {
       queryKey: ["yield", "details", id],
       queryFn: () => getYieldDetails({ vaultId: id }),
       enabled: ready,
+      ...queryOpts,
       staleTime: Infinity,
     })),
   });
@@ -184,34 +206,24 @@ export default function Portfolio() {
     ];
   });
 
-  const holdings = holdingsQs
-    .flatMap((q) => q.data ?? [])
+  const holdings = (holdingsQ.data ?? [])
     .filter((t) => t.balance > 0 && !t.isSpam)
     .sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0));
   const holdingKey = (chainId: number | undefined, address: string) =>
     `${chainId}:${address.toLowerCase()}`;
   const holdingByKey = new Map(
-    holdingsQs
-      .flatMap((q) => q.data ?? [])
-      .map((t) => [holdingKey(t.networkId, t.address), t])
+    (holdingsQ.data ?? []).map((t) => [holdingKey(t.networkId, t.address), t])
   );
   const balanceOf = (v: YieldVaultSummary) =>
     holdingByKey.get(holdingKey(v.chainId, v.assetAddress));
 
-  const totalDeposited = earningsQs.reduce(
-    (s, q) => s + (q.data?.totalAssetsUsd ?? 0),
-    0
-  );
-  const totalPnl = earningsQs.reduce(
-    (s, q) => s + (q.data?.totalPnlUsd ?? 0),
-    0
-  );
+  const totalDeposited = earningsQ.data?.totalAssetsUsd ?? 0;
+  const totalPnl = earningsQ.data?.totalPnlUsd ?? 0;
   const totalWallet = holdings.reduce((s, t) => s + (t.marketValue ?? 0), 0);
 
   const loading =
-    vaultsQ.isLoading ||
-    earningsQs.some((q) => q.isLoading) ||
-    holdingsQs.some((q) => q.isLoading);
+    vaultsQ.isLoading || earningsQ.isLoading || holdingsQ.isLoading;
+  const loadError = vaultsQ.error ?? earningsQ.error ?? holdingsQ.error;
 
   // --- actions -------------------------------------------------------------
 
@@ -231,7 +243,7 @@ export default function Portfolio() {
   // Positions are indexed and can trail a mined transaction, so re-read a
   // bounded number of times after a write instead of once.
   const refreshSoon = () => {
-    for (const ms of [0, 4000, 10000, 20000]) setTimeout(refresh, ms);
+    for (const ms of [3000, 12000]) setTimeout(refresh, ms);
   };
 
   const actionVault = action ? vaultById.get(action.vaultId) : undefined;
@@ -286,7 +298,12 @@ export default function Portfolio() {
       setAmount("");
       refreshSoon();
     } catch (e) {
-      setError(e instanceof Error ? e.message : `${action.kind} failed`);
+      const msg = e instanceof Error ? e.message : `${action.kind} failed`;
+      setError(
+        /build|429|too many|rate/i.test(msg)
+          ? `${msg}. If this keeps happening Dynamic may be rate-limiting this environment — wait a minute and retry.`
+          : msg
+      );
     } finally {
       setBusy(false);
       setStep(null);
@@ -300,6 +317,9 @@ export default function Portfolio() {
   const sortedVaults = [...vaults].sort(
     (a, b) => (b.netApy ?? 0) - (a.netApy ?? 0)
   );
+  const visibleVaults = showAll
+    ? sortedVaults
+    : sortedVaults.slice(0, VISIBLE_VAULTS);
 
   return (
     <section className="grid gap-4">
@@ -308,6 +328,23 @@ export default function Portfolio() {
           Portfolio
         </h2>
         <div className="flex items-center gap-2 text-sm">
+          {chainOptions.length > 1 && chainId != null && (
+            <select
+              className="rounded-lg border border-earn-border px-2 py-1"
+              value={chainId}
+              onChange={(e) => {
+                setChainPick(Number(e.target.value));
+                setShowAll(false);
+                setAction(null);
+              }}
+            >
+              {chainOptions.map((c) => (
+                <option key={c} value={c}>
+                  {chainName(c)}
+                </option>
+              ))}
+            </select>
+          )}
           {wallets.length > 1 && (
             <select
               className="rounded-lg border border-earn-border px-2 py-1"
@@ -345,10 +382,11 @@ export default function Portfolio() {
         ))}
       </div>
 
-      {vaultsQ.error && (
+      {loadError && (
         <p className="text-sm text-red-600">
-          Couldn&apos;t load vaults:{" "}
-          {vaultsQ.error instanceof Error ? vaultsQ.error.message : "error"}
+          Couldn&apos;t load some data:{" "}
+          {loadError instanceof Error ? loadError.message : "error"}. Dynamic
+          rate-limits its API — wait a moment, then press Refresh.
         </p>
       )}
 
@@ -521,7 +559,7 @@ export default function Portfolio() {
           </p>
         ) : (
           <ul className="divide-y divide-earn-border">
-            {sortedVaults.map((v) => {
+            {visibleVaults.map((v) => {
               const held = balanceOf(v);
               return (
                 <li
@@ -558,6 +596,15 @@ export default function Portfolio() {
               );
             })}
           </ul>
+        )}
+        {sortedVaults.length > VISIBLE_VAULTS && (
+          <button
+            type="button"
+            className={`${btn} mt-3`}
+            onClick={() => setShowAll((x) => !x)}
+          >
+            {showAll ? `Show top ${VISIBLE_VAULTS}` : `Show all ${sortedVaults.length}`}
+          </button>
         )}
       </div>
     </section>
