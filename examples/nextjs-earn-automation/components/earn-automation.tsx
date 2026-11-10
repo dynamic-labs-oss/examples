@@ -6,7 +6,11 @@ import {
   useInitStatus,
   useUser,
 } from "@dynamic-labs-sdk/react-hooks";
-import { delegateWaasKeyShares } from "@dynamic-labs-sdk/client/waas";
+import {
+  delegateWaasKeyShares,
+  hasDelegatedAccess,
+  revokeWaasDelegation,
+} from "@dynamic-labs-sdk/client/waas";
 import { isEvmWalletAccount } from "@dynamic-labs-sdk/evm";
 import { authFetch } from "@/lib/dynamic/auth-fetch";
 import LoginForm from "@/components/dynamic/login-form";
@@ -133,13 +137,29 @@ export default function EarnAutomation() {
     setBusy("delegate");
     setError(null);
     try {
+      // Dynamic only emits wallet.delegation.created on a fresh grant. If the
+      // wallet is already delegated (e.g. granted before this server existed or
+      // before its record was lost) re-delegating is a no-op and the server never
+      // hears about it — so revoke first to force a new grant and a new webhook.
+      if (hasDelegatedAccess({ walletAccount: wallet })) {
+        await revokeWaasDelegation({ walletAccount: wallet });
+      }
       await delegateWaasKeyShares({ walletAccount: wallet });
       // The grant reaches the server via Dynamic's webhook, a moment after the
       // SDK call resolves — poll until it lands.
+      let landed = false;
       for (let i = 0; i < 10; i++) {
         const granted = await refresh();
-        if (granted.has(walletAddress.toLowerCase())) break;
+        if (granted.has(walletAddress.toLowerCase())) {
+          landed = true;
+          break;
+        }
         await new Promise((r) => setTimeout(r, 1500));
+      }
+      if (!landed) {
+        setError(
+          "Delegation was granted, but the server hasn't received Dynamic's webhook yet. Check the webhook's delivery log and signing secret."
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delegation failed");
