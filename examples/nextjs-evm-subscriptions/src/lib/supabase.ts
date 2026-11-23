@@ -27,11 +27,14 @@ export type SubscriptionRow = {
   token_address: string;
   amount: string;
   period_seconds: number;
-  pulls_total: number;
+  pulls_total: number | null; // null = open-ended ("until cancelled")
   status: SubscriptionStatus;
+  plan_contract: string | null;
   created_at: string;
 };
 
+// One scheduled pull. (The table keeps its original name; each row is one
+// period's pull that the collector executes via plan.pull(subscriber).)
 export type AuthorizationRow = {
   id: string;
   subscription_id: string;
@@ -41,13 +44,11 @@ export type AuthorizationRow = {
   value: string;
   valid_after: number;
   valid_before: number;
-  nonce: string;
-  signature: string;
+  nonce: string; // "permit2:<index>" — unique per subscription
   status: AuthorizationStatus;
   tx_hash: string | null;
   error: string | null;
   posted_at: string | null;
-  executor: "direct" | "relay";
-  relay: Record<string, unknown> | null;
+  claimed_at: string | null;
   created_at: string;
 };

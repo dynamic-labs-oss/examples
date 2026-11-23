@@ -7,6 +7,7 @@ import {
   sendEmailOTP,
   verifyOTP,
   authenticateWithSocial,
+  waitForClientInitialized,
   type WalletProviderData,
   type OTPVerification,
 } from "@dynamic-labs-sdk/client";
@@ -162,6 +163,10 @@ export default function DynamicButton() {
     setLoading(true);
     setError(null);
     try {
+      // The client loads the environment's project settings asynchronously;
+      // connecting before that finishes throws "Project settings are not
+      // available". Wait for init first.
+      await waitForClientInitialized(dynamicClient);
       await connectAndVerifyWithWalletProvider({ walletProviderKey: providerKey }, dynamicClient);
       await ensureEvmWallet();
       setOpen(false);

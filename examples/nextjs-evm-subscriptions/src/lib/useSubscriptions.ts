@@ -1,11 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getActiveNetworkData, switchActiveNetwork } from "@dynamic-labs-sdk/client";
 import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 import { dynamicClient } from "./dynamic";
 import { useWallet } from "./useWallet";
-import { signPlanAuthorizations, type SignedAuthorization } from "./eip3009";
-import { PLAN } from "./config";
+import { CHAIN_ID, CHAIN_NAME, PLAN } from "./config";
+import { ensurePermit2Approval, revokePlanAllowance, signPlanPermit } from "./permit2";
 import { toast } from "./toast";
 
 export type AuthorizationSummary = {
@@ -19,6 +20,9 @@ export type AuthorizationSummary = {
   posted_at: string | null;
 };
 
+// "Until cancelled" = an unlimited, non-expiring permit (pulls_total is null).
+export type SubscribeVars = { openEnded?: boolean };
+
 export type Subscription = {
   id: string;
   subscriber: string;
@@ -27,7 +31,8 @@ export type Subscription = {
   token_address: string;
   amount: string;
   period_seconds: number;
-  pulls_total: number;
+  pulls_total: number | null; // null = open-ended ("until cancelled")
+  plan_contract: string | null;
   status: "active" | "cancelled" | "completed";
   created_at: string;
   authorizations: AuthorizationSummary[];
@@ -53,25 +58,73 @@ export function useSubscriptions() {
     refetchInterval: 30_000,
   });
 
+  // Moves the wallet onto the plan's chain, then returns a viem wallet client.
+  const getWalletClient = async () => {
+    if (!evmAccount) throw new Error("Connect a wallet first");
+    // Dynamic resolves the wallet's active network against the networks
+    // enabled for the environment; if the wallet sits on any other chain
+    // there's no network data and wallet-client creation throws. Move it to
+    // the plan's chain first.
+    const active = await getActiveNetworkData({ walletAccount: evmAccount }, dynamicClient).catch(
+      () => null,
+    );
+    if (String(active?.networkData?.networkId) !== String(CHAIN_ID)) {
+      try {
+        await switchActiveNetwork(
+          { walletAccount: evmAccount, networkId: String(CHAIN_ID) },
+          dynamicClient,
+        );
+      } catch {
+        throw new Error(`Switch your wallet to ${CHAIN_NAME} (chain ${CHAIN_ID}) and try again.`);
+      }
+    }
+    return createWalletClientForWalletAccount({ walletAccount: evmAccount }, dynamicClient);
+  };
+
   const subscribeMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ openEnded = false }: SubscribeVars = {}) => {
       if (!evmAccount) throw new Error("Connect a wallet first");
-      const walletClient = await createWalletClientForWalletAccount(
-        { walletAccount: evmAccount },
-        dynamicClient,
-      );
-      const auths = await signPlanAuthorizations({ walletClient });
+      const walletClient = await getWalletClient();
+      const owner = evmAccount.address as `0x${string}`;
+
+      // One-time (per wallet + token) approval for Permit2, then ONE signature.
+      const approvalTx = await ensurePermit2Approval({
+        walletClient,
+        owner,
+        // Open-ended needs a standing (max) USDC allowance for Permit2.
+        minAmount: openEnded ? 2n ** 255n : PLAN.amount * BigInt(PLAN.pulls),
+      });
+      if (approvalTx) toast.success("USDC approved for Permit2 (one-time). Now sign the subscription.");
+      const { permit, signature } = await signPlanPermit({ walletClient, owner, openEnded });
+
       const res = await fetch("/api/subscriptions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ subscriber: evmAccount.address, auths }),
+        body: JSON.stringify({
+          subscriber: owner,
+          permit: {
+            details: {
+              token: permit.details.token,
+              amount: permit.details.amount.toString(),
+              expiration: permit.details.expiration,
+              nonce: permit.details.nonce,
+            },
+            spender: permit.spender,
+            sigDeadline: permit.sigDeadline.toString(),
+          },
+          signature,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "Failed to save subscription");
       return body;
     },
-    onSuccess: () => {
-      toast.success(`Subscribed — ${PLAN.pulls} pull authorizations signed.`);
+    onSuccess: (_data, vars) => {
+      toast.success(
+        vars?.openEnded
+          ? "Subscribed — pulls continue every period until you cancel."
+          : `Subscribed — one signature covers ${PLAN.pulls} pulls.`,
+      );
       invalidate();
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Subscribe failed"),
@@ -79,6 +132,16 @@ export function useSubscriptions() {
 
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Cancelling is an on-chain revoke from the subscriber's own wallet
+      // (zero the Permit2 allowance), then we tell the server.
+      const sub = subscriptions.find((s) => s.id === id);
+      if (!sub?.plan_contract || !evmAccount) throw new Error("Subscription has no plan contract");
+      const walletClient = await getWalletClient();
+      await revokePlanAllowance({
+        walletClient,
+        owner: evmAccount.address as `0x${string}`,
+        plan: sub.plan_contract as `0x${string}`,
+      });
       const res = await fetch(`/api/subscriptions/${id}?subscriber=${address}`, {
         method: "DELETE",
       });
@@ -86,7 +149,7 @@ export function useSubscriptions() {
       if (!res.ok) throw new Error(body?.error ?? "Cancel failed");
     },
     onSuccess: () => {
-      toast.success("Subscription cancelled — pending pulls voided.");
+      toast.success("Allowance revoked — subscription cancelled.");
       invalidate();
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Cancel failed"),
@@ -94,7 +157,9 @@ export function useSubscriptions() {
 
   const collectMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/cron/collect", { method: "POST" });
+      // Scoped to this wallet and needs no secret (the schedule route does).
+      if (!address) throw new Error("Connect a wallet first");
+      const res = await fetch(`/api/collect?subscriber=${address}`, { method: "POST" });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "Collect failed");
       return body as { collected: number; results: { ok: boolean }[] };

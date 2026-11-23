@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, type AuthorizationRow } from "@/lib/supabase";
-import { CHAIN_ID, MERCHANT_ADDRESS, PLAN, TOKEN_ADDRESS } from "@/lib/config";
-import type { SignedAuthorization } from "@/lib/eip3009";
+import { supabase } from "@/lib/supabase";
+import { CHAIN_ID } from "@/lib/config";
+import { HttpError, Permit2SubscribeBody, activatePermit2Subscription } from "@/lib/permit2-server";
 
 // GET /api/subscriptions?subscriber=0x... — the payer's subscriptions with
 // the status of each scheduled pull.
@@ -36,56 +36,88 @@ export async function GET(req: NextRequest) {
   );
 }
 
-// POST /api/subscriptions — store a subscription and its pre-signed
-// authorizations. Body: { subscriber, auths: SignedAuthorization[] }.
+// POST /api/subscriptions — the browser sends ONE signed Permit2 PermitSingle.
+// The server validates it, activates it on the plan contract (the relayer pays
+// gas; Permit2 verifies the subscriber's signature), then records the
+// schedule. Body: { subscriber, permit, signature }.
 export async function POST(req: NextRequest) {
-  if (!MERCHANT_ADDRESS) {
-    return NextResponse.json({ error: "Merchant address not configured" }, { status: 500 });
+  const parsed = Permit2SubscribeBody.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request", issues: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) },
+      { status: 400 },
+    );
   }
-  const { subscriber, auths } = (await req.json()) as {
-    subscriber: `0x${string}`;
-    auths: SignedAuthorization[];
-  };
-  if (!subscriber || !Array.isArray(auths) || auths.length === 0) {
-    return NextResponse.json({ error: "subscriber and auths are required" }, { status: 400 });
+  const body = parsed.data;
+  const subscriber = body.subscriber.toLowerCase();
+
+  let plan;
+  try {
+    plan = await activatePermit2Subscription(body);
+  } catch (err) {
+    if (err instanceof HttpError) return NextResponse.json({ error: err.message }, { status: err.status });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Activation failed" }, { status: 500 });
   }
 
   const db = supabase();
+  // Re-subscribing restarts the on-chain schedule, so retire earlier ones.
+  const { data: older } = await db
+    .from("subscriptions")
+    .select("id")
+    .eq("subscriber", subscriber)
+    .eq("plan_contract", plan.planContract.toLowerCase())
+    .eq("status", "active");
+  for (const o of older ?? []) {
+    await db.from("authorizations").update({ status: "cancelled" }).eq("subscription_id", o.id).eq("status", "pending");
+    await db.from("subscriptions").update({ status: "cancelled" }).eq("id", o.id);
+  }
+
   const { data: sub, error } = await db
     .from("subscriptions")
     .insert({
-      subscriber: subscriber.toLowerCase(),
-      merchant: MERCHANT_ADDRESS.toLowerCase(),
+      subscriber,
+      merchant: plan.merchant.toLowerCase(),
       chain_id: CHAIN_ID,
-      token_address: TOKEN_ADDRESS,
-      amount: auths[0].value,
-      period_seconds: auths.length > 1 ? auths[1].validAfter - auths[0].validAfter : PLAN.periodSeconds,
-      pulls_total: auths.length,
+      token_address: plan.token,
+      amount: plan.amount.toString(),
+      period_seconds: plan.periodSeconds,
+      pulls_total: plan.pulls, // null = open-ended
       status: "active",
+      plan_contract: plan.planContract.toLowerCase(),
     })
     .select()
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const rows = auths.map((a, i) => ({
-    subscription_id: sub.id,
-    period_index: i,
-    from_address: a.from.toLowerCase(),
-    to_address: a.to.toLowerCase(),
-    value: a.value,
-    valid_after: a.validAfter,
-    valid_before: a.validBefore,
-    nonce: a.nonce,
-    signature: a.signature,
-    status: "pending",
-    executor: a.executor,
-    relay: a.relay ?? null,
-  }));
-  const { error: authError } = await db.from("authorizations").insert(rows);
-  if (authError) {
-    await db.from("subscriptions").delete().eq("id", sub.id);
-    return NextResponse.json({ error: authError.message }, { status: 500 });
+  if (error) {
+    return NextResponse.json(
+      { error: `${error.message} (permit already activated on-chain: ${plan.txHash})` },
+      { status: 500 },
+    );
   }
 
-  return NextResponse.json({ subscription: sub }, { status: 201 });
+  // One schedule row per pull. The contract enforces the cadence; these rows
+  // tell the collector when to call plan.pull(subscriber). The window stays
+  // open until the allowance expires so a late run still catches up.
+  // Open-ended subscriptions start with just the first row; the collector
+  // appends the next period's row after each successful pull.
+  const rows = Array.from({ length: plan.pulls ?? 1 }, (_, i) => ({
+    subscription_id: sub.id,
+    period_index: i,
+    from_address: subscriber,
+    to_address: plan.merchant.toLowerCase(),
+    value: plan.amount.toString(),
+    valid_after: plan.start + i * plan.periodSeconds,
+    valid_before: plan.expiration,
+    nonce: `permit2:${i}`,
+    status: "pending",
+  }));
+  const { error: rowsError } = await db.from("authorizations").insert(rows);
+  if (rowsError) {
+    await db.from("subscriptions").delete().eq("id", sub.id);
+    return NextResponse.json(
+      { error: `${rowsError.message} (permit already activated on-chain: ${plan.txHash})` },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ subscription: sub, activationTx: plan.txHash }, { status: 201 });
 }

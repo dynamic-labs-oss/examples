@@ -31,6 +31,13 @@ export function SubscriptionCard({
     }
   };
 
+  // Open-ended subscriptions keep appending a row per period; show the latest.
+  const allAuths = subscription.authorizations ?? [];
+  const MAX_VISIBLE = 6;
+  const visibleAuths =
+    subscription.pulls_total === null ? allAuths.slice(-MAX_VISIBLE) : allAuths;
+  const hiddenCount = allAuths.length - visibleAuths.length;
+
   const statusStyles: Record<string, string> = {
     active: "bg-green-50 text-green-700 border-green-200",
     cancelled: "bg-amber-50 text-amber-700 border-amber-200",
@@ -63,7 +70,13 @@ export function SubscriptionCard({
 
       {/* Pull timeline */}
       <div className="space-y-1.5">
-        {(subscription.authorizations ?? []).map((a) => (
+        {subscription.pulls_total === null && (
+          <p className="text-xs text-[#606060]">
+            Until cancelled
+            {hiddenCount > 0 ? ` · ${hiddenCount} earlier pull${hiddenCount === 1 ? "" : "s"} not shown` : ""}
+          </p>
+        )}
+        {visibleAuths.map((a) => (
           <PullRow key={a.id} auth={a} />
         ))}
       </div>
@@ -77,7 +90,7 @@ export function SubscriptionCard({
           disabled={loading || disabled}
           className="w-full py-2.5 rounded-lg text-sm font-medium border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel Subscription"}
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Revoke allowance & cancel"}
         </button>
       )}
     </div>

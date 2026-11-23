@@ -42,3 +42,10 @@ create index if not exists authorizations_due_idx
 
 create index if not exists subscriptions_subscriber_idx
   on public.subscriptions (subscriber);
+
+-- Lock both tables down. The app only talks to Postgres from the server with
+-- the secret key (which bypasses RLS). With RLS enabled and no policies, the
+-- publishable/anon key can neither read nor write these rows, so the stored
+-- signed authorizations are not exposed through the public Data API.
+alter table public.subscriptions enable row level security;
+alter table public.authorizations enable row level security;

@@ -1,8 +1,10 @@
 {
-  "crons": [
-    {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "schedules": {
+    "collect-pulls": {
+      "schedule": "0 * * * *",
       "path": "/api/cron/collect",
-      "schedule": "*/5 * * * *"
+      "requestMethod": "GET"
     }
-  ]
+  }
 }

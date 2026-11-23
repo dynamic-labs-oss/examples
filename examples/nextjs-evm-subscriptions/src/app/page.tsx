@@ -2,30 +2,42 @@
 
 import { useEffect, useState } from "react";
 import { CalendarClock, Loader2, ShieldCheck, Signature, Wallet } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@/lib/useWallet";
 import { useSubscriptions } from "@/lib/useSubscriptions";
-import { CHAIN_NAME, MERCHANT_ADDRESS, PLAN, TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/lib/config";
+import {
+  CHAIN_NAME,
+  MERCHANT_ADDRESS,
+  PLAN,
+  PLAN_CONTRACT,
+  TOKEN_ADDRESS,
+  TOKEN_DECIMALS,
+  TOKEN_SYMBOL,
+} from "@/lib/config";
+import { ERC20_ABI, publicClient } from "@/lib/permit2";
 import { formatPeriod, formatTokenAmount, shortenAddress } from "@/lib/utils";
-import { publicClient } from "@/lib/eip3009";
-import { EIP3009_ABI, TOKEN_ADDRESS } from "@/lib/config";
-import { useQuery } from "@tanstack/react-query";
 
 export default function SubscribePage() {
   const [mounted, setMounted] = useState(false);
   const { evmAccount, loggedIn } = useWallet();
   const { subscribeMutation } = useSubscriptions();
+  // Open-ended: one unlimited, non-expiring Permit2 allowance; pulls continue
+  // every period until the subscriber revokes it.
+  const [openEnded, setOpenEnded] = useState(false);
 
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
+
+  const period = formatPeriod(PLAN.periodSeconds).replace(/^every /, "");
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 pb-24">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#030303]">EVM Subscriptions</h1>
         <p className="text-sm text-[#606060] mt-1">
-          Sign once, then a relayer pulls {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)}{" "}
-          {TOKEN_SYMBOL} {formatPeriod(PLAN.periodSeconds)} from your wallet — no
-          on-chain transaction needed per payment.
+          Sign once, then {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} is pulled{" "}
+          {formatPeriod(PLAN.periodSeconds)} from your wallet by a contract that enforces the schedule — no
+          signature needed per payment.
         </p>
       </div>
 
@@ -52,7 +64,7 @@ export default function SubscribePage() {
             </div>
             <div className="flex justify-between">
               <span>Pulls authorized</span>
-              <span className="font-medium text-[#030303]">{PLAN.pulls}</span>
+              <span className="font-medium text-[#030303]">{openEnded ? "Until cancelled" : PLAN.pulls}</span>
             </div>
             <div className="flex justify-between">
               <span>Merchant</span>
@@ -63,15 +75,52 @@ export default function SubscribePage() {
             {evmAccount && <UsdcBalance address={evmAccount.address as `0x${string}`} />}
           </div>
 
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
+            {(
+              [
+                [false, `${PLAN.pulls} pulls`],
+                [true, "Until cancelled"],
+              ] as const
+            ).map(([open, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setOpenEnded(open)}
+                className={`py-1.5 rounded-md transition-colors ${
+                  openEnded === open ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {openEnded && (
+            <p className="text-xs text-[#606060] bg-[#F4F4F4] rounded-lg px-3 py-2">
+              Your wallet will show an <span className="font-medium text-[#030303]">unlimited, non-expiring</span>{" "}
+              USDC allowance. The plan contract can still only pay the merchant{" "}
+              {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} once per {period}, and you can
+              revoke it any time with Cancel.
+            </p>
+          )}
+          {!PLAN_CONTRACT && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+              Deploy the plan contract and set NEXT_PUBLIC_PLAN_CONTRACT to subscribe (see README).
+            </p>
+          )}
+
           <button
-            onClick={() => subscribeMutation.mutate()}
-            disabled={!loggedIn || !evmAccount || !MERCHANT_ADDRESS || subscribeMutation.isPending}
+            onClick={() => subscribeMutation.mutate({ openEnded })}
+            disabled={
+              !loggedIn || !evmAccount || !MERCHANT_ADDRESS || !PLAN_CONTRACT || subscribeMutation.isPending
+            }
             className="w-full py-2.5 rounded-lg text-sm font-medium bg-[#4779FF] text-white hover:bg-[#3366ee] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {subscribeMutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : openEnded ? (
+              "Sign once · until cancelled"
             ) : (
-              `Sign ${PLAN.pulls} authorizations`
+              "Sign once"
             )}
           </button>
           {!loggedIn && (
@@ -86,19 +135,22 @@ export default function SubscribePage() {
           <p className="text-sm font-semibold text-[#030303]">How it works</p>
           <Step
             icon={<Signature className="w-4 h-4 text-[#4779FF]" />}
-            title="You sign {N} EIP-3009 authorizations"
-            text={`Each signature lets the merchant pull ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} once, inside its own ${formatPeriod(PLAN.periodSeconds)} window — the EVM equivalent of Solana's subscription delegation.`}
-            n={PLAN.pulls}
+            title="You sign one Permit2 allowance"
+            text={
+              openEnded
+                ? "One EIP-712 signature grants the plan contract an unlimited, non-expiring allowance. Pulls continue every period until you cancel. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)"
+                : `One EIP-712 signature grants the plan contract up to ${formatTokenAmount(PLAN.amount * BigInt(PLAN.pulls), TOKEN_DECIMALS)} ${TOKEN_SYMBOL}, expiring after the last period. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)`
+            }
           />
           <Step
             icon={<ShieldCheck className="w-4 h-4 text-[#4779FF]" />}
-            title="Signatures are stored server-side"
-            text="Authorizations live in Supabase. Each has a unique nonce and validity window enforced by the USDC contract itself, so a pull can't be replayed or taken early."
+            title="The contract enforces the schedule"
+            text={`The plan contract's merchant, amount and period are immutable, so it can only pay the merchant ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} once per ${period}. Anyone can trigger a due pull — the money can only go one place.`}
           />
           <Step
             icon={<Wallet className="w-4 h-4 text-[#4779FF]" />}
-            title="A cron collects each period"
-            text="Every hour the collector broadcasts transferWithAuthorization for the due authorization (or posts it to Relay /execute/permits where the route supports it). You never sign again — and you never pay gas."
+            title="Cancel is a real on-chain revoke"
+            text="Cancelling sends Permit2.approve(token, plan, 0, 0) from your wallet. After that no pull can succeed, whatever the server or database says."
           />
         </div>
       </div>
@@ -106,16 +158,14 @@ export default function SubscribePage() {
   );
 }
 
-function Step({ icon, title, text, n }: { icon: React.ReactNode; title: string; text: string; n?: number }) {
+function Step({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
     <div className="flex gap-3">
       <div className="w-7 h-7 rounded-lg bg-[#4779FF]/10 flex items-center justify-center shrink-0">
         {icon}
       </div>
       <div>
-        <p className="text-sm font-medium text-[#030303]">
-          {n !== undefined ? title.replace("{N}", String(n)) : title}
-        </p>
+        <p className="text-sm font-medium text-[#030303]">{title}</p>
         <p className="text-xs text-[#606060] mt-0.5">{text}</p>
       </div>
     </div>
@@ -128,7 +178,7 @@ function UsdcBalance({ address }: { address: `0x${string}` }) {
     queryFn: () =>
       publicClient().readContract({
         address: TOKEN_ADDRESS,
-        abi: EIP3009_ABI,
+        abi: ERC20_ABI,
         functionName: "balanceOf",
         args: [address],
       }),

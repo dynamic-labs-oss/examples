@@ -15,7 +15,7 @@ const roboto = Roboto({
 export const metadata: Metadata = {
   title: "EVM Subscriptions with Dynamic",
   description:
-    "Recurring pull payments on EVM via EIP-3009 authorizations. Powered by Dynamic wallets and Relay.",
+    "Recurring pull payments on EVM: sign one Permit2 allowance and a contract enforces the schedule. Powered by Dynamic wallets.",
 };
 
 export default function RootLayout({

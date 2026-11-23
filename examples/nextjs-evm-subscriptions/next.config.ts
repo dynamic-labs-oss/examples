@@ -3,14 +3,8 @@ import type { NextConfig } from "next";
 const { NormalModuleReplacementPlugin } = require("webpack");
 
 const nextConfig: NextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**",
-      },
-    ],
-  },
+  // This app doesn't use next/image, so don't expose the image optimizer as an
+  // open proxy for arbitrary remote hosts (it was `hostname: "**"`).
   webpack: (config, { isServer }) => {
     config.experiments = {
       ...config.experiments,

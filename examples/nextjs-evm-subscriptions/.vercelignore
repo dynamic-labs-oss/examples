@@ -1,0 +1,15 @@
+# Never upload local secrets or build artifacts with `vercel deploy`.
+# Environment variables are set in the Vercel project, not shipped as files.
+.env
+.env.*
+!.env.example
+node_modules
+.next
+tsconfig.tsbuildinfo
+# The local lockfile records a private Artifactory mirror that Vercel can't
+# reach; let the Vercel build resolve from the public npm registry instead.
+package-lock.json
+supabase/.temp
+.vercel
+AGENTS.md
+CLAUDE.md
