@@ -33,7 +33,7 @@ Run `supabase/schema.sql` in your Supabase project's SQL editor first.
 |----------|----------|-------------|
 | `NEXT_PUBLIC_DYNAMIC_ENV_ID` | Yes | Dynamic environment ID from [app.dynamic.xyz](https://app.dynamic.xyz) |
 | `NEXT_PUBLIC_MERCHANT_ADDRESS` | Yes | Merchant EVM address that receives each pull |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase project URL and service role key (server only) |
+| `SUPABASE_URL` / `SUPABASE_SECRET_KEY` | Yes | Supabase project URL and secret API key — server only |
 | `RELAYER_PRIVATE_KEY` | Yes (direct mode) | Key that broadcasts `transferWithAuthorization`; fund with Base Sepolia ETH |
 | `NEXT_PUBLIC_RPC_URL` / `RPC_URL` | No | Base Sepolia RPC override |
 | `CRON_SECRET` | No | When set, `/api/cron/collect` requires `Authorization: Bearer <secret>` |

@@ -1,15 +1,15 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-// Server-side Supabase client. Uses the service role key so API routes can
+// Server-side Supabase client. Uses the secret API key so API routes can
 // read/write without RLS — never expose it to the browser.
 let _client: SupabaseClient | null = null;
 
 export function supabase(): SupabaseClient {
   if (!_client) {
     const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const key = process.env.SUPABASE_SECRET_KEY;
     if (!url || !key) {
-      throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
+      throw new Error("SUPABASE_URL and SUPABASE_SECRET_KEY must be set");
     }
     _client = createClient(url, key);
   }
