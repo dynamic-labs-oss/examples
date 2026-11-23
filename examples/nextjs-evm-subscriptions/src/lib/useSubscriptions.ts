@@ -20,8 +20,9 @@ export type AuthorizationSummary = {
   posted_at: string | null;
 };
 
-// "Until cancelled" = an unlimited, non-expiring permit (pulls_total is null).
-export type SubscribeVars = { openEnded?: boolean };
+// Either a fixed number of pulls (`pulls`, one per period), or "until
+// cancelled" = an unlimited, non-expiring permit (pulls_total is null).
+export type SubscribeVars = { openEnded?: boolean; pulls?: number };
 
 export type Subscription = {
   id: string;
@@ -82,7 +83,7 @@ export function useSubscriptions() {
   };
 
   const subscribeMutation = useMutation({
-    mutationFn: async ({ openEnded = false }: SubscribeVars = {}) => {
+    mutationFn: async ({ openEnded = false, pulls = PLAN.pulls }: SubscribeVars = {}) => {
       if (!evmAccount) throw new Error("Connect a wallet first");
       const walletClient = await getWalletClient();
       const owner = evmAccount.address as `0x${string}`;
@@ -92,10 +93,10 @@ export function useSubscriptions() {
         walletClient,
         owner,
         // Open-ended needs a standing (max) USDC allowance for Permit2.
-        minAmount: openEnded ? 2n ** 255n : PLAN.amount * BigInt(PLAN.pulls),
+        minAmount: openEnded ? 2n ** 255n : PLAN.amount * BigInt(pulls),
       });
       if (approvalTx) toast.success("USDC approved for Permit2 (one-time). Now sign the subscription.");
-      const { permit, signature } = await signPlanPermit({ walletClient, owner, openEnded });
+      const { permit, signature } = await signPlanPermit({ walletClient, owner, openEnded, pulls });
 
       const res = await fetch("/api/subscriptions", {
         method: "POST",
@@ -123,7 +124,7 @@ export function useSubscriptions() {
       toast.success(
         vars?.openEnded
           ? "Subscribed — pulls continue every period until you cancel."
-          : `Subscribed — one signature covers ${PLAN.pulls} pulls.`,
+          : `Subscribed — one signature covers ${vars?.pulls ?? PLAN.pulls} pulls.`,
       );
       invalidate();
     },

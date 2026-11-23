@@ -17,6 +17,17 @@ import {
 import { ERC20_ABI, publicClient } from "@/lib/permit2";
 import { formatPeriod, formatTokenAmount, shortenAddress } from "@/lib/utils";
 
+// Matches the server-side cap in permit2-server.ts.
+const MAX_PULLS = 52;
+
+const PERIOD_UNITS: Record<number, string> = {
+  60: "minute",
+  3600: "hour",
+  86400: "day",
+  604800: "week",
+  2592000: "month",
+};
+
 export default function SubscribePage() {
   const [mounted, setMounted] = useState(false);
   const { evmAccount, loggedIn } = useWallet();
@@ -24,11 +35,19 @@ export default function SubscribePage() {
   // Open-ended: one unlimited, non-expiring Permit2 allowance; pulls continue
   // every period until the subscriber revokes it.
   const [openEnded, setOpenEnded] = useState(false);
+  // Fixed mode: how many periods (e.g. hours) to sign up for. Kept as a string
+  // so the field can be cleared while typing.
+  const [pullsInput, setPullsInput] = useState(String(PLAN.pulls));
 
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
   const period = formatPeriod(PLAN.periodSeconds).replace(/^every /, "");
+  const unit = PERIOD_UNITS[PLAN.periodSeconds] ?? "period";
+  const pulls = Number(pullsInput);
+  const pullsValid = Number.isInteger(pulls) && pulls >= 1 && pulls <= MAX_PULLS;
+  const canSubmit = openEnded || pullsValid;
+  const total = pullsValid ? PLAN.amount * BigInt(pulls) : 0n;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 pb-24">
@@ -64,7 +83,9 @@ export default function SubscribePage() {
             </div>
             <div className="flex justify-between">
               <span>Pulls authorized</span>
-              <span className="font-medium text-[#030303]">{openEnded ? "Until cancelled" : PLAN.pulls}</span>
+              <span className="font-medium text-[#030303]">
+                {openEnded ? "Until cancelled" : pullsValid ? pulls : "—"}
+              </span>
             </div>
             <div className="flex justify-between">
               <span>Merchant</span>
@@ -78,7 +99,7 @@ export default function SubscribePage() {
           <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
             {(
               [
-                [false, `${PLAN.pulls} pulls`],
+                [false, `Fixed ${unit}s`],
                 [true, "Until cancelled"],
               ] as const
             ).map(([open, label]) => (
@@ -94,6 +115,31 @@ export default function SubscribePage() {
               </button>
             ))}
           </div>
+          {!openEnded && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="pulls" className="text-xs font-medium text-[#030303]">
+                How many {unit}s do you want to sign up for?
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="pulls"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={MAX_PULLS}
+                  step={1}
+                  value={pullsInput}
+                  onChange={(e) => setPullsInput(e.target.value)}
+                  className="w-24 rounded-lg border border-[#DADADA] px-3 py-1.5 text-sm text-[#030303] focus:outline-none focus:ring-2 focus:ring-[#4779FF]/40"
+                />
+                <span className="text-xs text-[#606060]">
+                  {pullsValid
+                    ? `${pulls} × ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} = ${formatTokenAmount(total, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} total`
+                    : `Enter a whole number from 1 to ${MAX_PULLS}`}
+                </span>
+              </div>
+            </div>
+          )}
           {openEnded && (
             <p className="text-xs text-[#606060] bg-[#F4F4F4] rounded-lg px-3 py-2">
               Your wallet will show an <span className="font-medium text-[#030303]">unlimited, non-expiring</span>{" "}
@@ -109,9 +155,14 @@ export default function SubscribePage() {
           )}
 
           <button
-            onClick={() => subscribeMutation.mutate({ openEnded })}
+            onClick={() => subscribeMutation.mutate({ openEnded, pulls: pullsValid ? pulls : undefined })}
             disabled={
-              !loggedIn || !evmAccount || !MERCHANT_ADDRESS || !PLAN_CONTRACT || subscribeMutation.isPending
+              !loggedIn ||
+              !evmAccount ||
+              !MERCHANT_ADDRESS ||
+              !PLAN_CONTRACT ||
+              !canSubmit ||
+              subscribeMutation.isPending
             }
             className="w-full py-2.5 rounded-lg text-sm font-medium bg-[#4779FF] text-white hover:bg-[#3366ee] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -120,7 +171,7 @@ export default function SubscribePage() {
             ) : openEnded ? (
               "Sign once · until cancelled"
             ) : (
-              "Sign once"
+              `Sign once · ${pullsValid ? pulls : "…"} ${unit}${pulls === 1 ? "" : "s"}`
             )}
           </button>
           {!loggedIn && (
@@ -139,7 +190,7 @@ export default function SubscribePage() {
             text={
               openEnded
                 ? "One EIP-712 signature grants the plan contract an unlimited, non-expiring allowance. Pulls continue every period until you cancel. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)"
-                : `One EIP-712 signature grants the plan contract up to ${formatTokenAmount(PLAN.amount * BigInt(PLAN.pulls), TOKEN_DECIMALS)} ${TOKEN_SYMBOL}, expiring after the last period. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)`
+                : `One EIP-712 signature grants the plan contract up to ${formatTokenAmount(total, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} (${pullsValid ? pulls : "your chosen number of"} ${unit}s), expiring after the last period. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)`
             }
           />
           <Step
