@@ -13,6 +13,7 @@ import {
 } from "@dynamic-labs-sdk/client";
 import { exportWaasPrivateKey } from "@dynamic-labs-sdk/client/waas";
 import { useWallet } from "@/lib/useWallet";
+import { useChain } from "@/lib/chain";
 import { dynamicClient } from "@/lib/dynamic";
 import { shortenAddress } from "@/lib/utils";
 import { KeyRound } from "lucide-react";
@@ -53,7 +54,11 @@ const outlineBtn =
   "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white border border-[#DADADA] text-[#030303] hover:bg-[#F9F9F9] disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function DynamicButton() {
-  const { evmAccount, loggedIn, disconnect, ensureEvmWallet } = useWallet();
+  const { evmAccount: evm, solanaAccount, loggedIn, disconnect, ensureWallets } = useWallet();
+  const { chain } = useChain();
+  // Show the wallet for the selected chain, falling back to whichever the
+  // user has (e.g. an external wallet that only exists on one chain).
+  const evmAccount = (chain === "solana" ? (solanaAccount ?? evm) : (evm ?? solanaAccount));
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "email" | "otp" | "wallet" | "export">("menu");
   const [email, setEmail] = useState("");
@@ -129,7 +134,7 @@ export default function DynamicButton() {
     setError(null);
     try {
       await verifyOTP({ otpVerification, verificationToken: otp }, dynamicClient);
-      await ensureEvmWallet();
+      await ensureWallets();
       setOpen(false);
       reset();
     } catch (err) {
@@ -140,7 +145,7 @@ export default function DynamicButton() {
     } finally {
       setLoading(false);
     }
-  }, [otpVerification, otp, ensureEvmWallet]);
+  }, [otpVerification, otp, ensureWallets]);
 
   const handleGoogle = useCallback(async () => {
     setLoading(true);
@@ -156,8 +161,12 @@ export default function DynamicButton() {
     }
   }, []);
 
+  // Wallets for the selected chain only (MetaMask etc. for EVM, Phantom etc.
+  // for Solana), so the picker matches the chain the user is subscribing on.
   const getEvmProviders = (): WalletProviderData[] =>
-    getAvailableWalletProvidersData(dynamicClient).filter((p) => p.chain === "EVM");
+    getAvailableWalletProvidersData(dynamicClient).filter((p) =>
+      chain === "solana" ? p.chain === "SOL" : p.chain === "EVM",
+    );
 
   const handleConnectWallet = useCallback(async (providerKey: string) => {
     setLoading(true);
@@ -168,7 +177,7 @@ export default function DynamicButton() {
       // available". Wait for init first.
       await waitForClientInitialized(dynamicClient);
       await connectAndVerifyWithWalletProvider({ walletProviderKey: providerKey }, dynamicClient);
-      await ensureEvmWallet();
+      await ensureWallets();
       setOpen(false);
       reset();
     } catch (err) {
@@ -176,7 +185,7 @@ export default function DynamicButton() {
     } finally {
       setLoading(false);
     }
-  }, [ensureEvmWallet]);
+  }, [ensureWallets]);
 
   if (loggedIn && evmAccount) {
     return (
@@ -262,7 +271,7 @@ export default function DynamicButton() {
         <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border border-[#DADADA] shadow-lg p-4 z-50">
           {view === "menu" && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-[#030303] mb-3">Sign in to EVM Subscriptions</p>
+              <p className="text-sm font-medium text-[#030303] mb-3">Sign in to Subscriptions</p>
               <button onClick={handleGoogle} disabled={loading} className={outlineBtn}>
                 <GoogleIcon />
                 Continue with Google
@@ -323,7 +332,9 @@ export default function DynamicButton() {
               </button>
               <p className="text-sm font-medium text-[#030303] mb-3">Choose a wallet</p>
               {getEvmProviders().length === 0 ? (
-                <p className="text-xs text-[#606060]">No EVM wallets detected. Install MetaMask or another wallet.</p>
+                <p className="text-xs text-[#606060]">{chain === "solana"
+                  ? "No Solana wallets detected. Install Phantom or another Solana wallet."
+                  : "No EVM wallets detected. Install MetaMask or another wallet."}</p>
               ) : (
                 getEvmProviders().map((provider) => (
                   <button key={provider.key} onClick={() => handleConnectWallet(provider.key)} disabled={loading} className={outlineBtn}>

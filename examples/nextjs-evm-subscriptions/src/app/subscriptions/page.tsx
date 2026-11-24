@@ -4,18 +4,34 @@ import { useEffect, useState } from "react";
 import { Loader2, Play, RefreshCw, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/useWallet";
 import { useSubscriptions } from "@/lib/useSubscriptions";
+import { useChain } from "@/lib/chain";
+import { ChainSwitcher } from "@/components/ChainSwitcher";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
+import { SolanaSubscriptions } from "@/components/SolanaSubscriptions";
 
 export default function SubscriptionsPage() {
   const [mounted, setMounted] = useState(false);
-  const { evmAccount, loggedIn } = useWallet();
-  const { subscriptions, isLoading, cancelMutation, collectMutation } = useSubscriptions();
+  const { chain } = useChain();
 
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 pb-24">
+      <div className="mb-6">
+        <ChainSwitcher />
+      </div>
+      {chain === "solana" ? <SolanaSubscriptions /> : <EvmSubscriptions />}
+    </div>
+  );
+}
+
+function EvmSubscriptions() {
+  const { loggedIn } = useWallet();
+  const { subscriptions, isLoading, cancelMutation, collectMutation } = useSubscriptions();
+
+  return (
+    <>
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#030303]">My Subscriptions</h1>
@@ -71,6 +87,6 @@ export default function SubscriptionsPage() {
           />
         ))}
       </div>
-    </div>
+    </>
   );
 }

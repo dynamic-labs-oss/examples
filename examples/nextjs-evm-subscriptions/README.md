@@ -1,6 +1,9 @@
 # EVM Subscriptions with Dynamic
 
-A Next.js demo that replicates the [Solana subscriptions](../nextjs-solana-subscriptions) flow on EVM: a user **signs once** and a contract that enforces the schedule pulls a recurring payment (default **$0.10 USDC per hour**) from their wallet. External wallets (MetaMask, WalletConnect) and Dynamic embedded wallets both work.
+A Next.js demo of recurring pull payments on **EVM (Base Sepolia)** and **Solana (devnet)**, switchable from the header of the subscribe and subscriptions pages. A user **signs once** and a contract or program that enforces the schedule pulls a recurring payment (default **$0.10 USDC per hour**) from their wallet. External wallets (MetaMask, Phantom, WalletConnect) and Dynamic embedded wallets both work.
+
+- **EVM** — Permit2 allowance + a cadence-enforcing `SubscriptionPlan` contract (sections below). Collection state lives in Supabase.
+- **Solana** — the [Solana Subscriptions program](https://solana.com/docs/payments/subscriptions/overview) (already deployed; nothing for you to deploy). See [Solana](#solana-devnet).
 
 ## How it works
 
@@ -57,6 +60,11 @@ npm run dev
 | `RELAYER_PRIVATE_KEY` | Yes | Server key that submits `subscribe`/`pull` and pays gas. **Testnet-only**; use a secrets manager (or MPC signing) in production |
 | `CRON_SECRET` | Recommended | When set, `/api/cron/collect` requires `Authorization: Bearer <secret>` (Vercel sends it to schedules automatically) |
 | `NEXT_PUBLIC_RPC_URL` / `RPC_URL` | No | Base Sepolia RPC override |
+| `NEXT_PUBLIC_SOLANA_MERCHANT_ADDRESS` | For Solana | Merchant whose plans the app lists; must match `SOLANA_MERCHANT_PRIVATE_KEY` |
+| `SOLANA_MERCHANT_PRIVATE_KEY` | For Solana | Merchant key that owns the plan and signs collection (base58 or JSON byte array). **Testnet-only**; server only |
+| `NEXT_PUBLIC_SOLANA_RPC_URL` | No | Solana devnet RPC (default: public devnet; must support `getProgramAccounts`) |
+| `NEXT_PUBLIC_SOLANA_TOKEN_MINT` | No | SPL mint (default: Circle's devnet USDC) |
+| `SOLANA_PLAN_AMOUNT` / `SOLANA_PLAN_PERIOD_HOURS` | No | Used only by `solana:create-plan` (default 100000 and 1) |
 | `NEXT_PUBLIC_PLAN_AMOUNT` / `_PERIOD_SECONDS` / `_PULLS` | No | Must match the deployed contract: amount (default 100000 = 0.10 USDC), period (default 3600), and the fixed pull count (default 4) |
 
 ### Dynamic dashboard
@@ -66,11 +74,35 @@ npm run dev
 3. Enable **Email OTP** and/or **Google** under Sign-in Methods
 4. Add your origins (`http://localhost:3000` and your deployed URL) under Security → Allowed Origins
 
+## Solana (devnet)
+
+Pick **Solana** in the chain switcher. The flow mirrors the [Solana subscriptions example](../nextjs-solana-subscriptions), but runs on devnet and adds server-side collection:
+
+1. **Subscribe** — one transaction from the subscriber's Dynamic wallet: it creates their subscription authority PDA (first time per wallet + mint) and a subscription delegation that records the plan's exact terms (the program checks the terms they saw, so a plan can't change under them).
+2. **Collect** — the merchant (or a listed `puller`) can pull up to the plan amount per period, only to the plan's destination. The hourly `collect-solana-pulls` schedule calls `/api/cron/collect-solana`, which reads subscriptions straight from chain (no database) and pulls what's due; the **Collect due pulls** button calls the wallet-scoped, secret-free `/api/solana/collect`.
+3. **Cancel / resume** — cancelling sets an expiry at the end of the current period; the subscriber can resume until then.
+
+We sign with the Dynamic wallet but submit through our own devnet RPC (`NEXT_PUBLIC_SOLANA_RPC_URL`), so the app doesn't depend on which Solana network the wallet is set to.
+
+### Solana setup
+
+1. Create a **merchant keypair** (testnet only) and fund it with devnet SOL from [faucet.solana.com](https://faucet.solana.com). Put the secret key in `.env.local` as `SOLANA_MERCHANT_PRIVATE_KEY` (base58 or a JSON byte array) and its public address as `NEXT_PUBLIC_SOLANA_MERCHANT_ADDRESS`.
+2. Create the plan (default 0.10 USDC per hour; override with `SOLANA_PLAN_AMOUNT` / `SOLANA_PLAN_PERIOD_HOURS`):
+
+   ```bash
+   npm run solana:create-plan
+   ```
+
+3. Subscribers need devnet SOL for fees and devnet USDC from [faucet.circle.com](https://faucet.circle.com) (mint `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`).
+4. In the Dynamic dashboard, enable **Solana** (and **Solana Devnet**) under Chains & Networks. Embedded wallets get a Solana wallet automatically on sign-in.
+
+Node 24+ is required (`@solana-program/token` declares `node >=24`).
+
 ## Collecting pulls
 
 `vercel.json` defines a Vercel [Schedule](https://vercel.com/docs/schedules) named `collect-pulls` that calls `/api/cron/collect` at the top of every hour (`0 * * * *`, UTC) to keep invocations cheap. Run it on demand with `vercel schedules invoke collect-pulls`, or pause it with `vercel schedules disable collect-pulls`. A due pull is collected at the next run, so it can land up to an hour late; the contract still enforces "no earlier than due".
 
-- `/api/cron/collect` collects **every** due pull and requires `CRON_SECRET`.
+- `/api/cron/collect` collects **every** due EVM pull and requires `CRON_SECRET`. `/api/cron/collect-solana` (schedule `collect-solana-pulls`, five minutes past each hour) does the same for Solana.
 - The **Collect due pulls** button calls the secret-free `POST /api/collect?subscriber=0x…`, which only runs that wallet's already-due pulls (at most 5 per call).
 - Locally nothing runs automatically. Use the button, or `curl -X POST -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/collect`.
 - A run that dies mid-pull (serverless timeout) leaves its row in `posting`; rows claimed more than 10 minutes ago are put back in the queue on the next run.
@@ -92,10 +124,11 @@ Add the deployed URL to the Dynamic allowed origins. Notes:
 - **Unaudited demo contract.** One fixed plan per deployment; the permit has a fixed total and expiry (unless open-ended), so a fixed subscription needs a re-sign when it runs out.
 - **`pull` is permissionless.** If someone triggers a due pull directly on-chain, the money still moves correctly (the contract is authoritative), but the database catches up one run later and a row can briefly look late or fail with `NotDue`.
 - **No authentication on subscribe/collect.** Anyone can submit a valid signed permit (Permit2 verifies it) or trigger already-due pulls, which costs the relayer gas. Fine for a testnet demo; add rate limiting before putting real funds behind it.
+- **Solana: one merchant, public RPC.** The app lists one merchant's plans and uses the public devnet RPC, which is rate-limited; set `NEXT_PUBLIC_SOLANA_RPC_URL` to a provider for anything real. `/api/solana/collect` is unauthenticated (like the EVM one): it can only trigger pulls that are already due, but each costs the merchant key a fee.
 - **Hot relayer key.** The relayer key lives in an environment variable. It can only submit `subscribe`/`pull` (it can't redirect funds), but use a secrets manager or MPC signing in production.
 
 ## Resources
 
-- [Solana Subscriptions example](../nextjs-solana-subscriptions)
+- [Solana Subscriptions example](../nextjs-solana-subscriptions) and the [program docs](https://solana.com/docs/payments/subscriptions/overview)
 - [Permit2](https://github.com/Uniswap/permit2) and its [AllowanceTransfer docs](https://docs.uniswap.org/contracts/permit2/overview)
 - [Dynamic JS SDK](https://docs.dynamic.xyz/javascript/reference/quickstart)

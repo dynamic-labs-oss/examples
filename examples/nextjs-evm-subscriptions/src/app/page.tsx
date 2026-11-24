@@ -15,6 +15,9 @@ import {
   TOKEN_SYMBOL,
 } from "@/lib/config";
 import { ERC20_ABI, publicClient } from "@/lib/permit2";
+import { useChain } from "@/lib/chain";
+import { ChainSwitcher } from "@/components/ChainSwitcher";
+import { SolanaSubscribe } from "@/components/SolanaSubscribe";
 import { formatPeriod, formatTokenAmount, shortenAddress } from "@/lib/utils";
 
 // Matches the server-side cap in permit2-server.ts.
@@ -30,6 +33,22 @@ const PERIOD_UNITS: Record<number, string> = {
 
 export default function SubscribePage() {
   const [mounted, setMounted] = useState(false);
+  const { chain } = useChain();
+
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-8 pb-24">
+      <div className="mb-6">
+        <ChainSwitcher />
+      </div>
+      {chain === "solana" ? <SolanaSubscribe /> : <EvmSubscribe />}
+    </div>
+  );
+}
+
+function EvmSubscribe() {
   const { evmAccount, loggedIn } = useWallet();
   const { subscribeMutation } = useSubscriptions();
   // Open-ended: one unlimited, non-expiring Permit2 allowance; pulls continue
@@ -39,9 +58,6 @@ export default function SubscribePage() {
   // so the field can be cleared while typing.
   const [pullsInput, setPullsInput] = useState(String(PLAN.pulls));
 
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-
   const period = formatPeriod(PLAN.periodSeconds).replace(/^every /, "");
   const unit = PERIOD_UNITS[PLAN.periodSeconds] ?? "period";
   const pulls = Number(pullsInput);
@@ -50,7 +66,7 @@ export default function SubscribePage() {
   const total = pullsValid ? PLAN.amount * BigInt(pulls) : 0n;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 pb-24">
+    <>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#030303]">EVM Subscriptions</h1>
         <p className="text-sm text-[#606060] mt-1">
@@ -205,7 +221,7 @@ export default function SubscribePage() {
           />
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

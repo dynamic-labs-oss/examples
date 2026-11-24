@@ -5,6 +5,11 @@
       "schedule": "0 * * * *",
       "path": "/api/cron/collect",
       "requestMethod": "GET"
+    },
+    "collect-solana-pulls": {
+      "schedule": "5 * * * *",
+      "path": "/api/cron/collect-solana",
+      "requestMethod": "GET"
     }
   }
 }

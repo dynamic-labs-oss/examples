@@ -14,6 +14,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DynamicProvider } from "@dynamic-labs-sdk/react-hooks";
 import { dynamicClient } from "./dynamic";
 import { useWallet } from "./useWallet";
+import { ChainProvider } from "./chain";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,18 +26,18 @@ const queryClient = new QueryClient({
 });
 
 function AppInit() {
-  const { ensureEvmWallet } = useWallet();
+  const { ensureWallets } = useWallet();
 
   useEffect(() => {
     const unsub = onEvent(
       {
         event: "walletAccountsChanged",
-        listener: () => { void ensureEvmWallet(); },
+        listener: () => { void ensureWallets(); },
       },
       dynamicClient
     );
     return () => unsub?.();
-  }, [ensureEvmWallet]);
+  }, [ensureWallets]);
 
   useEffect(() => {
     const handleOAuthRedirect = async () => {
@@ -45,13 +46,13 @@ function AppInit() {
         const url = new URL(window.location.href);
         if (await detectOAuthRedirect({ url }, dynamicClient)) {
           await completeSocialAuthentication({ url }, dynamicClient);
-          await ensureEvmWallet();
+          await ensureWallets();
           window.history.replaceState({}, "", window.location.pathname);
         }
       } catch {}
     };
     handleOAuthRedirect();
-  }, [ensureEvmWallet]);
+  }, [ensureWallets]);
 
   return null;
 }
@@ -60,8 +61,10 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <DynamicProvider client={dynamicClient}>
       <QueryClientProvider client={queryClient}>
-        <AppInit />
-        {children}
+        <ChainProvider>
+          <AppInit />
+          {children}
+        </ChainProvider>
       </QueryClientProvider>
     </DynamicProvider>
   );

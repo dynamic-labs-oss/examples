@@ -4,6 +4,7 @@ import {
   type DynamicClient,
 } from "@dynamic-labs-sdk/client";
 import { addEvmExtension } from "@dynamic-labs-sdk/evm";
+import { addSolanaExtension } from "@dynamic-labs-sdk/solana";
 
 let _client: DynamicClient | null = null;
 
@@ -12,9 +13,10 @@ export function getClient(): DynamicClient {
     _client = createDynamicClient({
       autoInitialize: false,
       environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID!,
-      metadata: { name: "EVM Subscriptions" },
+      metadata: { name: "Subscriptions" },
     });
     addEvmExtension(_client);
+    addSolanaExtension(_client);
     void initializeClient(_client);
   }
   return _client;
