@@ -2,7 +2,9 @@
 
 A Next.js demo of recurring pull payments on **EVM (Base Sepolia)** and **Solana (devnet)**, switchable from the header of the subscribe and subscriptions pages. A user **signs once** and a contract or program that enforces the schedule pulls a recurring payment (default **$0.10 USDC per hour**) from their wallet. External wallets (MetaMask, Phantom, WalletConnect) and Dynamic embedded wallets both work.
 
-- **EVM** — Permit2 allowance + a cadence-enforcing `SubscriptionPlan` contract (sections below). Collection state lives in Supabase.
+- **EVM** — two ways to authorize pulls, chosen on the subscribe page (sections below). Collection state lives in Supabase.
+  - **Permit2 + a custom contract** — sign **once**; a cadence-enforcing `SubscriptionPlan` contract does the pulling.
+  - **EIP-3009 (+ optional Relay)** — sign **once per pull**; the USDC contract itself enforces each authorization, and a relayer (or Relay) broadcasts it.
 - **Solana** — the [Solana Subscriptions program](https://solana.com/docs/payments/subscriptions/overview) (already deployed; nothing for you to deploy). See [Solana](#solana-devnet).
 
 ## How it works
@@ -26,6 +28,27 @@ The plan contract has no pull counter. How many pulls can happen comes from the 
 - **Until cancelled** — the permit uses Permit2's unlimited sentinels: `amount = 2^160 − 1` (Permit2 never decrements it) and `expiration = 2^48 − 1` (never expires; note `0` would mean "expires now"). Pulls continue every period until the subscriber revokes. The collector appends one schedule row per period (`pulls_total` is `NULL` for these) and closes the subscription if the allowance is revoked or can never be pulled again.
 
 Open-ended permits show up in wallets as an unlimited allowance, which looks alarming — the UI explains it up front. The safety comes from the contract (it can only ever pay the immutable merchant the fixed amount once per period) and from revocability, so treat the contract's correctness as load-bearing.
+
+## Two EVM modes, side by side
+
+| | **Permit2 + plan contract** | **EIP-3009 `transferWithAuthorization`** |
+|---|---|---|
+| Signatures | **One**, whatever the count (or "until cancelled") | **One per pull** (capped at 12) |
+| Subscriber gas | One-time USDC `approve` to Permit2 | **None** — no transaction at all |
+| Who enforces the terms | Your deployed `SubscriptionPlan` contract | The USDC contract (amount, window, single-use nonce) |
+| Open-ended | Yes | No — fixed count only |
+| Cancel | **On-chain revoke** (`Permit2.approve(token, plan, 0, 0)`); nothing can pull afterwards | Server deletes the stored signatures; a **leaked** signature stays valid until its window closes |
+| Needs | `NEXT_PUBLIC_PLAN_CONTRACT` (deploy once) | Nothing to deploy |
+| Executor | `plan.pull(subscriber)` from the relayer | `transferWithAuthorization` from the relayer (**direct**), or Relay's `/execute/permits` (**relay**) |
+
+Pick the mode on the subscribe page ("Authorization method"). Both write to the same Supabase tables and are collected by the same hourly schedule; each subscription card is labelled with its mode.
+
+### EIP-3009 details
+
+- **Subscribe:** the app builds one `TransferWithAuthorization` per period (unique nonce, back-to-back `validAfter`/`validBefore` windows) and the wallet signs each. The server **verifies every signature** against the token's EIP-712 domain and pins the recipient (merchant), amount and cadence before storing anything — a client can't redirect a pull or change its terms.
+- **Collect:** the collector broadcasts each authorization whose window is open. It first checks `authorizationState`, so a pull that was broadcast but not recorded isn't sent twice.
+- **Relay executor:** instead of a plain signature, the app requests a Relay quote with `usePermit: true`, signs the EIP-712 step it returns, and stores the quote's post body; the collector POSTs it to Relay `/execute/permits` and polls the check endpoint. This needs a route Relay's solvers list: USDC works on **mainnet**; Relay's testnet solvers carry no USDC, so on Base Sepolia use "Our relayer".
+- **Stored signatures are bearer authorizations.** They are never returned by the API, and they are deleted when a subscription is cancelled.
 
 ## Setup
 
@@ -55,9 +78,11 @@ npm run dev
 |----------|----------|-------------|
 | `NEXT_PUBLIC_DYNAMIC_ENV_ID` | Yes | Dynamic environment ID from [app.dynamic.xyz](https://app.dynamic.xyz) |
 | `NEXT_PUBLIC_MERCHANT_ADDRESS` | Yes | Merchant EVM address that receives each pull (baked into the plan contract; used for display) |
-| `NEXT_PUBLIC_PLAN_CONTRACT` | Yes | Address of the deployed `SubscriptionPlan` |
+| `NEXT_PUBLIC_PLAN_CONTRACT` | For Permit2 | Address of the deployed `SubscriptionPlan` (not needed for EIP-3009) |
 | `SUPABASE_URL` / `SUPABASE_SECRET_KEY` | Yes | Supabase project URL and secret API key — server only |
-| `RELAYER_PRIVATE_KEY` | Yes | Server key that submits `subscribe`/`pull` and pays gas. **Testnet-only**; use a secrets manager (or MPC signing) in production |
+| `RELAYER_PRIVATE_KEY` | Yes | Server key that submits Permit2 `subscribe`/`pull` and EIP-3009 `transferWithAuthorization`, and pays gas. **Testnet-only**; use a secrets manager (or MPC signing) in production |
+| `RELAY_API_URL` / `RELAY_API_KEY` | No | Relay executor (EIP-3009, mainnet). Defaults to `https://api.relay.link` |
+| `NEXT_PUBLIC_RELAY_API_URL` | No | Same, used by the browser when requesting quotes |
 | `CRON_SECRET` | Recommended | When set, `/api/cron/collect` requires `Authorization: Bearer <secret>` (Vercel sends it to schedules automatically) |
 | `NEXT_PUBLIC_RPC_URL` / `RPC_URL` | No | Base Sepolia RPC override |
 | `NEXT_PUBLIC_SOLANA_MERCHANT_ADDRESS` | For Solana | Merchant whose plans the app lists; must match `SOLANA_MERCHANT_PRIVATE_KEY` |
@@ -123,6 +148,7 @@ Add the deployed URL to the Dynamic allowed origins. Notes:
 
 - **Unaudited demo contract.** One fixed plan per deployment; the permit has a fixed total and expiry (unless open-ended), so a fixed subscription needs a re-sign when it runs out.
 - **`pull` is permissionless.** If someone triggers a due pull directly on-chain, the money still moves correctly (the contract is authoritative), but the database catches up one run later and a row can briefly look late or fail with `NotDue`.
+- **EIP-3009 cancel is off-chain.** Deleting stored signatures stops *us* from broadcasting them, but anyone who obtained a signature could still submit it until its window ends. Permit2 mode has no such gap because cancel is an on-chain revoke.
 - **No authentication on subscribe/collect.** Anyone can submit a valid signed permit (Permit2 verifies it) or trigger already-due pulls, which costs the relayer gas. Fine for a testnet demo; add rate limiting before putting real funds behind it.
 - **Solana: one merchant, public RPC.** The app lists one merchant's plans and uses the public devnet RPC, which is rate-limited; set `NEXT_PUBLIC_SOLANA_RPC_URL` to a provider for anything real. `/api/solana/collect` is unauthenticated (like the EVM one): it can only trigger pulls that are already due, but each costs the merchant key a fee.
 - **Hot relayer key.** The relayer key lives in an environment variable. It can only submit `subscribe`/`pull` (it can't redirect funds), but use a secrets manager or MPC signing in production.
@@ -130,5 +156,6 @@ Add the deployed URL to the Dynamic allowed origins. Notes:
 ## Resources
 
 - [Solana Subscriptions example](../nextjs-solana-subscriptions) and the [program docs](https://solana.com/docs/payments/subscriptions/overview)
+- [EIP-3009: transfer with authorization](https://eips.ethereum.org/EIPS/eip-3009) and [Relay step execution](https://docs.relay.link/references/api/api_core_concepts/step-execution#signature-steps)
 - [Permit2](https://github.com/Uniswap/permit2) and its [AllowanceTransfer docs](https://docs.uniswap.org/contracts/permit2/overview)
 - [Dynamic JS SDK](https://docs.dynamic.xyz/javascript/reference/quickstart)

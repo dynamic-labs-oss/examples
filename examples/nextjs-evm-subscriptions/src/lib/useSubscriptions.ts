@@ -5,7 +5,8 @@ import { getActiveNetworkData, switchActiveNetwork } from "@dynamic-labs-sdk/cli
 import { createWalletClientForWalletAccount } from "@dynamic-labs-sdk/evm/viem";
 import { dynamicClient } from "./dynamic";
 import { useWallet } from "./useWallet";
-import { CHAIN_ID, CHAIN_NAME, PLAN } from "./config";
+import { CHAIN_ID, CHAIN_NAME, PLAN, type SubscriptionMode } from "./config";
+import { signPlanAuthorizations, signRelayAuthorizations } from "./eip3009";
 import { ensurePermit2Approval, revokePlanAllowance, signPlanPermit } from "./permit2";
 import { toast } from "./toast";
 
@@ -20,9 +21,17 @@ export type AuthorizationSummary = {
   posted_at: string | null;
 };
 
-// Either a fixed number of pulls (`pulls`, one per period), or "until
-// cancelled" = an unlimited, non-expiring permit (pulls_total is null).
-export type SubscribeVars = { openEnded?: boolean; pulls?: number };
+// Two ways to authorize pulls:
+//  permit2 (default): ONE signature. Either a fixed number of pulls (`pulls`),
+//    or "until cancelled" = an unlimited, non-expiring permit (pulls_total null).
+//  eip3009: one signature PER pull (`pulls`), executed by our relayer
+//    ("direct") or by Relay ("relay"). Always a fixed count.
+export type SubscribeVars = {
+  mode?: SubscriptionMode;
+  openEnded?: boolean;
+  pulls?: number;
+  executor?: "direct" | "relay";
+};
 
 export type Subscription = {
   id: string;
@@ -33,6 +42,7 @@ export type Subscription = {
   amount: string;
   period_seconds: number;
   pulls_total: number | null; // null = open-ended ("until cancelled")
+  mode: SubscriptionMode;
   plan_contract: string | null;
   status: "active" | "cancelled" | "completed";
   created_at: string;
@@ -83,10 +93,31 @@ export function useSubscriptions() {
   };
 
   const subscribeMutation = useMutation({
-    mutationFn: async ({ openEnded = false, pulls = PLAN.pulls }: SubscribeVars = {}) => {
+    mutationFn: async ({
+      mode = "permit2",
+      openEnded = false,
+      pulls = PLAN.pulls,
+      executor = "direct",
+    }: SubscribeVars = {}) => {
       if (!evmAccount) throw new Error("Connect a wallet first");
       const walletClient = await getWalletClient();
       const owner = evmAccount.address as `0x${string}`;
+
+      if (mode === "eip3009") {
+        // N signatures, no on-chain transaction and no gas for the subscriber.
+        const auths =
+          executor === "relay"
+            ? await signRelayAuthorizations({ walletClient, pulls })
+            : await signPlanAuthorizations({ walletClient, pulls });
+        const res = await fetch("/api/subscriptions", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ mode: "eip3009", subscriber: owner, auths }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body?.error ?? "Failed to save subscription");
+        return body;
+      }
 
       // One-time (per wallet + token) approval for Permit2, then ONE signature.
       const approvalTx = await ensurePermit2Approval({
@@ -121,10 +152,13 @@ export function useSubscriptions() {
       return body;
     },
     onSuccess: (_data, vars) => {
+      const n = vars?.pulls ?? PLAN.pulls;
       toast.success(
-        vars?.openEnded
-          ? "Subscribed — pulls continue every period until you cancel."
-          : `Subscribed — one signature covers ${vars?.pulls ?? PLAN.pulls} pulls.`,
+        vars?.mode === "eip3009"
+          ? `Subscribed — ${n} pull authorizations signed.`
+          : vars?.openEnded
+            ? "Subscribed — pulls continue every period until you cancel."
+            : `Subscribed — one signature covers ${n} pulls.`,
       );
       invalidate();
     },
@@ -133,16 +167,20 @@ export function useSubscriptions() {
 
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Cancelling is an on-chain revoke from the subscriber's own wallet
-      // (zero the Permit2 allowance), then we tell the server.
       const sub = subscriptions.find((s) => s.id === id);
-      if (!sub?.plan_contract || !evmAccount) throw new Error("Subscription has no plan contract");
-      const walletClient = await getWalletClient();
-      await revokePlanAllowance({
-        walletClient,
-        owner: evmAccount.address as `0x${string}`,
-        plan: sub.plan_contract as `0x${string}`,
-      });
+      if (!sub || !evmAccount) throw new Error("Subscription not found");
+      // Permit2: cancelling is an on-chain revoke from the subscriber's own
+      // wallet (zero the allowance), then we tell the server. EIP-3009 has no
+      // allowance; the server just discards the stored signatures.
+      if (sub.mode !== "eip3009") {
+        if (!sub.plan_contract) throw new Error("Subscription has no plan contract");
+        const walletClient = await getWalletClient();
+        await revokePlanAllowance({
+          walletClient,
+          owner: evmAccount.address as `0x${string}`,
+          plan: sub.plan_contract as `0x${string}`,
+        });
+      }
       const res = await fetch(`/api/subscriptions/${id}?subscriber=${address}`, {
         method: "DELETE",
       });
@@ -150,7 +188,7 @@ export function useSubscriptions() {
       if (!res.ok) throw new Error(body?.error ?? "Cancel failed");
     },
     onSuccess: () => {
-      toast.success("Allowance revoked — subscription cancelled.");
+      toast.success("Subscription cancelled.");
       invalidate();
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Cancel failed"),

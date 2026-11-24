@@ -7,21 +7,20 @@ import { useWallet } from "@/lib/useWallet";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import {
   CHAIN_NAME,
+  MAX_PULLS,
   MERCHANT_ADDRESS,
   PLAN,
   PLAN_CONTRACT,
   TOKEN_ADDRESS,
   TOKEN_DECIMALS,
   TOKEN_SYMBOL,
+  type SubscriptionMode,
 } from "@/lib/config";
 import { ERC20_ABI, publicClient } from "@/lib/permit2";
 import { useChain } from "@/lib/chain";
 import { ChainSwitcher } from "@/components/ChainSwitcher";
 import { SolanaSubscribe } from "@/components/SolanaSubscribe";
 import { formatPeriod, formatTokenAmount, shortenAddress } from "@/lib/utils";
-
-// Matches the server-side cap in permit2-server.ts.
-const MAX_PULLS = 52;
 
 const PERIOD_UNITS: Record<number, string> = {
   60: "minute",
@@ -51,28 +50,49 @@ export default function SubscribePage() {
 function EvmSubscribe() {
   const { evmAccount, loggedIn } = useWallet();
   const { subscribeMutation } = useSubscriptions();
-  // Open-ended: one unlimited, non-expiring Permit2 allowance; pulls continue
-  // every period until the subscriber revokes it.
-  const [openEnded, setOpenEnded] = useState(false);
+  // How the subscriber authorizes pulls:
+  //  permit2: ONE signature to a cadence-enforcing contract (fixed or until cancelled)
+  //  eip3009: one signature PER pull; our relayer (or Relay) broadcasts each
+  const [mode, setMode] = useState<SubscriptionMode>("permit2");
+  const [executor, setExecutor] = useState<"direct" | "relay">("direct");
+  // Permit2 only: one unlimited, non-expiring allowance; pulls continue every
+  // period until the subscriber revokes it.
+  const [openEndedChoice, setOpenEnded] = useState(false);
+  const eip3009 = mode === "eip3009";
+  const openEnded = !eip3009 && openEndedChoice;
+  const maxPulls = MAX_PULLS[mode];
   // Fixed mode: how many periods (e.g. hours) to sign up for. Kept as a string
   // so the field can be cleared while typing.
   const [pullsInput, setPullsInput] = useState(String(PLAN.pulls));
 
-  const period = formatPeriod(PLAN.periodSeconds).replace(/^every /, "");
+  // "per hour" / "every 2 hours" -> "hour" / "2 hours", for use after "once per".
+  const period = formatPeriod(PLAN.periodSeconds).replace(/^(per|every) /, "");
   const unit = PERIOD_UNITS[PLAN.periodSeconds] ?? "period";
   const pulls = Number(pullsInput);
-  const pullsValid = Number.isInteger(pulls) && pulls >= 1 && pulls <= MAX_PULLS;
+  const pullsValid = Number.isInteger(pulls) && pulls >= 1 && pulls <= maxPulls;
   const canSubmit = openEnded || pullsValid;
   const total = pullsValid ? PLAN.amount * BigInt(pulls) : 0n;
+  // EIP-3009 needs no plan contract (the token itself enforces the terms).
+  const ready = eip3009 ? true : !!PLAN_CONTRACT;
 
   return (
     <>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#030303]">EVM Subscriptions</h1>
         <p className="text-sm text-[#606060] mt-1">
-          Sign once, then {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} is pulled{" "}
-          {formatPeriod(PLAN.periodSeconds)} from your wallet by a contract that enforces the schedule — no
-          signature needed per payment.
+          {eip3009 ? (
+            <>
+              Sign a payment authorization for each {unit}; a relayer then pulls{" "}
+              {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} {formatPeriod(PLAN.periodSeconds)}{" "}
+              from your wallet — no gas and no transaction from you.
+            </>
+          ) : (
+            <>
+              Sign once, then {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} is pulled{" "}
+              {formatPeriod(PLAN.periodSeconds)} from your wallet by a contract that enforces the schedule — no
+              signature needed per payment.
+            </>
+          )}
         </p>
       </div>
 
@@ -112,25 +132,84 @@ function EvmSubscribe() {
             {evmAccount && <UsdcBalance address={evmAccount.address as `0x${string}`} />}
           </div>
 
-          <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
-            {(
-              [
-                [false, `Fixed ${unit}s`],
-                [true, "Until cancelled"],
-              ] as const
-            ).map(([open, label]) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setOpenEnded(open)}
-                className={`py-1.5 rounded-md transition-colors ${
-                  openEnded === open ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          {/* How to authorize: one Permit2 signature, or one EIP-3009 per pull */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-[#030303]">Authorization method</span>
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
+              {(
+                [
+                  ["permit2", "Permit2 · sign once"],
+                  ["eip3009", "EIP-3009 · sign each"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m);
+                    // EIP-3009 caps the count lower; keep the field valid.
+                    if (Number(pullsInput) > MAX_PULLS[m]) setPullsInput(String(MAX_PULLS[m]));
+                  }}
+                  className={`py-1.5 rounded-md transition-colors ${
+                    mode === m ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {eip3009 ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-[#030303]">Executed by</span>
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
+                {(
+                  [
+                    ["direct", "Our relayer"],
+                    ["relay", "Relay (mainnet)"],
+                  ] as const
+                ).map(([x, label]) => (
+                  <button
+                    key={x}
+                    type="button"
+                    onClick={() => setExecutor(x)}
+                    className={`py-1.5 rounded-md transition-colors ${
+                      executor === x ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {executor === "relay" && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                  Relay only fills routes its solvers list. USDC works on mainnet; on {CHAIN_NAME} the quote
+                  will most likely be rejected, so use &ldquo;Our relayer&rdquo; here.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
+              {(
+                [
+                  [false, `Fixed ${unit}s`],
+                  [true, "Until cancelled"],
+                ] as const
+              ).map(([open, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setOpenEnded(open)}
+                  className={`py-1.5 rounded-md transition-colors ${
+                    openEnded === open ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {!openEnded && (
             <div className="flex flex-col gap-1.5">
               <label htmlFor="pulls" className="text-xs font-medium text-[#030303]">
@@ -142,7 +221,7 @@ function EvmSubscribe() {
                   type="number"
                   inputMode="numeric"
                   min={1}
-                  max={MAX_PULLS}
+                  max={maxPulls}
                   step={1}
                   value={pullsInput}
                   onChange={(e) => setPullsInput(e.target.value)}
@@ -151,9 +230,14 @@ function EvmSubscribe() {
                 <span className="text-xs text-[#606060]">
                   {pullsValid
                     ? `${pulls} × ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} = ${formatTokenAmount(total, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} total`
-                    : `Enter a whole number from 1 to ${MAX_PULLS}`}
+                    : `Enter a whole number from 1 to ${maxPulls}`}
                 </span>
               </div>
+              {eip3009 && pullsValid && (
+                <p className="text-xs text-[#606060]">
+                  Your wallet will ask you to sign {pulls} time{pulls === 1 ? "" : "s"}.
+                </p>
+              )}
             </div>
           )}
           {openEnded && (
@@ -164,19 +248,21 @@ function EvmSubscribe() {
               revoke it any time with Cancel.
             </p>
           )}
-          {!PLAN_CONTRACT && (
+          {!eip3009 && !PLAN_CONTRACT && (
             <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
               Deploy the plan contract and set NEXT_PUBLIC_PLAN_CONTRACT to subscribe (see README).
             </p>
           )}
 
           <button
-            onClick={() => subscribeMutation.mutate({ openEnded, pulls: pullsValid ? pulls : undefined })}
+            onClick={() =>
+              subscribeMutation.mutate({ mode, executor, openEnded, pulls: pullsValid ? pulls : undefined })
+            }
             disabled={
               !loggedIn ||
               !evmAccount ||
               !MERCHANT_ADDRESS ||
-              !PLAN_CONTRACT ||
+              !ready ||
               !canSubmit ||
               subscribeMutation.isPending
             }
@@ -184,6 +270,8 @@ function EvmSubscribe() {
           >
             {subscribeMutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : eip3009 ? (
+              `Sign ${pullsValid ? pulls : "…"} authorization${pulls === 1 ? "" : "s"}`
             ) : openEnded ? (
               "Sign once · until cancelled"
             ) : (
@@ -200,25 +288,47 @@ function EvmSubscribe() {
         {/* How it works */}
         <div className="rounded-xl border border-[#DADADA] bg-white p-5 flex flex-col gap-4">
           <p className="text-sm font-semibold text-[#030303]">How it works</p>
-          <Step
-            icon={<Signature className="w-4 h-4 text-[#4779FF]" />}
-            title="You sign one Permit2 allowance"
-            text={
-              openEnded
-                ? "One EIP-712 signature grants the plan contract an unlimited, non-expiring allowance. Pulls continue every period until you cancel. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)"
-                : `One EIP-712 signature grants the plan contract up to ${formatTokenAmount(total, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} (${pullsValid ? pulls : "your chosen number of"} ${unit}s), expiring after the last period. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)`
-            }
-          />
-          <Step
-            icon={<ShieldCheck className="w-4 h-4 text-[#4779FF]" />}
-            title="The contract enforces the schedule"
-            text={`The plan contract's merchant, amount and period are immutable, so it can only pay the merchant ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} once per ${period}. Anyone can trigger a due pull — the money can only go one place.`}
-          />
-          <Step
-            icon={<Wallet className="w-4 h-4 text-[#4779FF]" />}
-            title="Cancel is a real on-chain revoke"
-            text="Cancelling sends Permit2.approve(token, plan, 0, 0) from your wallet. After that no pull can succeed, whatever the server or database says."
-          />
+          {eip3009 ? (
+            <>
+              <Step
+                icon={<Signature className="w-4 h-4 text-[#4779FF]" />}
+                title={`You sign ${pullsValid ? pulls : "N"} EIP-3009 authorizations`}
+                text={`Each signature lets the merchant pull ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} once, inside its own ${period} window — the EVM equivalent of Solana's subscription delegation. It costs you no gas and no transaction.`}
+              />
+              <Step
+                icon={<ShieldCheck className="w-4 h-4 text-[#4779FF]" />}
+                title="The token enforces each pull"
+                text="Each authorization has a unique nonce and validity window that the USDC contract itself checks, so a pull can't be replayed, taken early, or sent anywhere but the merchant. The server verifies every signature before storing it."
+              />
+              <Step
+                icon={<Wallet className="w-4 h-4 text-[#4779FF]" />}
+                title="Cancelling stops future pulls"
+                text="The stored signatures are the only authority, so cancelling deletes them. There is no on-chain allowance to revoke, which also means a signature that leaked could still be used until its window closes."
+              />
+            </>
+          ) : (
+            <>
+              <Step
+                icon={<Signature className="w-4 h-4 text-[#4779FF]" />}
+                title="You sign one Permit2 allowance"
+                text={
+                  openEnded
+                    ? "One EIP-712 signature grants the plan contract an unlimited, non-expiring allowance. Pulls continue every period until you cancel. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)"
+                    : `One EIP-712 signature grants the plan contract up to ${formatTokenAmount(total, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} (${pullsValid ? pulls : "your chosen number of"} ${unit}s), expiring after the last period. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)`
+                }
+              />
+              <Step
+                icon={<ShieldCheck className="w-4 h-4 text-[#4779FF]" />}
+                title="The contract enforces the schedule"
+                text={`The plan contract's merchant, amount and period are immutable, so it can only pay the merchant ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} once per ${period}. Anyone can trigger a due pull — the money can only go one place.`}
+              />
+              <Step
+                icon={<Wallet className="w-4 h-4 text-[#4779FF]" />}
+                title="Cancel is a real on-chain revoke"
+                text="Cancelling sends Permit2.approve(token, plan, 0, 0) from your wallet. After that no pull can succeed, whatever the server or database says."
+              />
+            </>
+          )}
         </div>
       </div>
     </>

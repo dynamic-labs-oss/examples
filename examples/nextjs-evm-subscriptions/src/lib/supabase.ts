@@ -29,12 +29,14 @@ export type SubscriptionRow = {
   period_seconds: number;
   pulls_total: number | null; // null = open-ended ("until cancelled")
   status: SubscriptionStatus;
-  plan_contract: string | null;
+  mode: "permit2" | "eip3009";
+  plan_contract: string | null; // permit2 only
   created_at: string;
 };
 
-// One scheduled pull. (The table keeps its original name; each row is one
-// period's pull that the collector executes via plan.pull(subscriber).)
+// One scheduled pull. (The table keeps its original name.) In Permit2 mode a
+// row is one period the collector executes via plan.pull(subscriber); in
+// EIP-3009 mode it is one stored, pre-signed authorization.
 export type AuthorizationRow = {
   id: string;
   subscription_id: string;
@@ -44,7 +46,10 @@ export type AuthorizationRow = {
   value: string;
   valid_after: number;
   valid_before: number;
-  nonce: string; // "permit2:<index>" — unique per subscription
+  nonce: string; // "permit2:<index>", or the EIP-3009 bytes32 nonce — unique per subscription
+  signature: string | null; // EIP-3009 only; never sent to the browser
+  executor: "permit2" | "direct" | "relay";
+  relay: Record<string, unknown> | null; // EIP-3009 via Relay only
   status: AuthorizationStatus;
   tx_hash: string | null;
   error: string | null;

@@ -28,16 +28,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
   }
 
-  const revoked = await isAllowanceRevoked(
-    subscriber as `0x${string}`,
-    sub.token_address as `0x${string}`,
-    sub.plan_contract,
-  );
-  if (!revoked) {
-    return NextResponse.json(
-      { error: "Revoke the Permit2 allowance from your wallet first, then cancel." },
-      { status: 409 },
+  // EIP-3009 has no on-chain allowance to revoke: the stored signatures are
+  // the authority, so cancelling means deleting them from our side. That voids
+  // every pending pull, but a signature that leaked could still be broadcast
+  // by someone else until its window closes. (A pull already inside its window
+  // can be killed on-chain by the token's cancelAuthorization.)
+  if (sub.mode !== "eip3009") {
+    const revoked = await isAllowanceRevoked(
+      subscriber as `0x${string}`,
+      sub.token_address as `0x${string}`,
+      sub.plan_contract,
     );
+    if (!revoked) {
+      return NextResponse.json(
+        { error: "Revoke the Permit2 allowance from your wallet first, then cancel." },
+        { status: 409 },
+      );
+    }
   }
 
   await db
@@ -45,6 +52,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     .update({ status: "cancelled" })
     .eq("subscription_id", id)
     .eq("status", "pending");
+  // Stored EIP-3009 signatures are bearer authorizations: don't keep the ones
+  // that can no longer be used.
+  if (sub.mode === "eip3009") {
+    await db
+      .from("authorizations")
+      .update({ signature: null, relay: null })
+      .eq("subscription_id", id)
+      .eq("status", "cancelled");
+  }
   await db.from("subscriptions").update({ status: "cancelled" }).eq("id", id);
 
   return NextResponse.json({ ok: true });

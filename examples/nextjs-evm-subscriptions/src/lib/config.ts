@@ -25,6 +25,13 @@ export const PLAN = {
   pulls: Number(process.env.NEXT_PUBLIC_PLAN_PULLS ?? "4"),
 };
 
+// How many periods one subscription may cover. Permit2 needs a single
+// signature whatever the count; EIP-3009 needs one signature PER pull, so it
+// is capped much lower. Enforced on the server as well.
+export const MAX_PULLS = { permit2: 52, eip3009: 12 } as const;
+
+export type SubscriptionMode = "permit2" | "eip3009";
+
 // Permit2 (Uniswap) is deployed at the same address on every chain.
 export const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
 

@@ -38,6 +38,8 @@ export function SubscriptionCard({
     subscription.pulls_total === null ? allAuths.slice(-MAX_VISIBLE) : allAuths;
   const hiddenCount = allAuths.length - visibleAuths.length;
 
+  const eip3009 = subscription.mode === "eip3009";
+
   const statusStyles: Record<string, string> = {
     active: "bg-green-50 text-green-700 border-green-200",
     cancelled: "bg-amber-50 text-amber-700 border-amber-200",
@@ -58,6 +60,9 @@ export function SubscriptionCard({
             </p>
             <p className="text-xs text-[#606060] font-mono">
               → {shortenAddress(subscription.merchant)}
+              <span className="ml-2 font-sans rounded bg-[#F4F4F4] px-1.5 py-0.5 text-[10px] text-[#606060]">
+                {eip3009 ? "EIP-3009" : "Permit2"}
+              </span>
             </p>
           </div>
         </div>
@@ -90,7 +95,13 @@ export function SubscriptionCard({
           disabled={loading || disabled}
           className="w-full py-2.5 rounded-lg text-sm font-medium border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Revoke allowance & cancel"}
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : eip3009 ? (
+            "Cancel & void pending pulls"
+          ) : (
+            "Revoke allowance & cancel"
+          )}
         </button>
       )}
     </div>

@@ -2,6 +2,7 @@ import { supabase, type AuthorizationRow } from "./supabase";
 import { executePull } from "./collector";
 import { TOKEN_ADDRESS } from "./config";
 import { isAllowanceRevoked } from "./permit2-server";
+import { executeDirect, executeViaRelay } from "./eip3009-server";
 
 export type CollectResults = {
   collected: number;
@@ -24,8 +25,9 @@ export async function collectDue({
   const now = Math.floor(Date.now() / 1000);
 
   // Recover rows stuck in 'posting'. Retrying is safe for funds: the plan
-  // contract rejects an early pull and Permit2 caps the total, so the worst
-  // case is one row's tx hash lining up with a neighbouring period.
+  // contract rejects an early pull and Permit2 caps the total (so the worst
+  // case is one row's tx hash lining up with a neighbouring period), and an
+  // EIP-3009 nonce can only be used once (the executor checks it first).
   const cutoff = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
   await db
     .from("authorizations")
@@ -35,7 +37,7 @@ export async function collectDue({
 
   let query = db
     .from("authorizations")
-    .select("*, subscriptions!inner(status, plan_contract, pulls_total, period_seconds)")
+    .select("*, subscriptions!inner(status, mode, plan_contract, pulls_total, period_seconds)")
     .eq("status", "pending")
     .eq("subscriptions.status", "active")
     .lte("valid_after", now)
@@ -52,6 +54,7 @@ export async function collectDue({
   for (const auth of (due ?? []) as (AuthorizationRow & {
     subscriptions: {
       status: string;
+      mode: "permit2" | "eip3009";
       plan_contract: string | null;
       pulls_total: number | null;
       period_seconds: number;
@@ -68,7 +71,14 @@ export async function collectDue({
       .select("id");
     if (!claimed?.length) continue;
 
-    const result = await executePull(auth, plan);
+    const eip3009 = auth.subscriptions.mode === "eip3009";
+    // Permit2: call plan.pull(). EIP-3009: broadcast the stored signature
+    // directly, or hand it to Relay.
+    const result = !eip3009
+      ? await executePull(auth, plan)
+      : auth.executor === "relay"
+        ? await executeViaRelay(auth)
+        : await executeDirect(auth);
     if (result.ok) {
       await db
         .from("authorizations")
@@ -78,7 +88,7 @@ export async function collectDue({
 
       // Open-ended subscription: schedule the next period. The unique
       // (subscription_id, nonce) makes this idempotent if two runs race.
-      if (auth.subscriptions.pulls_total === null) {
+      if (!eip3009 && auth.subscriptions.pulls_total === null) {
         const next = auth.period_index + 1;
         await db.from("authorizations").upsert(
           {
@@ -99,7 +109,12 @@ export async function collectDue({
       // A pull that fails because the subscriber revoked (or the allowance
       // expired / was used up) on-chain will never succeed — close the
       // subscription instead of retrying forever.
-      if (await isAllowanceRevoked(auth.from_address as `0x${string}`, TOKEN_ADDRESS, plan).catch(() => false)) {
+      // (EIP-3009 has no allowance: a failed pull just stays pending and is
+      // retried until its own validity window closes.)
+      if (
+        !eip3009 &&
+        (await isAllowanceRevoked(auth.from_address as `0x${string}`, TOKEN_ADDRESS, plan).catch(() => false))
+      ) {
         await db
           .from("authorizations")
           .update({ status: "cancelled", error: "Allowance revoked or expired on-chain" })

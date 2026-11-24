@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { CHAIN_ID } from "@/lib/config";
 import { HttpError, Permit2SubscribeBody, activatePermit2Subscription } from "@/lib/permit2-server";
+import { Eip3009SubscribeBody, validateEip3009Subscription } from "@/lib/eip3009-server";
 
 // GET /api/subscriptions?subscriber=0x... — the payer's subscriptions with
 // the status of each scheduled pull.
@@ -36,12 +37,67 @@ export async function GET(req: NextRequest) {
   );
 }
 
-// POST /api/subscriptions — the browser sends ONE signed Permit2 PermitSingle.
-// The server validates it, activates it on the plan contract (the relayer pays
-// gas; Permit2 verifies the subscriber's signature), then records the
-// schedule. Body: { subscriber, permit, signature }.
+// POST /api/subscriptions — two modes, chosen by `mode` in the body:
+//
+//  permit2 (default): the browser sends ONE signed Permit2 PermitSingle. The
+//    server validates it, activates it on the plan contract (the relayer pays
+//    gas; Permit2 verifies the subscriber's signature), then records the
+//    schedule. Body: { subscriber, permit, signature }.
+//  eip3009: the browser sends N pre-signed TransferWithAuthorization messages,
+//    one per period. The server verifies and stores them; the collector
+//    broadcasts each in its window. Body: { mode: "eip3009", subscriber, auths }.
 export async function POST(req: NextRequest) {
-  const parsed = Permit2SubscribeBody.safeParse(await req.json().catch(() => null));
+  const json = await req.json().catch(() => null);
+  if ((json as { mode?: unknown } | null)?.mode === "eip3009") return createEip3009(json);
+  return createPermit2(json);
+}
+
+async function createEip3009(json: unknown) {
+  const parsed = Eip3009SubscribeBody.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request", issues: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) },
+      { status: 400 },
+    );
+  }
+  let v;
+  try {
+    v = await validateEip3009Subscription(parsed.data);
+  } catch (err) {
+    if (err instanceof HttpError) return NextResponse.json({ error: err.message }, { status: err.status });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Validation failed" }, { status: 500 });
+  }
+
+  const db = supabase();
+  const { data: sub, error } = await db
+    .from("subscriptions")
+    .insert({
+      subscriber: v.subscriber,
+      merchant: v.merchant,
+      chain_id: CHAIN_ID,
+      token_address: v.token,
+      amount: v.amount.toString(),
+      period_seconds: v.periodSeconds,
+      pulls_total: v.rows.length,
+      status: "active",
+      mode: "eip3009",
+    })
+    .select()
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { error: rowsError } = await db
+    .from("authorizations")
+    .insert(v.rows.map((r) => ({ ...r, subscription_id: sub.id, status: "pending" })));
+  if (rowsError) {
+    await db.from("subscriptions").delete().eq("id", sub.id);
+    return NextResponse.json({ error: rowsError.message }, { status: 500 });
+  }
+  return NextResponse.json({ subscription: sub }, { status: 201 });
+}
+
+async function createPermit2(json: unknown) {
+  const parsed = Permit2SubscribeBody.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid request", issues: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) },
@@ -83,6 +139,7 @@ export async function POST(req: NextRequest) {
       period_seconds: plan.periodSeconds,
       pulls_total: plan.pulls, // null = open-ended
       status: "active",
+      mode: "permit2",
       plan_contract: plan.planContract.toLowerCase(),
     })
     .select()
@@ -108,6 +165,7 @@ export async function POST(req: NextRequest) {
     valid_after: plan.start + i * plan.periodSeconds,
     valid_before: plan.expiration,
     nonce: `permit2:${i}`,
+    executor: "permit2",
     status: "pending",
   }));
   const { error: rowsError } = await db.from("authorizations").insert(rows);
