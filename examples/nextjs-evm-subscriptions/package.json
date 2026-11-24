@@ -49,9 +49,6 @@
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2"
   },
-  "overrides": {
-    "@coinbase/cdp-sdk": "1.60.0"
-  },
   "engines": {
     "node": ">=24"
   },
