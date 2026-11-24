@@ -1,8 +1,8 @@
 "use client";
 
-// Polyfill BigInt.toJSON so JSON.stringify doesn't throw inside Solana/Dynamic SDKs
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-if (typeof BigInt !== "undefined") (BigInt.prototype as any).toJSON = function () { return this.toString(); };
+// NOTE: do not polyfill BigInt.prototype.toJSON here. It makes @solana/kit send
+// getProgramAccounts filter offsets as strings ("expected u64"), which breaks
+// every plan/subscription lookup. kit serializes bigints itself.
 
 import { type ReactNode, useEffect } from "react";
 import {

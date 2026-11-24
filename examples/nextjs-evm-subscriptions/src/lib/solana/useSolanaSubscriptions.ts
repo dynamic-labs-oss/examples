@@ -13,7 +13,6 @@ import {
   getCancelSubscriptionOverlayInstructionAsync,
   getInitSubscriptionAuthorityOverlayInstructionAsync,
   getResumeSubscriptionOverlayInstructionAsync,
-  getSubscribeOverlayInstructionAsync,
   PlanStatus,
   type PlanWithAddress,
   type SubscriptionDelegation,
@@ -21,6 +20,7 @@ import {
 import { useWallet } from "../useWallet";
 import { toast } from "../toast";
 import { SOLANA_MERCHANT_ADDRESS, SOLANA_TOKEN_MINT } from "./config";
+import { subscriptionsClient } from "./client";
 import { solanaRpc } from "./rpc";
 import { sendKitInstructions } from "./tx";
 
@@ -87,9 +87,11 @@ export function useSolanaSubscriptions() {
       const rpc = solanaRpc();
       const user = address(solanaAccount.address);
       const signer = createNoopSigner(user);
-      const instructions: Instruction[] = [];
+      const client = subscriptionsClient(solanaAccount.address);
 
       // One-time per wallet + mint: the authority PDA that lets plans pull.
+      // `subscribe` commits to the authority's init id, which only exists once
+      // this has landed, so a first-time subscriber signs two transactions.
       const [authorityPda] = await findSubscriptionAuthorityPda({ tokenMint: MINT, user });
       const existing = await fetchMaybeSubscriptionAuthority(rpc, authorityPda);
       if (!existing.exists) {
@@ -98,27 +100,39 @@ export function useSolanaSubscriptions() {
           owner: user,
           tokenProgram: TOKEN_PROGRAM_ADDRESS,
         });
-        instructions.push(
-          await getInitSubscriptionAuthorityOverlayInstructionAsync({
-            owner: signer,
-            tokenMint: MINT,
-            tokenProgram: TOKEN_PROGRAM_ADDRESS,
-            userAta,
-          }),
+        await sendKitInstructions(
+          [
+            await getInitSubscriptionAuthorityOverlayInstructionAsync({
+              owner: signer,
+              tokenMint: MINT,
+              tokenProgram: TOKEN_PROGRAM_ADDRESS,
+              userAta,
+            }),
+          ],
+          signer,
+          solanaAccount,
         );
+        toast.success("Subscription authority created. Now confirm the subscription.");
       }
-      instructions.push(
-        await getSubscribeOverlayInstructionAsync({
-          subscriber: signer,
-          merchant: plan.data.owner,
-          planId: plan.data.data.planId,
-          tokenMint: MINT,
-          expectedAmount: plan.data.data.terms.amount,
-          expectedCreatedAt: plan.data.data.terms.createdAt,
-          expectedPeriodHours: plan.data.data.terms.periodHours,
-        }),
-      );
-      return sendKitInstructions(instructions, signer, solanaAccount);
+
+      // The plugin client fetches the live plan terms and the authority's
+      // init id itself. Right after the init above the RPC can briefly not
+      // see the new account yet, so retry that one case.
+      let subscribeIx: Instruction | undefined;
+      for (let attempt = 0; attempt < 8 && !subscribeIx; attempt++) {
+        try {
+          subscribeIx = await client.subscriptions.instructions.subscribe({
+            merchant: plan.data.owner,
+            planId: plan.data.data.planId,
+            tokenMint: MINT,
+          });
+        } catch (err) {
+          const notYet = err instanceof Error && /not initialized/i.test(err.message);
+          if (!notYet || attempt === 7) throw err;
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
+      return sendKitInstructions([subscribeIx!], signer, solanaAccount);
     },
     onSuccess: () => {
       toast.success("Subscribed on Solana — the merchant can now pull each period.");
