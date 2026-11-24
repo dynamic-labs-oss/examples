@@ -1,0 +1,8 @@
+.vercel
+.env*
+!.env.example
+tsconfig.tsbuildinfo
+
+# Written by `next dev` for AI agents; not part of the example
+AGENTS.md
+CLAUDE.md

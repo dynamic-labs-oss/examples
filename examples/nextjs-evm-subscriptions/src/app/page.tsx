@@ -1,0 +1,372 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { CalendarClock, Loader2, ShieldCheck, Signature, Wallet } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useWallet } from "@/lib/useWallet";
+import { useSubscriptions } from "@/lib/useSubscriptions";
+import {
+  CHAIN_NAME,
+  MAX_PULLS,
+  MERCHANT_ADDRESS,
+  PLAN,
+  PLAN_CONTRACT,
+  TOKEN_ADDRESS,
+  TOKEN_DECIMALS,
+  TOKEN_SYMBOL,
+  type SubscriptionMode,
+} from "@/lib/config";
+import { ERC20_ABI, publicClient } from "@/lib/permit2";
+import { useChain } from "@/lib/chain";
+import { ChainSwitcher } from "@/components/ChainSwitcher";
+import { SolanaSubscribe } from "@/components/SolanaSubscribe";
+import { formatPeriod, formatTokenAmount, shortenAddress } from "@/lib/utils";
+
+const PERIOD_UNITS: Record<number, string> = {
+  60: "minute",
+  3600: "hour",
+  86400: "day",
+  604800: "week",
+  2592000: "month",
+};
+
+export default function SubscribePage() {
+  const [mounted, setMounted] = useState(false);
+  const { chain } = useChain();
+
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-8 pb-24">
+      <div className="mb-6">
+        <ChainSwitcher />
+      </div>
+      {chain === "solana" ? <SolanaSubscribe /> : <EvmSubscribe />}
+    </div>
+  );
+}
+
+function EvmSubscribe() {
+  const { evmAccount, loggedIn } = useWallet();
+  const { subscribeMutation } = useSubscriptions();
+  // How the subscriber authorizes pulls:
+  //  permit2: ONE signature to a cadence-enforcing contract (fixed or until cancelled)
+  //  eip3009: one signature PER pull; our relayer (or Relay) broadcasts each
+  const [mode, setMode] = useState<SubscriptionMode>("permit2");
+  const [executor, setExecutor] = useState<"direct" | "relay">("direct");
+  // Permit2 only: one unlimited, non-expiring allowance; pulls continue every
+  // period until the subscriber revokes it.
+  const [openEndedChoice, setOpenEnded] = useState(false);
+  const eip3009 = mode === "eip3009";
+  const openEnded = !eip3009 && openEndedChoice;
+  const maxPulls = MAX_PULLS[mode];
+  // Fixed mode: how many periods (e.g. hours) to sign up for. Kept as a string
+  // so the field can be cleared while typing.
+  const [pullsInput, setPullsInput] = useState(String(PLAN.pulls));
+
+  // "per hour" / "every 2 hours" -> "hour" / "2 hours", for use after "once per".
+  const period = formatPeriod(PLAN.periodSeconds).replace(/^(per|every) /, "");
+  const unit = PERIOD_UNITS[PLAN.periodSeconds] ?? "period";
+  const pulls = Number(pullsInput);
+  const pullsValid = Number.isInteger(pulls) && pulls >= 1 && pulls <= maxPulls;
+  const canSubmit = openEnded || pullsValid;
+  const total = pullsValid ? PLAN.amount * BigInt(pulls) : 0n;
+  // EIP-3009 needs no plan contract (the token itself enforces the terms).
+  const ready = eip3009 ? true : !!PLAN_CONTRACT;
+
+  return (
+    <>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-[#030303]">EVM Subscriptions</h1>
+        <p className="text-sm text-[#606060] mt-1">
+          {eip3009 ? (
+            <>
+              Sign a payment authorization for each {unit}; a relayer then pulls{" "}
+              {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} {formatPeriod(PLAN.periodSeconds)}{" "}
+              from your wallet — no gas and no transaction from you.
+            </>
+          ) : (
+            <>
+              Sign once, then {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} is pulled{" "}
+              {formatPeriod(PLAN.periodSeconds)} from your wallet by a contract that enforces the schedule — no
+              signature needed per payment.
+            </>
+          )}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Plan card */}
+        <div className="rounded-xl border border-[#DADADA] bg-white p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#4779FF]/10 flex items-center justify-center">
+              <CalendarClock className="w-5 h-5 text-[#4779FF]" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[#030303]">{PLAN.name}</p>
+              <p className="text-xs text-[#606060]">{CHAIN_NAME} · {TOKEN_SYMBOL}</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 text-xs text-[#606060]">
+            <div className="flex justify-between">
+              <span>Amount</span>
+              <span className="font-medium text-[#030303]">
+                {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL}{" "}
+                {formatPeriod(PLAN.periodSeconds)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Pulls authorized</span>
+              <span className="font-medium text-[#030303]">
+                {openEnded ? "Until cancelled" : pullsValid ? pulls : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Merchant</span>
+              <span className="font-mono">
+                {MERCHANT_ADDRESS ? shortenAddress(MERCHANT_ADDRESS) : "not configured"}
+              </span>
+            </div>
+            {evmAccount && <UsdcBalance address={evmAccount.address as `0x${string}`} />}
+          </div>
+
+          {/* How to authorize: one Permit2 signature, or one EIP-3009 per pull */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-[#030303]">Authorization method</span>
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
+              {(
+                [
+                  ["permit2", "Permit2 · sign once"],
+                  ["eip3009", "EIP-3009 · sign each"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m);
+                    // EIP-3009 caps the count lower; keep the field valid.
+                    if (Number(pullsInput) > MAX_PULLS[m]) setPullsInput(String(MAX_PULLS[m]));
+                  }}
+                  className={`py-1.5 rounded-md transition-colors ${
+                    mode === m ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {eip3009 ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-[#030303]">Executed by</span>
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
+                {(
+                  [
+                    ["direct", "Our relayer"],
+                    ["relay", "Relay (mainnet)"],
+                  ] as const
+                ).map(([x, label]) => (
+                  <button
+                    key={x}
+                    type="button"
+                    onClick={() => setExecutor(x)}
+                    className={`py-1.5 rounded-md transition-colors ${
+                      executor === x ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {executor === "relay" && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                  Relay only fills routes its solvers list. USDC works on mainnet; on {CHAIN_NAME} the quote
+                  will most likely be rejected, so use &ldquo;Our relayer&rdquo; here.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F4F4] text-xs font-medium">
+              {(
+                [
+                  [false, `Fixed ${unit}s`],
+                  [true, "Until cancelled"],
+                ] as const
+              ).map(([open, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setOpenEnded(open)}
+                  className={`py-1.5 rounded-md transition-colors ${
+                    openEnded === open ? "bg-white text-[#030303] shadow-sm" : "text-[#606060] hover:text-[#030303]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {!openEnded && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="pulls" className="text-xs font-medium text-[#030303]">
+                How many {unit}s do you want to sign up for?
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="pulls"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={maxPulls}
+                  step={1}
+                  value={pullsInput}
+                  onChange={(e) => setPullsInput(e.target.value)}
+                  className="w-24 rounded-lg border border-[#DADADA] px-3 py-1.5 text-sm text-[#030303] focus:outline-none focus:ring-2 focus:ring-[#4779FF]/40"
+                />
+                <span className="text-xs text-[#606060]">
+                  {pullsValid
+                    ? `${pulls} × ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} = ${formatTokenAmount(total, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} total`
+                    : `Enter a whole number from 1 to ${maxPulls}`}
+                </span>
+              </div>
+              {eip3009 && pullsValid && (
+                <p className="text-xs text-[#606060]">
+                  Your wallet will ask you to sign {pulls} time{pulls === 1 ? "" : "s"}.
+                </p>
+              )}
+            </div>
+          )}
+          {openEnded && (
+            <p className="text-xs text-[#606060] bg-[#F4F4F4] rounded-lg px-3 py-2">
+              Your wallet will show an <span className="font-medium text-[#030303]">unlimited, non-expiring</span>{" "}
+              USDC allowance. The plan contract can still only pay the merchant{" "}
+              {formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} {TOKEN_SYMBOL} once per {period}, and you can
+              revoke it any time with Cancel.
+            </p>
+          )}
+          {!eip3009 && !PLAN_CONTRACT && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+              Deploy the plan contract and set NEXT_PUBLIC_PLAN_CONTRACT to subscribe (see README).
+            </p>
+          )}
+
+          <button
+            onClick={() =>
+              subscribeMutation.mutate({ mode, executor, openEnded, pulls: pullsValid ? pulls : undefined })
+            }
+            disabled={
+              !loggedIn ||
+              !evmAccount ||
+              !MERCHANT_ADDRESS ||
+              !ready ||
+              !canSubmit ||
+              subscribeMutation.isPending
+            }
+            className="w-full py-2.5 rounded-lg text-sm font-medium bg-[#4779FF] text-white hover:bg-[#3366ee] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {subscribeMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : eip3009 ? (
+              `Sign ${pullsValid ? pulls : "…"} authorization${pulls === 1 ? "" : "s"}`
+            ) : openEnded ? (
+              "Sign once · until cancelled"
+            ) : (
+              `Sign once · ${pullsValid ? pulls : "…"} ${unit}${pulls === 1 ? "" : "s"}`
+            )}
+          </button>
+          {!loggedIn && (
+            <p className="text-xs text-center text-[#606060]">
+              Connect an external wallet (MetaMask, WalletConnect…) or sign in to use an embedded wallet.
+            </p>
+          )}
+        </div>
+
+        {/* How it works */}
+        <div className="rounded-xl border border-[#DADADA] bg-white p-5 flex flex-col gap-4">
+          <p className="text-sm font-semibold text-[#030303]">How it works</p>
+          {eip3009 ? (
+            <>
+              <Step
+                icon={<Signature className="w-4 h-4 text-[#4779FF]" />}
+                title={`You sign ${pullsValid ? pulls : "N"} EIP-3009 authorizations`}
+                text={`Each signature lets the merchant pull ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} once, inside its own ${period} window — the EVM equivalent of Solana's subscription delegation. It costs you no gas and no transaction.`}
+              />
+              <Step
+                icon={<ShieldCheck className="w-4 h-4 text-[#4779FF]" />}
+                title="The token enforces each pull"
+                text="Each authorization has a unique nonce and validity window that the USDC contract itself checks, so a pull can't be replayed, taken early, or sent anywhere but the merchant. The server verifies every signature before storing it."
+              />
+              <Step
+                icon={<Wallet className="w-4 h-4 text-[#4779FF]" />}
+                title="Cancelling stops future pulls"
+                text="The stored signatures are the only authority, so cancelling deletes them. There is no on-chain allowance to revoke, which also means a signature that leaked could still be used until its window closes."
+              />
+            </>
+          ) : (
+            <>
+              <Step
+                icon={<Signature className="w-4 h-4 text-[#4779FF]" />}
+                title="You sign one Permit2 allowance"
+                text={
+                  openEnded
+                    ? "One EIP-712 signature grants the plan contract an unlimited, non-expiring allowance. Pulls continue every period until you cancel. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)"
+                    : `One EIP-712 signature grants the plan contract up to ${formatTokenAmount(total, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} (${pullsValid ? pulls : "your chosen number of"} ${unit}s), expiring after the last period. (The first time only, you also send a one-off USDC approve to Permit2 and pay its gas.)`
+                }
+              />
+              <Step
+                icon={<ShieldCheck className="w-4 h-4 text-[#4779FF]" />}
+                title="The contract enforces the schedule"
+                text={`The plan contract's merchant, amount and period are immutable, so it can only pay the merchant ${formatTokenAmount(PLAN.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL} once per ${period}. Anyone can trigger a due pull — the money can only go one place.`}
+              />
+              <Step
+                icon={<Wallet className="w-4 h-4 text-[#4779FF]" />}
+                title="Cancel is a real on-chain revoke"
+                text="Cancelling sends Permit2.approve(token, plan, 0, 0) from your wallet. After that no pull can succeed, whatever the server or database says."
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Step({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-7 h-7 rounded-lg bg-[#4779FF]/10 flex items-center justify-center shrink-0">
+        {icon}
+      </div>
+      <div>
+        <p className="text-sm font-medium text-[#030303]">{title}</p>
+        <p className="text-xs text-[#606060] mt-0.5">{text}</p>
+      </div>
+    </div>
+  );
+}
+
+function UsdcBalance({ address }: { address: `0x${string}` }) {
+  const { data } = useQuery({
+    queryKey: ["usdc-balance", address],
+    queryFn: () =>
+      publicClient().readContract({
+        address: TOKEN_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [address],
+      }),
+    refetchInterval: 15_000,
+  });
+  return (
+    <div className="flex justify-between">
+      <span>Your USDC balance</span>
+      <span className="font-medium text-[#030303]">
+        {data !== undefined ? formatTokenAmount(data, TOKEN_DECIMALS) : "…"} {TOKEN_SYMBOL}
+      </span>
+    </div>
+  );
+}
